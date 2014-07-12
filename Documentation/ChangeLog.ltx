@@ -1,0 +1,126 @@
+\documentclass[12pt]{article}
+
+\usepackage{times}
+\evensidemargin=0.25in
+\oddsidemargin=0.25in
+\textwidth=6in
+
+\title{Requirements for Changelog Handling in the AutoBuilder}
+\author{Clifford Beshers \and David Fox  \\ Linspire, Inc. \and Jeremy Shaw}
+\begin{document}
+  \maketitle
+
+The {\tt debian/changelog} file records the history of a package, but
+also controls the version number, the distribution name, and the
+urgency of each build.  It is necessary for the autobuilder to manage
+this file in order to perform it job.
+
+Apart from the few bits of information which are used by the build
+system, the changelog is intended to be read by humans.  To this end
+it is important to avoid cluttering it with unimporant information,
+and to assist the changelog author, the software developer, in editing
+the entry so that it summarizes the changes to emphasize the issues
+that will affect the end users of the package.  Depending on one's
+development style, this can be quite different from the issues that
+appear in the log of the source code control system, because those
+entries might reflect developer oriented changes that do not affect
+the end user, and may have a finer granularity than a changelog entry.
+
+It is particularly important to remember that one of the most
+important uses of the changelog is in diagnosing failures.  You must
+be able to look at the entries and determine which change in which
+version caused the failure to appear, so every change must be
+associated with a package version.  This is important when considering
+how to manage the changelog for packages where we maintain sets of
+patches which get applied to a series of versions coming from the
+upstream developers (aka autobuilder quilt targets.)
+
+Another design consideration is that it is preferable if we do not let
+the autobuilder check anything into the source code repository.  Doing
+so leads to a race condition.  [Add description of this race condition.]
+
+\section{Dependency Triggered Rebuilds}
+
+The autobuilder often rebuilds packages whose source code has not
+changed, due only to rebuilds of their build dependencies.  It is
+necessary to create a changelog entry for this case in order to set
+the version number of the package, but this entry contains little
+information of interest to a human.  For this reason, only one such
+entry will be preserved in the changelog, and it must be the most
+recent one.  Any entry created for a previous dependency triggered
+rebuild will be removed when a new one is added.
+
+\section{Test Builds}
+
+A package may also be built from a `dir' target, in which case we have
+no way of knowing whether the source code has changed or not, or due
+to the use of the {\tt --force-build} flag.  These builds will also get an
+automatically generated changelog entry and version number, and will
+be marked in such a way that they can be recognized as test builds and
+prevented from being added to non-local repositories.
+
+\section{Source Change Triggered Rebuilds}
+
+If the package's source code has changed the developer needs to create
+an entry describing that change, a new version number for the build
+needs to be chosen, and an urgency level needs to be assigned to the
+build.  The developer may do this before the build begins, in which
+case the autobuilder will find this information already checked into
+the changelog, verify that the values are acceptable, and use them to
+complete the build.  If the autobuilder finds that no entry has been
+added, or that an unacceptable version number has been chosen, it will
+(depending on its run time options) either abort or invoke a tool to
+allow the developer to create or repair the entry.
+
+The changelog editing tool would implement our version numbering
+policy to create the new entry, and additionally might pull log
+entries from the source code control system so the developer could
+edit them into the debian changelog entry.
+
+\section{Patch Change Triggered Rebuilds}
+
+Another type of change that triggers rebuilds is when the patches
+which we are applying to a package using the autobuilder's `quilt'
+target type.  In this case there are two lines of parallel development
+going on for the package, one upstream and one local.  For packages
+where the upstream is already debianized, log entries for the changes
+to our patch need to end up interleaved into the log of the upstream
+package chronologically, so that they can be associated with
+particular versions for diagnosing failures.  The simplest way to do
+this is to require the developer to use the quilt mechanism to patch
+the changelog to add entries.  This is no more difficult than managing
+the other patches in the quilt directory, and the development of
+suitable tools would make it much easier.
+
+The version numbers for packages generated from quilt targets could be
+chosen by combining version number chosen by the upstream developer
+and a version number chosen by the patch developer.  Alternatively, it
+might be desirable to allow the autobuilder to use its version number
+generation feature to append a uniquifying tag to the upstream version
+number.  This choice could be signalled by using a special tag in the
+changelog where the version number belongs, such as {\tt @VERSION@}.
+
+\section{Summary}
+
+\begin{itemize}
+
+\item The autobuilder must be modified to require the developer to
+supply a new changelog entry in order to rebuild a package.  The only
+exceptions to this rule would be if the package was being rebuilt due
+only to changes in its build dependencies, or if the package was being
+rebuilt for test purposes, in which case the result would be marked
+with a special vendor tag to make it ineligable for uploading.
+
+\item If a package is rebuilt due only to changes in its build
+dependencies, a changelog entry is added to indicate this.  This entry
+is removed on any subsequent build, and replaced either with another,
+similar entry, or with a developer supplied entry.
+
+\item Tools should be developed to help developers write end user
+oriented changelog entries by gathering the log entries from the
+revision control system and laying them out in debian changelog
+format.
+
+\end{itemize}
+
+\end{document}

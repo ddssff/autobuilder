@@ -1,0 +1,108 @@
+
+* Autobuilder should know it's own source code location and refuse to build if versions don't match.
+* Same with build-env.
+
+* Resolved distribution spec should be uploaded into every dist as a debian package.
+  Include the diffs?  Could be very big.
+** Must include the version
+
+* Propagate all package build dependencies forward, optionally let the developer
+
+* Verify that the haskell implementation doesn't blow up.
+
+* Add unit tests
+** Use IRMA as a test
+
+* Debian package versioning: If the debian package version is not
+specified in the control file by the developer, the autobuilder should
+generate one.
+
+We might provide a pool of distributions to consider for versioning.
+For example, skipjack-live, and skipjack-devel.  For any package P,
+the autobuilder would ensure that the generated version (V > max
+(version (select P [skipjack-live,skipjack-devel]))).
+
+A downgrade might be allowed on devel versions, but not on live
+versions.  Any package that might reasonably expect a downgrade, say,
+nvidia drivers, should either be included in another package
+(kernel-extra) with its own version number, or packaged witht the
+version number in the package name.  In the latter case, another
+package without the version number should exist that depends on the
+package with the specific version number.  For example, nvidia-driver
+should be an empty package with a dependency on nvidia-driver-v1448.
+That way downgrades are easy: just change the dependency in the meta
+package.
+
+Would be nice to have a default kernel package as well.
+
+
+
+* Versioning:
+** policy   -- For all contingencies, best methods of the developer versioning stuff so that everything works correctly.
+** mechanism -- nuts and bolts of distributions, version numbers, etc.
+** autobuilder documentation -- for how to get the autobuilder to do what you want.
+
+
+Policy:  Given stable dist X and unstable dist X+1, backports should be managed carefully.
+
+In the case of package P being effectively the same in both X and X+1, use ~bpo in the X version number.
+In the case of package P being newer in X, see below for exceptions, but ...
+
+
+
+
+**Exceptions:
+
+Goal: 100% of the time, newer dist have newer version numbers.  Not
+really feasible, because it forces arbitrary rebuilds.  (It would be
+possible to put and X-Trivial tag on a rebuild to tell CNR to ignore
+the change, and that would alleviate the problem.  A better goal would
+be to make UI for develoepers and/or QA to apply a severity/urgency
+index to the package.  Implementation detail: global computation cache
+can be used to make this trivial.)
+
+
+Consider something like Win4Lin, which often isn't available for a
+newer kernel.  It would be missing from distribution X+1, so trying to
+install it from distribution X while running X+1 would force a massive
+downgrade.
+
+We should allow massive downgrades like that, but only with a good UI that
+explains the problem.
+
+Similarly, upon upgrade, we should warn the users that there are
+packages that will go away, or be downgraded.  (Those packages might
+not be installed, they might be in the CNR database of everything
+you've installed. CNR should provide an interface for saying whether
+something is essential to you before upgrade.
+***Write up and forkover to web.)
+
+
+Version numbering:
+ * Use cases for all of the above cases.
+ * Test suite runs rules over uses cases.
+ * Explore ~ for expanding the version space.
+ * Once explored, make decisions and write up the rules.
+
+
+* Topics for tomorrow (Tuesday)
+** How to generate logs/informational output/errors from the autobuilder
+** Organizing cron jobs, packaging them, machine resources.
+** Review what we did last week, race conditions
+
+
+** Multiple-Directory Target
+
+For some projects you might want to work on multiple debs at the same
+time. For example, you might be working on an application, and making
+changes to the libraries it relies on.
+
+It would be nice if there was a simple mechanism so that you could
+modify the various packages, and the autobuilder would automatically
+rebuild the local dependencies as necessary.
+
+One idea is that you would check all the source out into a
+subdirectory. You would then run the autobuilder in the subdirectory
+and it would build all the packages. Packages directories would be
+detectable, in part, because they have a debian subdirectory.
+

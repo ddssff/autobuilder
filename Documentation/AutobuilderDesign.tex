@@ -1,0 +1,519 @@
+\documentclass[12pt]{article}
+
+\newcommand{\notimplemented}{(NI)}
+
+\usepackage{times}
+\evensidemargin=0.25in
+\oddsidemargin=0.25in
+\textwidth=6in
+
+\title{Functional Release Management of an Operating System}
+\author{Clifford Beshers \and David Fox  \\ Linspire, Inc. \and Jeremy Shaw}
+\begin{document}
+  \maketitle
+  \begin{abstract}
+    We present the design and implementation of a system for managing
+    the development and release of an operating system based on the
+    Debian Linux distribution.
+  \end{abstract}
+
+\section{Introduction}
+The goal is to build a functional implementation of package management
+on top of existing Debian methods.
+
+\section{High-level Workflow Requirements}
+\begin{description}
+\item{Easy to get started:}
+
+Our tools must be simple enough for a developer who is not familiar
+with Debian tools to use the autobuilder, modify and test a package,
+then send us a patch.
+
+For example, suppose an experienced Linux user installs Freespire,
+notices a bug in a script and wants to fix it.  Something like the
+following steps should be sufficient:
+
+\begin{enumerate}
+\item apt-get install apt-file autobuilder
+\item apt-file search \em{scriptname} -- this will return a \em{packagename}
+\item apt-get source \em{packagename}
+\item \em{user edits source code}
+\item autobuilder --target dir:\em{packagename-version}
+\item autobuilder --install dir:\em{packagename-version} \notimplemented
+\item \em{user tests package}
+\item autobuilder --submit dir:\em{packagename-version}
+  \notimplemented
+\item autobuilder prompts the user for a changelog, including an
+  interactive guide to selecting a version number.
+\item (compare with Ubuntu's MOM, merge-o-matic, for features)
+\end{enumerate}
+
+
+\item{Allow full building and testing locally and offline}
+
+Building packages should not require any special environment, other
+than a working autobuilder.  Specifically, one shouldn't need to use
+particular machines, or have a network connection, or be behind a firewall..
+
+\subsection{Support many source code control systems}
+
+No one source code control system seems able to satisfy everyone's
+requirements and the diversity of choices is likely to persist.
+
+The autobuilder can check out source code from a variety of systems:
+cvs, subversion, arch/tla, darcs, mercurial, git\notimplemented.
+
+\subsection{Do not require a source code control system}
+\item support work on multiple packages;
+\item clear reporting;
+\item easy release management;
+\item query tools for tracking who has done what;
+\item visual tools for tracking who has done what;
+\item correctness of autobuilder;
+\item verification tools.
+\end{description}
+
+\subsection{Easy to get started}
+
+
+\subsection{support work on multiple packages}
+\subsection{clear reporting}
+\subsection{easy release management}
+\subsection{query tools for tracking who has done what}
+\subsection{visual tools for tracking who has done what}
+\subsection{correctness of autobuilder}
+\subsection{verification tools}
+
+
+\section{Release Management}
+
+From a programmer's perspective, no worries about release management.
+Just pull, patch and push.
+
+A push can fail if the distribution has been committed to in between
+the pull.
+
+\subsection{Extracting Patches from Debian Source Debs}
+
+Get a source deb, patch, upload.  System computes the changes by
+looking at the changelog, finding the most recently known version of
+the package and producing the difference.
+
+Requires a global package index.
+
+What about the Debian changelog?  Reject if not filled in?
+
+\section{Outline}
+
+Start with a simple model of computation.
+Functions on values, multiple inputs, multiple outputs.
+Each value may be a compound structure, but not recursive.
+
+Then add in circular build dependencies?
+
+Correctness of computation.
+
+Record programmer assertions of unneeded recompilation.
+
+There are at least two reasons to minimize package rebuilding:
+\begin{enumerate}
+  \item to minimize development time;
+  \item to minimize download time and user disturbance.
+\end{enumerate}
+
+
+\section{Optimization}
+
+Caching based on hash of function and values.
+
+Naylor style dataflow optimization, checking inputs and
+outputs. (Better described as memoization?)
+
+\section{Scheduling}
+
+Optimizing turn around time for package building is essential for
+developers.
+
+On a package level, they need to be able to test $({p} \cup
+{r | p `depends` r, r \leftarrow dist}$
+as soon as possible.
+
+If a rebuild of P forces a rebuild of Q (i.e., q `buildDepends` p),
+then one of two things should happen:
+\begin{enumerate}
+\item The computation to recompute q should be scheduled for later.
+\item the developer should add an assertion that the rebuild of q will
+  be effectively the same.
+\end{enumerate}
+An automated system could test the developer assertions given time to
+rebuild the package and compare the contents and meta-data.
+
+The scheduling for later could be done by narrowing the distribution
+down to just the build and run-time dependencies for all the active
+packages.  That guarantees that no unnecessary work will be done
+immediately.
+
+To submit that work to the main dist, do the equivalent of 'tla diff
+--base-0 --patch-n', but on the distribution level, and submit the
+results.
+
+\section{Distribution Patches}
+
+A distribution level patch is a set of diffs, each applying to a
+different package.
+
+Upon starting, the autobuilder should calculate the distribution diff
+and show it to the developer.
+
+Then it should show the planned package rebuild, separated into two
+parts: immediate and propagated.  Immediate package rebuilds are those
+that either explicitly have a source change, or have a downward
+dependency on a package that has changed and a reverse dependency on
+another package that has changed.  Propagated package rebuilds are
+reverse dependencies of the top level people.
+
+\section{Debian Changelogs and Version Numbers}
+
+The debian changelog is updated everytime a package is rebuilt. There
+are three (common) reasons why a package would be rebuilt:
+
+\begin{enumerate}
+\item A developer changed the source code
+\item A build dependency change and the package needs to be rebuilt
+\item The base package of a quilt target was updated
+\end{enumerate}
+
+It is desirable for the debian changelog to track all there of these
+activies. In the case that a developer modifies the package, it is
+especially useful to have a brief summary of the changes they made.
+
+Changelogs entries that are generated soley for build dependency
+changes lose their value the next time the package is built. So it
+might be a good idea to drop those entries the next time the package
+is rebuilt. In most cases, this can be done by having the autobuilder
+not commit the changes it makes to the changelog.
+
+
+
+
+
+\section{Global Computation Cache}
+
+\section{Nearly Lockless Sequencing}
+
+Consider the following problem.  Two developers, Jim and Bob, want to run the
+autobuilder at roughly the same time.  Jim has fixed a bug by
+checking in some patches to a particular branch.  Bob wants to import
+a vast block of changes from an upstream distribution, e.g., from
+Debian unstable (a.k.a. sid).  Bob's run is going to take considerable
+time and will probably have different results that with Jim's build.
+
+Given, the current design, a conflict will arise on upload, because
+two builds will start with the same set of base packages, effectively
+creating a fork.
+
+The solution is to sequence the sets of source targets and then have a
+purely functional autobuilder that uses the global computation cache
+to speed things up.
+
+The build specification is a list of targets, either source code
+branches or packages in a repository, or both (indicating that patches
+in the former should be applied to the package.)  Usually, no version
+identifiers are specified and the latest version available is used.
+Note that the version identifiers are not necessarily numeric nor
+monotonically increasing.  For example, checksums are used to identify
+patches in some newer source code control systems.
+
+Resolving a build specification into a distribution specification
+consists of fixing all the version identifiers.  At time $t_0$, the
+distribution specification is $DS={(s_i,v_i)}$, where $s$ is a source
+target and $v$ is a unique version identifier.  Both Jim and Bob
+should produce new distribution specifications by applying the
+autobuilder's resolver:  $ R :: BS -> DS$, where $BS$ is a build
+specification (a list of targets, usually without versions) and $DS$
+is a list of fully qualified targets.  If the computation of Jim's and Bob's
+distribution specifications are serialized by checking the results
+into their own source code branch, then two autobuilders can run
+simultaneously, each producing the binary packages for their given
+distribution specification, without any conflicts.
+
+Furthermore, if each autobuilder uses the global computation cache
+described above, then each target will be built only once, unless its
+build dependencies are different in each distribution.
+
+
+
+\section{Multiple-Directory Target}
+
+For some projects you might want to work on multiple packages at the
+same time. For example, you might be working on an application, and
+making changes to the libraries it relies on.  Another common scenario
+is propagating a format change through multiple applications, where
+you want to come out with a single update that keeps everything working.
+
+It would be nice if there was a simple mechanism so that you could
+modify the various packages, and the autobuilder would automatically
+rebuild the local dependencies as necessary.
+
+One idea is that you would check all the source out into a
+subdirectory. You would then run the autobuilder in the subdirectory
+and it would build all the packages. Packages directories would be
+detectable, in part, because they have a debian subdirectory.
+
+
+
+\section{Requirements for Changelog Handling in the AutoBuilder}
+
+The {\tt debian/changelog} file records the history of a package, but
+also controls the version number, the distribution name, and the
+urgency of each build.  It is necessary for the autobuilder to manage
+this file in order to perform it job.
+
+Apart from the few bits of information which are used by the build
+system, the changelog is intended to be read by humans.  To this end
+it is important to avoid cluttering it with unimporant information,
+and to assist the changelog author, the software developer, in editing
+the entry so that it summarizes the changes to emphasize the issues
+that will affect the end users of the package.  Depending on one's
+development style, this can be quite different from the issues that
+appear in the log of the source code control system, because those
+entries might reflect developer oriented changes that do not affect
+the end user, and may have a finer granularity than a changelog entry.
+
+It is particularly important to remember that one of the most
+important uses of the changelog is in diagnosing failures.  You must
+be able to look at the entries and determine which change in which
+version caused the failure to appear, so every change must be
+associated with a package version.  This is important when considering
+how to manage the changelog for packages where we maintain sets of
+patches which get applied to a series of versions coming from the
+upstream developers (aka autobuilder quilt targets.)
+
+Another design consideration is that it is preferable if we do not let
+the autobuilder check anything into the source code repository.  Doing
+so leads to a race condition.  [Add description of this race condition.]
+
+\section{Dependency Triggered Rebuilds}
+
+The autobuilder often rebuilds packages whose source code has not
+changed, due only to rebuilds of their build dependencies.  It is
+necessary to create a changelog entry for this case in order to set
+the version number of the package, but this entry contains little
+information of interest to a human.  For this reason, only one such
+entry will be preserved in the changelog, and it must be the most
+recent one.  Any entry created for a previous dependency triggered
+rebuild will be removed when a new one is added.
+
+\section{Test Builds}
+
+A package may also be built from a `dir' target, in which case we have
+no way of knowing whether the source code has changed or not, or due
+to the use of the {\tt --force-build} flag.  These builds will also get an
+automatically generated changelog entry and version number, and will
+be marked in such a way that they can be recognized as test builds and
+prevented from being added to non-local repositories.
+
+\section{Source Change Triggered Rebuilds}
+
+If the package's source code has changed the developer needs to create
+an entry describing that change, a new version number for the build
+needs to be chosen, and an urgency level needs to be assigned to the
+build.  The developer may do this before the build begins, in which
+case the autobuilder will find this information already checked into
+the changelog, verify that the values are acceptable, and use them to
+complete the build.  If the autobuilder finds that no entry has been
+added, or that an unacceptable version number has been chosen, it will
+(depending on its run time options) either abort or invoke a tool to
+allow the developer to create or repair the entry.
+
+The changelog editing tool would implement our version numbering
+policy to create the new entry, and additionally might pull log
+entries from the source code control system so the developer could
+edit them into the debian changelog entry.
+
+\section{Patch Change Triggered Rebuilds}
+
+Another type of change that triggers rebuilds is when the patches
+which we are applying to a package using the autobuilder's `quilt'
+target type.  In this case there are two lines of parallel development
+going on for the package, one upstream and one local.  For packages
+where the upstream is already debianized, log entries for the changes
+to our patch need to end up interleaved into the log of the upstream
+package chronologically, so that they can be associated with
+particular versions for diagnosing failures.  The simplest way to do
+this is to require the developer to use the quilt mechanism to patch
+the changelog to add entries.  This is no more difficult than managing
+the other patches in the quilt directory, and the development of
+suitable tools would make it much easier.
+
+The version numbers for packages generated from quilt targets could be
+chosen by combining version number chosen by the upstream developer
+and a version number chosen by the patch developer.  Alternatively, it
+might be desirable to allow the autobuilder to use its version number
+generation feature to append a uniquifying tag to the upstream version
+number.  This choice could be signalled by using a special tag in the
+changelog where the version number belongs, such as {\tt @VERSION@}.
+
+\section{Summary}
+
+\begin{itemize}
+
+\item The autobuilder must be modified to require the developer to
+supply a new changelog entry in order to rebuild a package.  The only
+exceptions to this rule would be if the package was being rebuilt due
+only to changes in its build dependencies, or if the package was being
+rebuilt for test purposes, in which case the result would be marked
+with a special vendor tag to make it ineligable for uploading.
+
+\item If a package is rebuilt due only to changes in its build
+dependencies, a changelog entry is added to indicate this.  This entry
+is removed on any subsequent build, and replaced either with another,
+similar entry, or with a developer supplied entry.
+
+\item Tools should be developed to help developers write end user
+oriented changelog entries by gathering the log entries from the
+revision control system and laying them out in debian changelog
+format.
+
+\end{itemize}
+
+
+
+\section{Multiple-Directory Target}
+
+For some projects you might want to work on multiple packages at the
+same time. For example, you might be working on an application, and
+making changes to the libraries it relies on.  Another common scenario
+is propagating a format change through multiple applications, where
+you want to come out with a single update that keeps everything working.
+
+It would be nice if there was a simple mechanism so that you could
+modify the various packages, and the autobuilder would automatically
+rebuild the local dependencies as necessary.
+
+One idea is that you would check all the source out into a
+subdirectory. You would then run the autobuilder in the subdirectory
+and it would build all the packages. Packages directories would be
+detectable, in part, because they have a debian subdirectory.
+
+
+
+\section{Requirements for Changelog Handling in the AutoBuilder}
+
+The {\tt debian/changelog} file records the history of a package, but
+also controls the version number, the distribution name, and the
+urgency of each build.  It is necessary for the autobuilder to manage
+this file in order to perform it job.
+
+Apart from the few bits of information which are used by the build
+system, the changelog is intended to be read by humans.  To this end
+it is important to avoid cluttering it with unimporant information,
+and to assist the changelog author, the software developer, in editing
+the entry so that it summarizes the changes to emphasize the issues
+that will affect the end users of the package.  Depending on one's
+development style, this can be quite different from the issues that
+appear in the log of the source code control system, because those
+entries might reflect developer oriented changes that do not affect
+the end user, and may have a finer granularity than a changelog entry.
+
+It is particularly important to remember that one of the most
+important uses of the changelog is in diagnosing failures.  You must
+be able to look at the entries and determine which change in which
+version caused the failure to appear, so every change must be
+associated with a package version.  This is important when considering
+how to manage the changelog for packages where we maintain sets of
+patches which get applied to a series of versions coming from the
+upstream developers (aka autobuilder quilt targets.)
+
+Another design consideration is that it is preferable if we do not let
+the autobuilder check anything into the source code repository.  Doing
+so leads to a race condition.  [Add description of this race condition.]
+
+\section{Dependency Triggered Rebuilds}
+
+The autobuilder often rebuilds packages whose source code has not
+changed, due only to rebuilds of their build dependencies.  It is
+necessary to create a changelog entry for this case in order to set
+the version number of the package, but this entry contains little
+information of interest to a human.  For this reason, only one such
+entry will be preserved in the changelog, and it must be the most
+recent one.  Any entry created for a previous dependency triggered
+rebuild will be removed when a new one is added.
+
+\section{Test Builds}
+
+A package may also be built from a `dir' target, in which case we have
+no way of knowing whether the source code has changed or not, or due
+to the use of the {\tt --force-build} flag.  These builds will also get an
+automatically generated changelog entry and version number, and will
+be marked in such a way that they can be recognized as test builds and
+prevented from being added to non-local repositories.
+
+\section{Source Change Triggered Rebuilds}
+
+If the package's source code has changed the developer needs to create
+an entry describing that change, a new version number for the build
+needs to be chosen, and an urgency level needs to be assigned to the
+build.  The developer may do this before the build begins, in which
+case the autobuilder will find this information already checked into
+the changelog, verify that the values are acceptable, and use them to
+complete the build.  If the autobuilder finds that no entry has been
+added, or that an unacceptable version number has been chosen, it will
+(depending on its run time options) either abort or invoke a tool to
+allow the developer to create or repair the entry.
+
+The changelog editing tool would implement our version numbering
+policy to create the new entry, and additionally might pull log
+entries from the source code control system so the developer could
+edit them into the debian changelog entry.
+
+\section{Patch Change Triggered Rebuilds}
+
+Another type of change that triggers rebuilds is when the patches
+which we are applying to a package using the autobuilder's `quilt'
+target type.  In this case there are two lines of parallel development
+going on for the package, one upstream and one local.  For packages
+where the upstream is already debianized, log entries for the changes
+to our patch need to end up interleaved into the log of the upstream
+package chronologically, so that they can be associated with
+particular versions for diagnosing failures.  The simplest way to do
+this is to require the developer to use the quilt mechanism to patch
+the changelog to add entries.  This is no more difficult than managing
+the other patches in the quilt directory, and the development of
+suitable tools would make it much easier.
+
+The version numbers for packages generated from quilt targets could be
+chosen by combining version number chosen by the upstream developer
+and a version number chosen by the patch developer.  Alternatively, it
+might be desirable to allow the autobuilder to use its version number
+generation feature to append a uniquifying tag to the upstream version
+number.  This choice could be signalled by using a special tag in the
+changelog where the version number belongs, such as {\tt @VERSION@}.
+
+\section{Summary}
+
+\begin{itemize}
+
+\item The autobuilder must be modified to require the developer to
+supply a new changelog entry in order to rebuild a package.  The only
+exceptions to this rule would be if the package was being rebuilt due
+only to changes in its build dependencies, or if the package was being
+rebuilt for test purposes, in which case the result would be marked
+with a special vendor tag to make it ineligable for uploading.
+
+\item If a package is rebuilt due only to changes in its build
+dependencies, a changelog entry is added to indicate this.  This entry
+is removed on any subsequent build, and replaced either with another,
+similar entry, or with a developer supplied entry.
+
+\item Tools should be developed to help developers write end user
+oriented changelog entries by gathering the log entries from the
+revision control system and laying them out in debian changelog
+format.
+
+\end{itemize}
+
+
+
+
+\end{document}

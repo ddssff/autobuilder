@@ -1,0 +1,1723 @@
+autobuilder (6.67) unstable; urgency=low
+
+  * Replace the GitBranch constructor of PackageFlag with a
+    [GitSpec] field added to the Git target type.
+
+ -- David Fox <dsf@seereason.com>  Wed, 09 Jul 2014 13:20:05 -0700
+
+autobuilder (6.66) unstable; urgency=low
+
+  * Add a KeepRCS Package flag to prevent removal of the RCS control
+    information in the source target.  The ghcjs target can't run without
+    it.
+
+ -- David Fox <dsf@seereason.com>  Mon, 07 Jul 2014 12:55:02 -0700
+
+autobuilder (6.65.2) unstable; urgency=low
+
+  * Fix the generation of git arguments when the GitBranch flag is used.
+  * Set EDITOR=/bin/true when running dpkg-source --commit
+
+ -- David Fox <dsf@seereason.com>  Mon, 02 Jun 2014 15:55:05 -0700
+
+autobuilder (6.65.1) unstable; urgency=low
+
+  * Bump version.
+
+ -- David Fox <dsf@seereason.com>  Thu, 22 May 2014 06:29:30 -0700
+
+autobuilder (6.65) unstable; urgency=low
+
+  * Remove the script to run the autobuilder the package
+    autobuilder-seereason now builds an autobuilder executable, and
+    includes the configuration information for our repository.
+
+ -- David Fox <dsf@seereason.com>  Wed, 21 May 2014 17:14:17 -0700
+
+autobuilder (6.64) unstable; urgency=low
+
+  * Remove unused parameter "myCompilerVersion" of defaultParams - we now
+    discover the version of GHC by examining the build environment.
+
+ -- David Fox <dsf@seereason.com>  Thu, 08 May 2014 08:18:19 -0700
+
+autobuilder (6.63) unstable; urgency=low
+
+  * Remove the ghcVersion field from the parameter record.
+
+ -- David Fox <dsf@seereason.com>  Mon, 05 May 2014 12:55:13 -0700
+
+autobuilder (6.62) unstable; urgency=low
+
+  * Add SkipVersion to the PackageFlag type in
+    Debian.AutoBuilder.Types.Packages.  This is clearer than commenting
+    targets out and allows us to wait for a newer version of a package
+    and build it automatically when it arrives.
+  * Add FailVersion, which is like SkipVersion but causes a package build
+    failure, discarding the package and all the packages that depend on it.
+  * Add SkipPackage and FailPackage.
+
+ -- David Fox <dsf@seereason.com>  Fri, 28 Mar 2014 05:18:21 -0700
+
+autobuilder (6.61) unstable; urgency=low
+
+  * Changes to send proper compiler version number to cabal-debian.
+
+ -- David Fox <dsf@seereason.com>  Fri, 07 Mar 2014 13:56:42 -0800
+
+autobuilder (6.60) unstable; urgency=low
+
+  * Fix bug in build decision - use the build decision to decide whether
+    to do an arch only or a sourceful build, not the current release
+    status.  Even if the current release status of a package is Arch (only
+    binary packages missing) we still want a sourceful build if the build
+    decision is Yes rather than Arch.
+
+ -- David Fox <dsf@seereason.com>  Sun, 02 Feb 2014 09:45:49 -0800
+
+autobuilder (6.59) unstable; urgency=low
+
+  * Changes for debian-3.81
+  * Make sure we give new local repostories the correct architecture list
+
+ -- David Fox <dsf@seereason.com>  Tue, 14 Jan 2014 08:36:19 -0800
+
+autobuilder (6.58) unstable; urgency=low
+
+  * Use the exceptions package instead of MonadCatchIO-mtl
+
+ -- David Fox <dsf@seereason.com>  Tue, 07 Jan 2014 06:50:58 -0800
+
+autobuilder (6.57) unstable; urgency=low
+
+  * Collect code for the local repository in LocalRepo
+  * Collect code for the build environement in BuildEnv
+  * Use the new optionaIncludePackages feature of debian-repo
+
+ -- David Fox <dsf@seereason.com>  Wed, 18 Dec 2013 14:48:11 -0800
+
+autobuilder (6.56.1) unstable; urgency=low
+
+  * Fix bug involving the CabalPin flag and scraping version numbers from
+    hackage2.
+
+ -- David Fox <dsf@seereason.com>  Sat, 12 Oct 2013 09:05:52 -0700
+
+autobuilder (6.56) unstable; urgency=low
+
+  * Change path to tarball files for hackage2.
+
+ -- David Fox <dsf@seereason.com>  Fri, 04 Oct 2013 09:23:35 -0700
+
+autobuilder (6.55) unstable; urgency=low
+
+  * Allow full debian relations rather than just a package name as the
+    argument to several flags in cabal-debian and autobuilder: --map-dep,
+    --build-dep, --build-dep-indep, --exec-map
+
+ -- David Fox <dsf@seereason.com>  Sun, 01 Sep 2013 11:59:32 -0700
+
+autobuilder (6.54) unstable; urgency=low
+
+  * Changes for debian-3.74
+
+ -- David Fox <dsf@seereason.com>  Tue, 23 Apr 2013 23:49:44 -0700
+
+autobuilder (6.53.3) unstable; urgency=low
+
+  * Changes for debian-3.71
+
+ -- David Fox <dsf@seereason.com>  Sun, 14 Apr 2013 13:33:02 -0700
+
+autobuilder (6.53.2) unstable; urgency=low
+
+  * Don't specify version numbers when building an apt-get install
+    command from the source package fingerprint.  This was causing
+    problems when new versions of a dependency come out after the
+    source package was built.
+
+ -- David Fox <dsf@seereason.com>  Sat, 13 Apr 2013 10:32:55 -0700
+
+autobuilder (6.53.1) unstable; urgency=low
+
+  * Use some new Show instances
+  * Renamed some constructors in Debian.AutoBuilder.Types.Packages
+
+ -- David Fox <dsf@seereason.com>  Wed, 10 Apr 2013 12:32:35 -0700
+
+autobuilder (6.53) unstable; urgency=low
+
+  * Add debianization script and use the debianization it produces.
+
+ -- David Fox <dsf@seereason.com>  Wed, 13 Mar 2013 09:49:26 -0700
+
+autobuilder (6.52) unstable; urgency=low
+
+  * Move code from autobuilder-config to here.
+
+ -- David Fox <dsf@seereason.com>  Mon, 11 Mar 2013 08:54:10 -0700
+
+autobuilder (6.51) unstable; urgency=low
+
+  * Add Packages combinators to Debian.Autobuilder.Types.Packages.
+
+ -- David Fox <dsf@seereason.com>  Sun, 03 Mar 2013 06:23:20 -0800
+
+autobuilder (6.50) unstable; urgency=low
+
+  * Detect bogus target names in the command line parameters.
+
+ -- David Fox <dsf@seereason.com>  Mon, 25 Feb 2013 09:05:36 -0800
+
+autobuilder (6.49) unstable; urgency=low
+
+  * Changes for cabal-debian 3.0.
+
+ -- David Fox <dsf@seereason.com>  Sun, 03 Feb 2013 08:38:56 -0800
+
+autobuilder (6.48.3) unstable; urgency=low
+
+  * Require cabal-debian 2.6.3 to bypass a bug formatting the control
+    file.
+
+ -- David Fox <dsf@seereason.com>  Fri, 04 Jan 2013 09:44:32 -0800
+
+autobuilder (6.48.2) unstable; urgency=low
+
+  * Add a missing newline in the generated changelog entry.
+
+ -- David Fox <dsf@seereason.com>  Wed, 26 Dec 2012 16:43:47 -0800
+
+autobuilder (6.48.1) unstable; urgency=low
+
+  * Restore the code to first try running debian/Debianize.hs before
+    calling the debianize function directly
+
+ -- David Fox <dsf@seereason.com>  Fri, 21 Dec 2012 10:52:10 -0800
+
+autobuilder (6.48) unstable; urgency=low
+
+  * New PackageFlag: ModifyAtoms, takes a function [DebAtom] -> [DebAtom].
+    This is used to modify the debianization in arbitrary ways, such as
+    adding data files to a binary package.
+  * Don't route all arguments to callDebianize through the command line
+    parser, convert PackageFlags directory to cabal-debian flags.  This
+    gives us more flexibility, specifically enabling using ModifyAtoms
+    flag in the autobuilder configuration file.
+
+ -- David Fox <dsf@seereason.com>  Thu, 20 Dec 2012 06:42:52 -0800
+
+autobuilder (6.47) unstable; urgency=low
+
+  * Change the data type used to hold a patch from String to ByteString,
+    because this is what embedFile returns.
+
+ -- David Fox <dsf@seereason.com>  Sun, 16 Dec 2012 14:59:34 -0800
+
+autobuilder (6.46) unstable; urgency=low
+
+  * CD to ~/.autobuilder.d so we can find files in the config directory,
+    specifically patches that we fileEmbed in the target list.  This also
+    keeps it from seeing random haskell modules in pwd while running.
+  * Add file-embed to build dependencies so libghc-file-embed-dev is
+    available while autobuilder is running.
+
+ -- David Fox <dsf@seereason.com>  Sat, 15 Dec 2012 11:41:57 -0800
+
+autobuilder (6.45) unstable; urgency=low
+
+  * Working Git target support.
+
+ -- David Fox <dsf@seereason.com>  Sat, 24 Nov 2012 06:12:25 -0800
+
+autobuilder (6.44) unstable; urgency=low
+
+  * Move some debianization code into cabal-debian.
+
+ -- David Fox <dsf@seereason.com>  Thu, 15 Nov 2012 11:00:38 -0800
+
+autobuilder (6.43) unstable; urgency=low
+
+  * ^C should terminate the autobuilder during a package build, not
+    just the single package.
+  * Debianize: throw an exception if Setup configure fails
+  * Add the extraLib dependencies to the dev package's dependencies
+
+ -- David Fox <dsf@seereason.com>  Wed, 14 Nov 2012 09:31:28 -0800
+
+autobuilder (6.42) unstable; urgency=low
+
+  * Remove the Moderate constructor from the Strictness type, now
+    we only have Lax and Strict.
+  * Strict operation removes all build dependencies from the environment
+    before building each package
+  * The Lax mode is now the default, a --strict argument is added
+  * A --flush-depends argument is added which flushes all build
+    dependencies before starting the build.
+  * Always make sure that clean exists, then if depends doesn't exist or
+    flushDepends is set copy clean to depend.  Then install dependencies,
+    copy depends to build, and continue.
+
+ -- David Fox <dsf@seereason.com>  Thu, 08 Nov 2012 04:45:57 -0800
+
+autobuilder (6.41) unstable; urgency=low
+
+  * Send CABALDEBIAN=["--deb-version", versionnumber] to cabal-debian
+
+ -- David Fox <dsf@seereason.com>  Mon, 05 Nov 2012 17:43:34 -0800
+
+autobuilder (6.40) unstable; urgency=low
+
+  * When debianizing, try running Setup configure --builddir=debian,
+    if that doesn't work then we call the debianize function.  This
+    lets the user provide custom debianization code in the haskell
+    package's Setup file.
+
+ -- David Fox <dsf@seereason.com>  Mon, 05 Nov 2012 09:52:00 -0800
+
+autobuilder (6.39) unstable; urgency=low
+
+  * Bypass abandoned versions.
+
+ -- David Fox <dsf@seereason.com>  Sat, 03 Nov 2012 06:14:33 -0700
+
+autobuilder (6.34) unstable; urgency=low
+
+  * Fix code to cache repository info.
+
+ -- David Fox <dsf@seereason.com>  Wed, 24 Oct 2012 16:11:53 -0700
+
+autobuilder (6.33) unstable; urgency=low
+
+  * Eliminate duplicate error messages.
+
+ -- David Fox <dsf@seereason.com>  Sun, 07 Oct 2012 12:41:53 -0700
+
+autobuilder (6.32) unstable; urgency=low
+
+  * Fix the algorithm for processing targets.
+
+ -- David Fox <dsf@seereason.com>  Thu, 04 Oct 2012 21:37:07 -0700
+
+autobuilder (6.31) unstable; urgency=low
+
+  * Build *all* the ready targets we know about before going back
+    and redoing the dependency computation.
+
+ -- David Fox <dsf@seereason.com>  Thu, 04 Oct 2012 12:19:05 -0700
+
+autobuilder (6.30) unstable; urgency=low
+
+  * Fix support for applying a patch to an apt target
+  * Remove a confusing error message
+  * Show cwd when running cabal-debian
+
+ -- David Fox <dsf@seereason.com>  Thu, 20 Sep 2012 08:03:08 -0700
+
+autobuilder (6.29) unstable; urgency=low
+
+  * Improve format of ready target message.
+
+ -- David Fox <dsf@seereason.com>  Wed, 18 Jul 2012 17:09:09 -0700
+
+autobuilder (6.28) unstable; urgency=low
+
+  * Make the TargetSpec type more flexible.
+
+ -- David Fox <dsf@seereason.com>  Thu, 28 Jun 2012 09:47:56 -0700
+
+autobuilder (6.27) unstable; urgency=low
+
+  * Add a --no-doc option to send --disable-haddock to cabal-debian.
+
+ -- David Fox <dsf@seereason.com>  Sat, 16 Jun 2012 14:12:54 -0700
+
+autobuilder (6.26) unstable; urgency=low
+
+  * Add a --report option to print report of pinned and patched packages.
+
+ -- David Fox <dsf@seereason.com>  Sat, 31 Mar 2012 08:34:49 -0700
+
+autobuilder (6.25) unstable; urgency=low
+
+  * Fix some type safety issues when mapping cabal to debian library
+    names.
+
+ -- David Fox <dsf@seereason.com>  Sun, 25 Mar 2012 12:16:08 -0700
+
+autobuilder (6.24) unstable; urgency=low
+
+  * Use distinct types for Debian binary and source package names,
+    rather than String.
+
+ -- David Fox <dsf@seereason.com>  Thu, 15 Mar 2012 12:39:46 -0700
+
+autobuilder (6.23) unstable; urgency=low
+
+  * Resolve some confusion between the name in the Packages type and
+    the debian source package name.  Turned out to involve extensive
+    changes to the signatures of the prepare and retrieve functions.
+
+ -- David Fox <dsf@seereason.com>  Wed, 14 Mar 2012 10:00:29 -0700
+
+autobuilder (6.22) unstable; urgency=low
+
+  * Make Patch a retrieve method instead of a flag.
+  * Add a DataFiles method to add data files to a cabal package.
+  * Add support to the Uri method for zip files and plain files.
+
+ -- David Fox <dsf@seereason.com>  Thu, 08 Mar 2012 05:56:07 -0800
+
+autobuilder (6.21) unstable; urgency=low
+
+  * Split the debianization functionality out of the Hackage download
+    method, so we can, for example, debianize a darcs download.
+
+ -- David Fox <dsf@seereason.com>  Tue, 06 Mar 2012 10:56:06 -0800
+
+autobuilder (6.20) unstable; urgency=low
+
+  * Moved target specific flags out of RetrieveMethod into PackageFlag.
+
+ -- David Fox <dsf@seereason.com>  Mon, 05 Mar 2012 17:20:11 -0800
+
+autobuilder (6.19) unstable; urgency=low
+
+  * Change revision string format so it begins with a RetrieveMethod.
+
+ -- David Fox <dsf@seereason.com>  Sun, 04 Mar 2012 08:17:02 -0800
+
+autobuilder (6.18.3) unstable; urgency=low
+
+  * in asBuildable, first look for debianization in download directory,
+    then in subdirectories.  Previously it was the other way around.
+
+ -- David Fox <dsf@seereason.com>  Fri, 02 Mar 2012 13:41:48 -0800
+
+autobuilder (6.18.2) unstable; urgency=low
+
+  * Accomodate packages with the old revision string format.
+
+ -- David Fox <dsf@seereason.com>  Fri, 02 Mar 2012 06:31:21 -0800
+
+autobuilder (6.18.1) unstable; urgency=low
+
+  * Fix a bug in the format of the revision string.
+
+ -- David Fox <dsf@seereason.com>  Thu, 01 Mar 2012 20:29:49 -0800
+
+autobuilder (6.18) unstable; urgency=low
+
+  * Rename type Spec -> RetrieveMethod
+  * Split up PackageFlag into several target specific types 
+  * Improve package pipeline.
+
+ -- David Fox <dsf@seereason.com>  Sat, 25 Feb 2012 06:25:09 -0800
+
+autobuilder (6.17) unstable; urgency=low
+
+  * Add a --hackage-server, and update HTMl parser so we can use either
+    hackage.haskell.org or hackage.factisresearch.com.
+
+ -- David Fox <dsf@seereason.com>  Sat, 18 Feb 2012 21:35:57 -0800
+
+autobuilder (6.16.1) unstable; urgency=low
+
+  * Changes for tar 0.4.
+
+ -- David Fox <dsf@seereason.com>  Tue, 14 Feb 2012 07:16:18 -0800
+
+autobuilder (6.16) unstable; urgency=low
+
+  * Fix a bug in the code that runs dpkg-source --commit where it used
+    doesFileExist instead of doesDirectory exist.  Also handle the case
+    where the debian/patches directory already exists, but we have local
+    changes too.  There is probably a remaining bug when the package
+    includes a debian/patches/autobuilder.diff file.
+
+ -- David Fox <dsf@seereason.com>  Fri, 10 Feb 2012 09:28:36 -0800
+
+autobuilder (6.15) unstable; urgency=low
+
+  * Maintain a map from cabal package names to debian epoch numbers so we
+    can create correct debian version numbers in both the changelog for
+    the package being built and for the version numbers of dependencies.
+
+ -- David Fox <dsf@seereason.com>  Thu, 09 Feb 2012 07:29:54 -0800
+
+autobuilder (6.14) unstable; urgency=low
+
+  * Add an ExtraDevDep entry to the Param record, pass a --dev-dep flag to
+    cabal-debian when we see this parameter.
+  * Add a MapDep entry to the Param record, pass a --map-dep flag to
+    cabal-debian when we see it.
+
+ -- David Fox <dsf@seereason.com>  Mon, 23 Jan 2012 05:22:57 -0800
+
+autobuilder (6.13) unstable; urgency=low
+
+  * Rename the type Package -> Packages and make it a Monoid, adding
+    NoPackage and Packages (Set.Set Packages) construcors.
+
+ -- David Fox <dsf@seereason.com>  Wed, 11 Jan 2012 09:22:45 -0800
+
+autobuilder (6.12) unstable; urgency=low
+
+  * Add support for debian's 3.0 (quilt) source format when target is of
+    the form DebDir (Uri ...) (...).
+
+ -- David Fox <dsf@seereason.com>  Sun, 01 Jan 2012 11:00:24 -0800
+
+autobuilder (6.11) unstable; urgency=low
+
+  * Add a Revision String constructor to PackageFlag so we can control the
+    revision string used when debianizing hackage targets.  If the hackage
+    version of a package is already in sid we usually get into trouble
+    because the debian version we generate by default looks older.
+
+ -- David Fox <dsf@seereason.com>  Sun, 20 Nov 2011 07:01:43 -0800
+
+autobuilder (6.10) unstable; urgency=low
+
+  * Make sure the debian source package names match the name in the
+    Package record.
+
+ -- David Fox <dsf@seereason.com>  Fri, 04 Nov 2011 06:41:07 -0700
+
+autobuilder (6.9) unstable; urgency=low
+
+  * Actually, its dpkg-dev-1.16.1 that requires dpkg-source --commit.
+  * Require cabal-debian 1.3 or newer.
+
+ -- David Fox <dsf@seereason.com>  Sat, 08 Oct 2011 08:54:51 -0700
+
+autobuilder (6.8) unstable; urgency=low
+
+  * If dpkg-dev is 1.16 or newer is installed in the build environment,
+    we may need to run dpkg-source --commit to update the source package
+    when there are local changes created by a Quilt target or similar.
+
+ -- David Fox <dsf@seereason.com>  Tue, 04 Oct 2011 21:48:17 -0700
+
+autobuilder (6.7) unstable; urgency=low
+
+  * Add a constructor Patch B.ByteString to the PackageFlags type so we
+    can specify the text of a patch directly in the autobuilder config
+    and it will be applied to the source code of a debianize target.
+  * Add a flag to PackageFlags to set the maintainer for cabal-debian.
+
+ -- David Fox <dsf@seereason.com>  Sat, 10 Sep 2011 09:43:06 -0700
+
+autobuilder (6.6) unstable; urgency=low
+
+  * Add support for cabal-debian flags --deb-name, --deb-version, --epoch
+  * Make the list of PackageFlag available when building a target.
+  * Use the haskell expression for Target (now Package) instead of the old
+    package spec syntax.
+  * Fail if we don't have the built-in module list for the exact compiler
+    version that is in our build environment.
+
+ -- David Fox <dsf@seereason.com>  Wed, 24 Aug 2011 16:39:35 -0700
+
+autobuilder (6.5) unstable; urgency=low
+
+  * Simplify the parameter handling code
+  * Replac the relaxInfo field of Target with a more general flag list.
+
+ -- David Fox <dsf@seereason.com>  Sat, 20 Aug 2011 06:40:59 -0700
+
+autobuilder (6.4) unstable; urgency=low
+
+  * Run cabal-debian on hackage targets to generate debianization.
+    This means we need to remove all the deb-dir targets we wrapped around
+    our hackage targets.
+
+ -- David Fox <dsf@seereason.com>  Mon, 15 Aug 2011 10:50:41 -0700
+
+autobuilder (6.3.5) unstable; urgency=low
+
+  * Use unmountRecursiveSafely to unmount /proc after installing the build
+    deps, as well as after build of a proc target, in case it somehow gets
+    unmounted.
+  * Only mount /proc during the actual call to apt-get, not for all of
+    prepareBuildImage.
+
+ -- David Fox <dsf@seereason.com>  Wed, 13 Jul 2011 15:42:36 -0700
+
+autobuilder (6.3.4) unstable; urgency=low
+
+  * Mount /proc while installing build dependencies - some packages
+    require it, and it is so normal I can't forsee any adverse effects.
+
+ -- David Fox <dsf@seereason.com>  Tue, 12 Jul 2011 22:28:53 -0700
+
+autobuilder (6.3.3) unstable; urgency=low
+
+  * Fix the detection of a failure condition where the upstream source
+    version is newer than the version in the debian directory
+
+ -- David Fox <dsf@seereason.com>  Sun, 26 Jun 2011 10:50:05 -0700
+
+autobuilder (6.3.2) unstable; urgency=low
+
+  * Add a hackage: target to download source code from hackage.haskell.org.  A target
+    of the form "hackage:packagename" downloads the newest version, if the form is
+    "hackage:packagename=version" the specified version is used.
+
+ -- David Fox <dsf@seereason.com>  Sat, 25 Jun 2011 12:05:05 -0700
+
+autobuilder (6.3.1) unstable; urgency=low
+
+  * Fix repo caching
+
+ -- David Fox <dsf@seereason.com>  Fri, 31 Dec 2010 11:11:15 -0800
+
+autobuilder (6.3) unstable; urgency=low
+
+  * Use new progress reporting code in debian-repo 5.15
+
+ -- David Fox <dsf@seereason.com>  Mon, 27 Dec 2010 06:05:55 -0800
+
+autobuilder (6.2.5) unstable; urgency=low
+
+  * Allow our quilt targets to work with Debian's.
+
+ -- David Fox <dsf@seereason.com>  Mon, 20 Dec 2010 05:44:30 -0800
+
+autobuilder (6.2.4) unstable; urgency=low
+
+  * Panic if the version number we compute for a new package looks older
+    then the current version of the package.
+
+ -- David Fox <dsf@seereason.com>  Sun, 19 Dec 2010 16:46:15 -0800
+
+autobuilder (6.2.3) unstable; urgency=low
+
+  * Print out the table of ready and blocked packages before each target.
+
+ -- David Fox <dsf@seereason.com>  Mon, 11 Oct 2010 23:19:17 -0700
+
+autobuilder (6.2.2) unstable; urgency=low
+
+  * Output topDir at beginning of each parameter set.
+
+ -- David Fox <dsf@seereason.com>  Mon, 11 Oct 2010 21:03:30 -0700
+
+autobuilder (6.2.1) unstable; urgency=low
+
+  * Fix the generation of the revision string for apt targets.  If I
+    knew how I would ask darcs when this got to be the way it was, it
+    makes no sense.
+
+ -- David Fox <dsf@seereason.com>  Wed, 01 Sep 2010 08:15:15 -0700
+
+autobuilder (6.2) unstable; urgency=low
+
+  * More cleanups in error and exception handling.
+
+ -- David Fox <dsf@seereason.com>  Tue, 27 Jul 2010 15:58:25 -0700
+
+autobuilder (6.1) unstable; urgency=low
+
+  * Switch back to tdfa (reverted from 1.1.3 to 1.1.2.)
+  * Improved error reporting
+  * Update imports
+
+ -- David Fox <dsf@seereason.com>  Mon, 19 Jul 2010 11:50:54 +0100
+
+autobuilder (6.0.3) unstable; urgency=low
+
+  * Switch from regex-tdfa to regex-posix, see comment in haskell-debian.
+
+ -- David Fox <dsf@seereason.com>  Fri, 16 Jul 2010 10:47:23 -0700
+
+autobuilder (6.0.2) unstable; urgency=low
+
+  * Use md5sums of the target specs to name the working directories in
+    .autobuilder.
+
+ -- David Fox <dsf@seereason.com>  Sun, 30 May 2010 12:27:49 -0700
+
+autobuilder (6.0.1) unstable; urgency=low
+
+  * Fix Debian.AutoBuilder.BuildTarget.Darcs.renderForDarcs so it
+    can handle a local path as well as a URI.
+
+ -- David Fox <dsf@seereason.com>  Sun, 30 May 2010 10:20:27 -0700
+
+autobuilder (6.0) unstable; urgency=low
+
+  * New major version number for autobuilders that use debootstrap
+    instead of build-env.
+  * Replace the fields of Params involving which packages to include
+    and exclude from the build environment with just includePackages 
+    and excludePackages.  Use debian-repo-5.9.
+
+ -- David Fox <dsf@seereason.com>  Thu, 27 May 2010 09:11:04 -0700
+
+autobuilder (5.18) unstable; urgency=low
+
+  * Switch to debian-repo-5.8, which uses debootstrap instead of
+    build-env.
+
+ -- David Fox <dsf@seereason.com>  Wed, 26 May 2010 12:57:18 -0700
+
+autobuilder (5.17) unstable; urgency=low
+
+  * Add a --build-trumped <package> option, so we can build the older
+    version of ghc6 required to build the latest one.
+
+ -- David Fox <dsf@seereason.com>  Fri, 21 May 2010 06:29:24 -0700
+
+autobuilder (5.16) unstable; urgency=low
+
+  * Eliminate the use of the CIO class and the TIO monad, use
+    IO directly.
+
+ -- David Fox <dsf@seereason.com>  Sun, 09 May 2010 13:26:29 -0700
+
+autobuilder (5.15) unstable; urgency=low
+
+  * Use Sets of targets rather than lists
+  * Add Eq and Ord instances to Target
+  * Compute final target set after all the parameter sets are computed,
+    rather than at the time the different flags that affect the target set
+    are encountered.
+
+ -- David Fox <dsf@seereason.com>  Sun, 09 May 2010 09:40:09 -0700
+
+autobuilder (5.14) unstable; urgency=low
+
+  * Quick fix to get arch-only builds to work better.  It definitely
+    helps, but it may still get confused by build dependency regressions.
+
+ -- David Fox <dsf@seereason.com>  Wed, 17 Feb 2010 21:35:43 -0800
+
+autobuilder (5.13) unstable; urgency=low
+
+  * Don't ever unset the locale variable LANG, it makes it impossible to
+    read some of the source files.  If the locales package is installed
+    in the build environment this change shouldn't cause a problem.  Fixes
+    the invalid argument error mentioned in 5.12 entry.
+
+ -- David Fox <dsf@seereason.com>  Mon, 08 Feb 2010 06:13:21 -0800
+
+autobuilder (5.12) unstable; urgency=low
+
+  * Fix at least one case of this error: fd:40: hGetContents: invalid argument (Invalid or incomplete multibyte or wide character)
+
+ -- David Fox <dsf@seereason.com>  Sat, 02 Jan 2010 17:47:11 -0800
+
+autobuilder (5.11) unstable; urgency=low
+
+  * Pull in fix in haskell-debian-repo that fixes a bug in the way
+    packages with epoch numbers are handled.
+
+ -- David Fox <dsf@seereason.com>  Tue, 24 Nov 2009 19:39:44 -0800
+
+autobuilder (5.10) unstable; urgency=low
+
+  * For karmic, we need to pass --force-yes to prevent failures when apt-get
+    gives a warning.
+
+ -- David Fox <dsf@seereason.com>  Fri, 20 Nov 2009 06:33:11 -0800
+
+autobuilder (5.9) unstable; urgency=low
+
+  * Fix the adjustVendorTag function and add some unit tests.
+
+ -- David Fox <dsf@seereason.com>  Tue, 01 Sep 2009 06:56:28 -0700
+
+autobuilder (5.8) unstable; urgency=low
+
+  * Make the separator between the regular and quilt versions "++" instead
+    of just "+", so that adding a quilt patch trumps versions that just had
+    the "+seereason" vendor tag appended.
+  * Adjust the vendor tag so it has a suitable number of '+' - generally one,
+    possibly two if your vendor name starts with a or b.
+
+ -- David Fox <dsf@seereason.com>  Wed, 19 Aug 2009 17:16:35 -0700
+
+autobuilder (5.7) unstable; urgency=low
+
+  * Add an oldVendorTags field to the Params structure, so we can change
+    the vendor tag we are using and still strip the old and the new tag
+    when deciding what the upstream source package version is.
+
+ -- David Fox <dsf@seereason.com>  Mon, 27 Jul 2009 10:43:46 -0700
+
+autobuilder (5.6) unstable; urgency=low
+
+  * This version pulls in a more lenient changelog parser in haskell-debian,
+    instead of the normal two spaces at the beginning of log entry lines, it
+    allows a tab or a space and a tab.
+
+ -- David Fox <dsf@seereason.com>  Tue, 21 Jul 2009 11:55:50 -0700
+
+autobuilder (5.5) unstable; urgency=low
+
+  * Add a "twice:" target to control whether we run dpkg-buildpackage a
+    second time if the first time fails.  Some packages are designed to
+    configure themselves and fail the first time you build them, and
+    succeed the second time, in order to prevent fully automated builds.
+    Up until now the autobuilder always tried dpkg-buildpackage twice, now
+    you need to add "twice:" to the front of the target to get this
+    behavior.
+  * Support the SHA1 and SHA256 checksums that debian now puts into the
+    .changes file by updating them when the autobuilder edits the .dsc
+    file.
+
+ -- David Fox <dsf@seereason.com>  Fri, 03 Apr 2009 14:52:34 -0700
+
+autobuilder (5.4) unstable; urgency=low
+
+  * Fix handling of architecture independent packages that were
+    already build on a machine with a different architecture.
+
+ -- David Fox <dsf@seereason.com>  Mon, 23 Feb 2009 07:02:04 -0800
+
+autobuilder (5.3) unstable; urgency=low
+
+  * Put more useful text into the Changes field of the .changes file,
+    so that the newdist messages are more useful.
+  * The --goal option needs to imply the --all-targets option
+  * Fix an non-exhaustive pattern bug in the config file autobuilder.hs.
+
+ -- David Fox <dsf@seereason.com>  Sat, 21 Feb 2009 17:19:38 -0800
+
+autobuilder (5.2) unstable; urgency=low
+
+  * Add a help/usage option.
+
+ -- David Fox <dsf@seereason.com>  Sat, 21 Feb 2009 09:56:27 -0800
+
+autobuilder (5.1) unstable; urgency=low
+
+  * Add support for splitting up the configuration file, use feature in example.
+
+ -- David Fox <dsf@seereason.com>  Sat, 21 Feb 2009 08:57:24 -0800
+
+autobuilder (5.0) unstable; urgency=low
+
+  * Bump major version number to reflect new configuration style.
+  * Use new split off debian-repo library
+
+ -- David Fox <dsf@seereason.com>  Wed, 18 Feb 2009 11:23:38 -0800
+
+autobuilder (4.46) unstable; urgency=low
+
+  * Add a help message.
+  * Fix path to configuration directory (~/.autobuilder.d, not ~/.autobuilder)
+
+ -- David Fox <dsf@seereason.com>  Mon, 16 Feb 2009 06:19:58 -0800
+
+autobuilder (4.45) unstable; urgency=low
+
+  * Add a force argument to useEnv to make sure we complete the
+    computation before we tear down the changeroot environment.
+    Unfortunately, this force argument can only run in the regular IO
+    monad, so we can't use our nicer terminal formatting monad TIO.
+
+ -- David Fox <dsf@seereason.com>  Wed, 11 Feb 2009 06:10:30 -0800
+
+autobuilder (4.44) unstable; urgency=low
+
+  * Create a wrapper script named autobuilder that runs the configuration
+    file in ~/.autobuilder/AutoBuilder.hs.  If that script doesn't exist
+    it creates it by coping an example script.
+  * Fix a bug in useEnv.
+
+ -- David Fox <dsf@seereason.com>  Mon, 09 Feb 2009 18:12:37 -0800
+
+autobuilder (4.43) unstable; urgency=low
+
+  * Support for running multiple parameter sets
+  * Require build-env >= 2.28.
+  * Replace old autobuilder executable with one that just takes a list
+    of build releases as its arguments.
+
+ -- David Fox <dsf@seereason.com>  Sun, 08 Feb 2009 13:30:27 -0800
+
+autobuilder (4.42) unstable; urgency=low
+
+  * Add code to mount the ssh agent socket directory inside the
+    chroot and unmount it when we exit.
+
+ -- David Fox <dsf@seereason.com>  Fri, 06 Feb 2009 14:48:32 -0800
+
+autobuilder (4.41) unstable; urgency=low
+
+  * Fix problem with new autobuilder script creating build environments,
+    requires debian >= 3.26.
+
+ -- David Fox <dsf@seereason.com>  Thu, 05 Feb 2009 10:28:29 -0800
+
+autobuilder (4.40) unstable; urgency=low
+
+  * Work on new Haskell configuration style.
+  * Fix --use-repo-cache so it actually uses the repo cache for the first
+    time.
+  * Modify --force-build so it takes a source package name, and may be
+    repeated.
+
+ -- David Fox <dsf@seereason.com>  Wed, 04 Feb 2009 13:22:44 -0800
+
+autobuilder (4.39) unstable; urgency=low
+
+  * Add the --goal option, which allows you to specify one or more 
+    packages which you wish to build.  Once those packages and all of
+    the packages they depend on are built the autobuilder exits.
+
+ -- David Fox <dsf@seereason.com>  Sun, 01 Feb 2009 07:59:25 -0800
+
+autobuilder (4.38) unstable; urgency=low
+
+  * API changes in haskell-debian
+  * Restore code to add build info (elapsed time, etc) to the .changes file
+  * Add a cd target, which builds a debian package from a subdirectory
+
+ -- David Fox <dsf@seereason.com>  Sat, 31 Jan 2009 08:54:38 -0800
+
+autobuilder (4.37) unstable; urgency=low
+
+  * API changes for haskell-debian 3.22.
+  * Eliminate most uses of EnvPath, use regular FilePath type instead.
+  * Introduce ParamClass, a type class for the autobuilder's runtime parameters
+
+ -- David Fox <dsf@seereason.com>  Thu, 29 Jan 2009 16:49:06 -0800
+
+autobuilder (4.36) unstable; urgency=low
+
+  * Modify the code to choose the next target so we always build the
+    package blocking the largest number of other packages first.  That
+    way, when we parallelize the autobuilder we'll have more ready
+    targets that can be forked off.
+
+ -- David Fox <dsf@seereason.com>  Tue, 27 Jan 2009 06:50:57 -0800
+
+autobuilder (4.35) unstable; urgency=low
+
+  * Add build dependency on cabal-debian.
+
+ -- David Fox <dsf@seereason.com>  Sun, 25 Jan 2009 20:34:30 -0800
+
+autobuilder (4.34) unstable; urgency=low
+
+  * Fix code to avoid re-downloading tarballs.
+
+ -- David Fox <dsf@seereason.com>  Fri, 23 Jan 2009 19:21:24 -0800
+
+autobuilder (4.33) unstable; urgency=low
+
+  * Work around ghc bug 2971.
+
+ -- David Fox <dsf@seereason.com>  Wed, 21 Jan 2009 09:48:43 -0800
+
+autobuilder (4.32) unstable; urgency=low
+
+  * Allow uri: targets to refer to uncompressed, gzipped, or bzip2'ed
+    tarballs
+
+ -- David Fox <dsf@seereason.com>  Mon, 10 Nov 2008 06:09:26 -0800
+
+autobuilder (4.31) unstable; urgency=low
+
+  * Add and repair support for sources.list entries that have ssh: as the
+    URI scheme.
+
+ -- David Fox <dsf@seereason.com>  Wed, 05 Nov 2008 10:40:19 -0800
+
+autobuilder (4.30) unstable; urgency=low
+
+  * Prohibit versions in the changelog that look like vendor tags added by
+    the autobuilder.  They make it difficult for the author to know what
+    version needs to go into debian/changelog to trigger a build by the
+    autobuilder, particularly since each distribution may have different
+    auto-generated versions.
+
+ -- David Fox <dsf@seereason.com>  Mon, 06 Oct 2008 09:52:10 -0700
+
+autobuilder (4.29) unstable; urgency=low
+
+  * Fix error message for bad URI target syntax.
+
+ -- David Fox <dsf@seereason.com>  Tue, 23 Sep 2008 07:58:02 -0700
+
+autobuilder (4.28) unstable; urgency=low
+
+  * Require the md5sum suffix on uri targets, this means we don't have to
+    download them when we already have a file with the correct checksum.
+    Before the checksum was optional, but human nature being what it is
+    many targets were left without checksums resulting in unnecessary
+    file downloads on every run of the autobuilder.  It also resulted in
+    builds failing when corrupt downloads occurred.
+
+ -- David Fox <dsf@seereason.com>  Thu, 11 Sep 2008 08:31:28 -0700
+
+autobuilder (4.27) unstable; urgency=low
+
+  * When a build dependency regresses and the --allow-build-dependency-regressions
+    flag is used, we need to rebuild packages that experience such regressions.  It
+    is not correct that they don't need rebuilding because they were built with even
+    newer packages than the ones available.  Frequently they have binary dependencies
+    on packages that are no longer available.
+  * Fix a bug in the build dependency computations which caused unnecessary rebuilds.
+
+ -- David Fox <dsf@seereason.com>  Wed, 10 Sep 2008 10:21:03 -0700
+
+autobuilder (4.26) unstable; urgency=low
+
+  * Slightly relax the expression to recognize a date string so the
+    entry in gtk2hs parses ("Thu, 8 Jul 2008 11:16:33 -0300", missing
+    a leading space or zero before the first 8.)
+
+ -- David Fox <dsf@seereason.com>  Wed, 03 Sep 2008 10:13:38 -0700
+
+autobuilder (4.25) unstable; urgency=low
+
+  * Improve reporting of dependency cycles, show a table of exactly
+    which binary and source packages participated in cycles that need
+
+ -- David Fox <dsf@seereason.com>  Wed, 20 Aug 2008 09:21:43 -0700
+
+autobuilder (4.24) unstable; urgency=low
+
+  * Return type of Debian.GenBuildDeps.buildable changed.
+
+ -- David Fox <dsf@seereason.com>  Mon, 18 Aug 2008 12:47:39 -0700
+
+autobuilder (4.23) unstable; urgency=low
+
+  * API changes in haskell-debian.
+
+ -- David Fox <dsf@seereason.com>  Sat, 19 Jul 2008 07:36:44 -0700
+
+autobuilder (4.22) unstable; urgency=low
+
+  * Most functions that were previously in the TIO monad now work with any
+    monad that is an instance of CIO, which includes IO.
+  * Remove files from the uri directory if they have bad checksums.
+
+ -- David Fox <dsf@seereason.com>  Sat, 28 Jun 2008 15:57:20 -0700
+
+autobuilder (4.21) unstable; urgency=low
+
+  * Store the dependency info and the relaxed dependency info with the target.
+    We need to use the relaxed dependency info both when deciding which target
+    to build next, and when deciding whether the target needs to be rebuilt.
+    The full dependency info is used when computing the build dependency solution.
+
+ -- David Fox <dsf@seereason.com>  Thu, 19 Jun 2008 15:58:51 +0000
+
+autobuilder (4.20) unstable; urgency=low
+
+  * Move the modules into the Debian.AutoBuilder heirarchy.
+  * Add dependency on subversion
+  * Add --allow-build-dependency-regressions option
+
+ -- David Fox <dsf@seereason.com>  Tue, 10 Jun 2008 17:45:31 +0000
+
+autobuilder (4.19) unstable; urgency=low
+
+  * Fix bug in build decision code - we now build when a new build
+    dependency appears.
+
+ -- David Fox <dsf@seereason.com>  Thu, 05 Jun 2008 12:14:39 +0000
+
+autobuilder (4.18) unstable; urgency=low
+
+  * Fix the package names of the documentation dependencies.
+
+ -- David Fox <dsf@seereason.com>  Mon, 02 Jun 2008 17:49:09 +0000
+
+autobuilder (4.17) unstable; urgency=low
+
+  * Re-debianize using cabal-debian.
+  * Fixes for haddock 2.1, re-enable documentation package.
+  * Newdist now takes a --sender-email or Sender-Email: parameter.
+
+ -- David Fox <dsf@seereason.com>  Mon, 02 Jun 2008 15:55:51 +0000
+
+autobuilder (4.16) unstable; urgency=low
+
+  * Fully implement Relax-Depends.  This directive takes a binary package name
+    and an optional source package name, and says not to rebuild the source
+    package even when the binary package is newer and is a build dependency of
+    the source package.  This must now be used to break curcular dependencies
+    such as ghc6 -> haskell-haddock -> ghc6.
+
+ -- David Fox <dsf@seereason.com>  Sat, 31 May 2008 07:37:07 +0000
+
+autobuilder (4.15) unstable; urgency=low
+
+  * Improved messaging when installation of build dependencies fails.
+
+ -- David Fox <dsf@seereason.com>  Thu, 29 May 2008 22:04:48 +0000
+
+autobuilder (4.14) unstable; urgency=low
+
+  * Ignore _darcs when it appears in the configuration directory.
+  * Build dependency computation code cleanups.
+
+ -- David Fox <dsf@seereason.com>  Thu, 22 May 2008 10:32:59 -0700
+
+autobuilder (4.13) unstable; urgency=low
+
+  * Fix bug in formatting of repoCache file.
+
+ -- David Fox <dsf@seereason.com>  Wed, 21 May 2008 16:23:25 -0700
+
+autobuilder (4.12) unstable; urgency=low
+
+  * Changes in haskell-debian API.
+
+ -- David Fox <dsf@seereason.com>  Wed, 14 May 2008 12:55:30 -0700
+
+autobuilder (4.11) unstable; urgency=low
+
+  * Using lazy bytestrings in System.Unix.Process now
+  * Bazaar support
+  * Extra essential for sid: perl-modules
+
+ -- David Fox <dsf@seereason.com>  Tue, 06 May 2008 10:42:33 -0700
+
+autobuilder (4.10) unstable; urgency=low
+
+  * Check for package name mismatches when creating the merged quilt
+    changelog.
+  * Make sure we finish computing the new changelog before overwriting
+    the old one.
+  * Don't die if there are entries in the patch changelog that are older
+    than the oldest entry in the base changelog.  Just ignore them.
+  * Update HAppS targets and others.
+
+ -- David Fox <dsf@seereason.com>  Fri, 11 Apr 2008 06:00:12 -0700
+
+autobuilder (4.9) unstable; urgency=low
+
+  * Fix a bug which prevented arch-only builds - that is, building a package
+    for amd64 when it had already been built for i386.
+
+ -- David Fox <dsf@seereason.com>  Thu, 03 Apr 2008 09:09:39 -0700
+
+autobuilder (4.8) unstable; urgency=low
+
+  * Fix a newdist bug introduced in 4.5.4 where it ignores its
+    configuration file.
+
+ -- David Fox <dsf@seereason.com>  Tue, 01 Apr 2008 16:16:36 -0700
+
+autobuilder (4.7) unstable; urgency=low
+
+  * Allow multiple identical lets.
+
+ -- David Fox <dsf@seereason.com>  Wed, 26 Mar 2008 18:54:52 -0700
+
+autobuilder (4.6) unstable; urgency=low
+
+  * Prohibit parameter sets that try to "Let" the same variable more
+    than once.  Remove any instances of this from the example config.
+  * Changes for recent versions of hardy.
+
+ -- David Fox <dsf@seereason.com>  Mon, 24 Mar 2008 15:15:18 -0700
+
+autobuilder (4.5.4) unstable; urgency=low
+
+  * Fix for case 52.
+
+ -- David Fox <dsf@seereason.com>  Wed, 12 Mar 2008 12:32:25 -0700
+
+autobuilder (4.5.3) unstable; urgency=low
+
+  * If a package was not built by the autobuilder, don't build it
+    just because we don't know the version numbers of its build
+    dependencies.  Build it only if one of those dependencies was
+    built by the autobuilder.
+
+ -- David Fox <dsf@seereason.com>  Wed, 27 Feb 2008 13:56:59 +0000
+
+autobuilder (4.5.2) unstable; urgency=low
+
+  * Fix a crash in progress reporting.
+
+ -- David Fox <dsf@seereason.com>  Tue, 26 Feb 2008 20:29:30 -0800
+
+autobuilder (4.5.1) unstable; urgency=low
+
+  * Fix an order of operation error in the quilt patch.
+
+ -- David Fox <dsf@seereason.com>  Sun, 24 Feb 2008 14:47:23 -0800
+
+autobuilder (4.5) unstable; urgency=low
+
+  * Record the version number from the source code changelog in the
+    "Revision:" string, which is added to the .dsc file.  This can then be
+    compared to the version number found in the changelog of the current
+    source code when making the build decision.  This will cause some
+    packages built with the old autobuilder to rebuild unnecessarily, but
+    only in the case where there is a vendor tag in the current source
+    code.  This makes some code in VersionPolicy obsolete.
+  * Use $! to try to avoid some "file is locked" errors.  This needs to be
+    addressed more systematically.
+
+ -- David Fox <dsf@seereason.com>  Sun, 24 Feb 2008 08:26:11 -0800
+
+autobuilder (4.4.3) unstable; urgency=low
+
+  * Adds the Release-Alias option
+  * Sort dependencies so newest version appears first in the list of OR relations
+  * If no build dependencies changed, don't add a changelog entry about it.
+
+ -- David Fox <dsf@seereason.com>  Wed, 20 Feb 2008 11:50:34 -0800
+
+autobuilder (4.4.2) unstable; urgency=low
+
+  * Fix messaging when we fail to prepare the source code of a target,
+    it was just exiting silently.  (Closes case 37)
+
+ -- David Fox <ddssff@gmail.com>  Wed, 13 Feb 2008 22:16:59 -0800
+
+autobuilder (4.4.1) unstable; urgency=low
+
+  * Update build dependencies
+
+ -- Jeremy Shaw <jeremy@n-heptane.com>  Tue, 12 Feb 2008 17:30:38 -0800
+
+autobuilder (4.4) unstable; urgency=low
+
+  * Writing repository cache was failing because the read and write
+    functions were interfering with each other.  Patch haskell-regex-base.
+  * Abort if we fail to prepare the source code of any of the targets.
+    Since we don't know what binary packages a source package will produce
+    we can't determine which subsequent packages might be affected.
+  * Progress reporting improvements.
+
+ -- David Fox <dsf@seereason.com>  Wed, 06 Feb 2008 22:15:45 -0800
+
+autobuilder (4.3) unstable; urgency=low
+
+  * Implement Use-Repo-Cache, which loads the most recent repository
+    information to avoid long queries of remote servers.
+
+ -- David Fox <ddssff@gmail.com>  Wed, 06 Feb 2008 16:02:19 -0800
+
+autobuilder (4.2) unstable; urgency=low
+
+  * Fix a VersionPolicy bug
+  * Revamp progress reporting
+
+ -- David Fox <dsf@seereason.com>  Mon, 04 Feb 2008 13:58:10 -0800
+
+autobuilder (4.1) unstable; urgency=low
+
+  * Use rewritten Debian.VersionPolicy module, vendor tags will always
+    be added to version numbers unless the --do-not-change-version flag
+    is given.
+  * Configuration updates to use new merged ubuntu and debian repositories.
+  * Add a Release-Alias parameter, to tell autobuilder to use bpo40+ for
+    the etch release name when constructing versions.
+  * Eliminate some uncaught exceptions so execution can continue when target
+    builds fail.
+
+ -- David Fox <ddssff@gmail.com>  Mon, 28 Jan 2008 13:54:03 -0800
+
+autobuilder (4.0) unstable; urgency=low
+
+  * Changes for GHC 6.8.2.
+  * Improvements in build dependency computation
+
+ -- David Fox <dsf@seereason.com>  Mon, 21 Jan 2008 20:49:03 +0000
+
+autobuilder (3.9) unstable; urgency=low
+
+  * Darcs targets can have a tag, appended to the URI following an equals sign
+    similar to the way apt targets can specify a version number:
+       darcs:http://http://darcs.haskell.org/crypto=4.0.3
+    The --tag argument will be passed to darcs get if a tag is given.
+
+ -- David Fox <dsf@seereason.org>  Wed,  7 Nov 2007 09:11:07 -0800
+
+autobuilder (3.8) unstable; urgency=low
+
+  * Cache prepared AptImage objects in the AptIO IOState so we don't
+    keep running apt-get update on them (which, as Cliff points out,
+    is not only slow, but incorrect.)
+
+ -- David Fox <ddssff@gmail.com>  Sat, 20 Oct 2007 17:01:47 +0000
+
+autobuilder (3.7) unstable; urgency=low
+
+  * Compenste for changes in haskell-debian library
+  * Use read' instead of read to see what text failed
+  * Targets to build all haskell packages
+  * Add an Autobuilder-Email parameter to autobuilder to give the address
+    the autobuilder uses in the changelog entries it generates.
+
+ -- David Fox <ddssff@gmail.com>  Thu, 11 Oct 2007 20:57:10 +0000
+
+autobuilder (3.6) unstable; urgency=low
+
+  * Newdist shouldn't depend on freespire-archive-keyring, make it a
+    "Suggests:".
+  * Use the external haskell-debian and haskell-extra libraries rather
+    than internal copies.
+  * Make the example in "Example/local" the real, working version for
+    seereason.org, and add a comment about how to change it for other
+    locations.
+
+ -- David Fox <ddssff@gmail.com>  Thu,  4 Oct 2007 21:40:02 -0700
+
+autobuilder (3.5) unstable; urgency=low
+
+  * If no Build-URI or Upload-URI value is given use an empty
+    sources.list for the build repository.  This means that
+    package versions built will still not collide with versions
+    in the local repository, but they will not be checked for
+    compatibility with any remote repository.
+  * Modifications to the configuration in the Example directory ensure
+    that the value of Build-Release is always set properly.
+  * Allow multiple addresses in newdist's Notify-Email param.
+  * Newdist now reports errors via email.
+
+ -- David Fox <ddssff@gmail.com>  Thu,  6 Sep 2007 09:50:36 -0700
+
+autobuilder (3.4) unstable; urgency=low
+
+  * Fixed bug with with sources.list mismatch
+  * Fixed bug with localpool not being updated correctly inside build environments
+  * Fixed bug that resulted in error about invalid release
+
+ -- Jeremy Shaw <jeremy.shaw@linspire.com>  Wed,  5 Sep 2007 10:25:12 -0700
+
+autobuilder (3.3) unstable; urgency=low
+
+  * Fix polarity of 'Unable to sign' error message
+
+ -- Jeremy Shaw <jeremy.shaw@linspire.com>  Fri, 31 Aug 2007 12:40:36 -0700
+
+autobuilder (3.2) unstable; urgency=low
+
+  * Hack newdist so that --create-section works. This means that the
+    Packages/Sources/Release file will be rewritten at least one extra
+    time for most runs of newdist. Hopefully prepareRelease is not run
+    once per package being installed.
+
+ -- Jeremy Shaw <jeremy.shaw@linspire.com>  Thu, 30 Aug 2007 10:58:56 -0700
+
+autobuilder (3.1) unstable; urgency=low
+
+  * Fix newdist package so it actually contains stuff
+  * newdist should also Conflict with autobuilder-newdist
+
+ -- Jeremy Shaw <jeremy.shaw@linspire.com>  Tue, 28 Aug 2007 11:15:20 -0700
+
+autobuilder (3.0) unstable; urgency=low
+
+  * Final cleanups.
+
+ -- David Fox <ddssff@gmail.com>  Mon, 27 Aug 2007 06:52:30 -0700
+
+autobuilder (2.33) unstable; urgency=low
+
+  * Use UnsafeInterleaveIO to avoid doing queries across the
+    network on repositories we never actually use.
+
+ -- David Fox <ddssff@gmail.com>  Sun, 26 Aug 2007 21:58:02 -0700
+
+autobuilder (2.32) unstable; urgency=low
+
+  * Should be a working release.
+
+ -- David Fox <ddssff@gmail.com>  Fri, 24 Aug 2007 12:07:57 -0700
+
+autobuilder (2.31) unstable; urgency=low
+
+  * Work on unifying the Apt types.
+
+ -- David Fox <ddssff@gmail.com>  Sun, 19 Aug 2007 07:31:22 -0700
+
+autobuilder (2.30) unstable; urgency=low
+
+  * Get --if-sources-changed to work properly
+  * Fix --create-section so it doesn't remove existing sections
+    when it adds a new one
+  * Fix a place where a sources.list was getting written as a
+    haskell expression.
+  * Understand apache2 directory listing format.
+  * Internal type changes: create a Repo type class for various
+    repository types (local, verified, unverified.)
+
+ -- David Fox <ddssff@gmail.com>  Tue, 14 Aug 2007 07:50:18 -0700
+
+autobuilder (2.29) unstable; urgency=low
+
+  * Fix a bug in the function that changes the release name of a
+    changes file - it was being changed in the control info but
+    the changesRelease field was not being changed.  This led to
+    build failures when the new release did not get created.
+
+ -- David Fox <david.fox@linspire.com>  Tue, 24 Jul 2007 06:31:39 -0700
+
+autobuilder (2.28) unstable; urgency=low
+
+  * Add a --release-build-tag (in the config file "Release-Build-Tag:
+    yes") option to get fancy version tags like "r1cnr3".  The normal
+    behavior is to generate tags like "cnr3".
+  * Much improved console output.
+
+ -- David Fox <david.fox@linspire.com>  Tue, 24 Jul 2007 05:08:39 -0700
+
+autobuilder (2.27) unstable; urgency=low
+
+  * Added systemProcess and systemProcess'
+  * Updated SVN backend to support password protected repositories (untested)
+  * Added -fasm flag to speed up compilation
+  * Updated libghc6-unixutils-prof depends to 1.7
+  * Added some LANGUAGE pragmas
+
+ -- Jeremy Shaw <jeremy.shaw@linspire.com>  Mon, 23 Jul 2007 11:40:56 -0700
+
+autobuilder (2.26) unstable; urgency=low
+
+  * Autobuilder should run newdist if *any* builds succeed, not just
+    when they all succeed.
+  * Fix typo that prevented recognition of --do-newdist flag.
+
+ -- David Fox <david.fox@linspire.com>  Mon,  2 Jul 2007 14:10:32 -0700
+
+autobuilder (2.25) unstable; urgency=low
+
+  * Fix bug in newdist where all old packages were discarded
+    when a new one was added.
+  * Disallow multipe Root parameters in newdist.
+
+ -- David Fox <david.fox@linspire.com>  Mon,  2 Jul 2007 13:35:43 -0700
+
+autobuilder (2.24) unstable; urgency=low
+
+  * If any of the packages to be uploaded collide with files
+    already in the index, fail all the packages.
+  * Improve help text formatting - display configuration file parameter names
+  * Don't die when gpg is not set up
+
+ -- David Fox <ddssff@gmail.com>  Sat, 30 Jun 2007 08:59:34 -0700
+
+autobuilder (2.23) unstable; urgency=low
+
+  * Support uploading of package that install into multiple sections
+  * Allow automatic creation of sections in local repository
+  * Distinguish between failed and rejected installs, failed ones stay
+    in incoming, rejected move to reject/
+  * Move all files of a rejected upload to reject, not just .changes
+  * Fix the createRelease/createAlias/createSection functions in newdist
+  * Add a Notify-Email parameter to newdist
+  * Add packages to indexes all at once, not one at a time.
+
+ -- David Fox <ddssff@gmail.com>  Tue, 26 Jun 2007 14:03:48 -0700
+
+autobuilder (2.22) unstable; urgency=low
+
+  * Finish sourcedeb: implementation
+  * Fix and generalize .orig.tar.gz treatment
+  * Update example configuration
+
+ -- David Fox <david.fox@linspire.com>  Sun, 24 Jun 2007 10:25:00 -0700
+
+autobuilder (2.21) unstable; urgency=low
+
+  * Add a 'sourcedeb:' target type.  It expects to see a .dsc file, a .tar.gz
+    file, and maybe a .diff.tar.gz file (not quite working correctly.)
+  * Add locking to newdist to avoid collisions
+  * Re-implement withLock to use O_CREAT | O_EXCL atomic file creation.
+  * Cache the downloaded build dependency debs in the clean environment so we don't
+    have to re-download for each package build.
+
+ -- David Fox <ddssff@gmail.com>  Fri, 22 Jun 2007 08:35:20 -0700
+
+autobuilder (2.20) unstable; urgency=low
+
+  * Implement the 'proc:' target, which mounts /proc during the package build.
+    Only use this if it is required, it reveals information about the build
+    machine that will generally differ from the conditions on the machine the
+    package will be installed onto.
+
+ -- David Fox <david.fox@linspire.com>  Sun, 17 Jun 2007 10:52:56 -0700
+
+autobuilder (2.19) unstable; urgency=low
+
+  * Catch all subtask failures
+  * Show output of all failed tasks
+
+ -- David Fox <david.fox@linspire.com>  Sat, 16 Jun 2007 12:40:17 -0700
+
+autobuilder (2.18) unstable; urgency=low
+
+  * Fix sense of a test for errors
+  * Allow the use of ssh: URIs to construct the build environment sources,
+    since http access may not be available.
+  * Use the Upload-URI to construct the build environment sources if there is
+    no Build-URI
+
+ -- David Fox <david.fox@linspire.com>  Fri, 15 Jun 2007 09:25:02 -0700
+
+autobuilder (2.17) unstable; urgency=low
+
+  * More fixes to honor the Section directive in debian/control
+  * Implement --create-section, --create-release, --create-alias in newdist
+  * Catch attempts to upload to nonexistant releases and sections
+  * Fix --no-sign in newdist
+
+ -- David Fox <david.fox@linspire.com>  Thu, 14 Jun 2007 12:58:40 -0700
+
+autobuilder (2.16) unstable; urgency=low
+
+  * Pull in a build-env fix
+  * Changes in configuration parameters relating to the upload repository.
+    The retired parameters are:
+  	Remote-URI	Replaced by Upload-URI
+  	Release		Replaced by Build-Release
+    The new parameters are:
+  	Base-Release	The basis release which our release will augment
+  	Upload-URI	An URI we can use to dupload to
+  	Build-URI	The download-only equivalent of Upload-URI
+  	Build-Release	The name of the release we are building into
+  * Create the remote repository if necessary when using --do-upload
+  * Construct from the Upload-URI at the beginning of each run, in case
+    new releases and sections are added.  This avoids having to manually
+    create the empty indexes.
+  * Don't require configuration files to start with a digit, just that
+    they don't start with a dot and don't end with a tilde.  The idea is
+    that their order shouldn't be important, though I'm not sure how this
+    affects the behavior of several conflicting Let directives.
+  * Don't include the top section of the configuration file as a global
+    section.  Just use the ones mentioned on the command line.
+  * Implement the verbosity flag in newdist.
+  * Don't remove and rebuild environments whenever their sources.list
+    changes, allow apt-get update to repair them.
+  * Add a required Component parameter to specify what component packages
+    should be uploaded to.  Packages will be moved into the same component
+    of the remote repository that they are in locally.
+  * Build directories need to be in format <sourcepackage>-<upstreamversion>
+    no epoch or release.
+  * Honor the section names listed in the .changes file.
+  * Add a function to set up the ssh keys to contact the upload host.
+
+ -- David Fox <david.fox@linspire.com>  Mon, 11 Jun 2007 11:41:40 -0700
+
+autobuilder (2.15) unstable; urgency=low
+
+  * Disable an annoying debugging message.
+
+ -- David Fox <david.fox@linspire.com>  Fri, 25 May 2007 11:46:47 -0700
+
+autobuilder (2.14) unstable; urgency=low
+
+  * Changes so SourceTree types so we always build in a directory of the form <package>-<version>.
+
+ -- David Fox <ddssff@gmail.com>  Fri, 25 May 2007 09:22:00 -0700
+
+autobuilder (2.13) unstable; urgency=low
+
+  * Catch patch failures in quilt targets.
+  * Use the directory "quilt-patches" instead of just "patches" to avoid
+    collisions with source trees that have a patches directory
+  * Update exposed module list
+  * Don't convert tabs to '\011' in output
+  * Require newer haskell-unixutils package to fix stdout/stderr mixup.
+
+ -- David Fox <david.fox@linspire.com>  Sun, 13 May 2007 08:40:03 -0700
+
+autobuilder (2.12) unstable; urgency=low
+
+  * Overhaul the progress reporting.
+  * Eliminate the Strip-Vendor-Tag option.  It is dangerous to strip tags
+    off of version numbers because after that we might be unable to add a
+    tag to makes them look like the newest version.
+  * The DebSource datatype now contains a Repository rather than a URI.
+    This is because the URI in that record actually represents the root
+    directory of a repository, so we want to verify that the URI actually 
+    points to a valid, accessable repository before creating a DebSource.
+  * Added a map from URI -> Repository to the state portion of the ABIO
+    monad.  This helps avoid repeatedly verifying remote repositories.
+
+ -- David Fox <david.fox@linspire.com>  Fri, 13 Apr 2007 13:44:37 -0700
+
+autobuilder (2.11) unstable; urgency=low
+
+  * Remove the Require-Tag option, it is obsolete and causing things to
+    rebuild when they shouldn't have been, and then fail to upload.
+  * Use the DryRunIO monad to implement -n.
+  * Use the DryRunIO monad to implement a --debug mode.
+
+ -- David Fox <david.fox@linspire.com>  Fri, 30 Mar 2007 10:39:10 -0700
+
+autobuilder (2.10) unstable; urgency=low
+
+  * Disable arch-only builds until we resolve the issue of distinguishing
+    udebs from missing binary packages.
+  * Fail all the build dependencies when a target fails.  (This behavior
+    was lost somewhere along the line.)
+  * When -n option given exit when first target requiring a build is found.
+    (This seems to have been lost as well.)
+  * Do better escaping on constructed directory names to avoid upsetting
+    make(1).  Some targets were failing.
+  * Exit with a failure if we can't obtain the lock.
+
+ -- David Fox <david.fox@linspire.com>  Tue, 27 Mar 2007 12:45:11 -0700
+
+autobuilder (2.9.3) unstable; urgency=low
+
+  * Fix One more problem caused by the fix for files left behind in
+    incoming, it was trying to remove everything twice and dying.
+
+ -- David Fox <david.fox@linspire.com>  Fri, 23 Mar 2007 17:34:12 -0700
+
+autobuilder (2.9.2) unstable; urgency=low
+
+  * Replace code that uses "apt-cache" - it error exits if there are zero
+    versions of any of its arguments.  Read /var/lib/apt/lists/* directly
+  * Fix build decision on arch-only build - it now says
+    Build Decision: Arch - <reason>.
+  * Fix problem when we need an arch only build of a dependency triggered
+    build.
+  * Fix problem where some files were left behind in incoming.
+
+ -- David Fox <david.fox@linspire.com>  Fri, 23 Mar 2007 14:47:22 -0700
+
+autobuilder (2.9.1) unstable; urgency=low
+
+  * Make sure all three versions of every package index is
+    always written: uncompressed, gzipped, and bzip2ed.
+
+ -- David Fox <david.fox@linspire.com>  Thu, 22 Mar 2007 10:07:51 -0700
+
+autobuilder (2.9) unstable; urgency=low
+
+  * Version bump to force upgrade, version 2.8.2 doesn't put the
+    architecture independent packages into the index.
+
+ -- David Fox <david.fox@linspire.com>  Thu, 22 Mar 2007 08:28:54 -0700
+
+autobuilder (2.8.2) unstable; urgency=low
+
+  * newdist: Attempt to add Repository to email notifications
+
+ -- Jeremy Shaw <jeremy.shaw@linspireinc.com>  Wed, 21 Mar 2007 16:47:39 -0700
+
+autobuilder (2.8.1) unstable; urgency=low
+
+  * Fix format of Release files so repository signing works
+  * Fix the newdist --expire option
+  * Fix the release string generated for darcs targets.
+
+ -- David Fox <david.fox@linspire.com>  Wed, 21 Mar 2007 15:17:47 -0700
+
+autobuilder (2.8) unstable; urgency=low
+
+  * Support for multiple distributions
+  * Prevent uploads to non-existant releases
+  * Always run signRepository when any index files change
+  * Use ByteString for loading package indexes
+  * Restrict creation of Repository and Release objects to
+    the functions that verify their on-disk representation
+
+ -- David Fox <david.fox@linspire.com>  Mon, 19 Mar 2007 21:49:53 -0700
+
+autobuilder (2.7.7) unstable; urgency=low
+
+  * newdist: Add distribution to email subject line
+  * newdist: Change from adddress to lautobuilder-reports@linspire.com
+  * autobuilder: add space after colon in 'Distribution:' in .changes file
+
+ -- Jeremy Shaw <jeremy.shaw@linspireinc.com>  Sat, 17 Mar 2007 11:23:09 -0700
+
+autobuilder (2.7.6) unstable; urgency=low
+
+  * Prevent the uploading of targets with invalid revision strings, i.e.
+    dir: targets.  Print the reasons for rejecting each upload.
+
+ -- David Fox <david.fox@linspire.com>  Fri, 16 Mar 2007 10:24:36 -0700
+
+autobuilder (2.7.5) unstable; urgency=low
+
+  * Darcs targets appear to hang on darcs changes --xml-output, attempt to
+    strictify
+
+ -- Jeremy Shaw <jeremy.shaw@linspireinc.com>  Thu, 15 Mar 2007 18:56:55 -0700
+
+autobuilder (2.7.4) unstable; urgency=low
+
+  * Updated newdist to fix autobuilder email address
+
+ -- Jeremy Shaw <jeremy.shaw@linspireinc.com>  Thu, 15 Mar 2007 18:21:13 -0700
+
+autobuilder (2.7.3) unstable; urgency=low
+
+  * Add MIME dependency in Autobuilder.cabal
+
+ -- Jeremy Shaw <jeremy.shaw@linspireinc.com>  Thu, 15 Mar 2007 17:52:04 -0700
+
+autobuilder (2.7.2) unstable; urgency=low
+
+  * Added primitive email support to newdist
+
+ -- Jeremy Shaw <jeremy.shaw@linspireinc.com>  Thu, 15 Mar 2007 16:55:23 -0700
+
+autobuilder (2.7.1) unstable; urgency=low
+
+  * Remove the extra '@' from the upload login name.
+
+ -- David Fox <david.fox@linspire.com>  Thu, 15 Mar 2007 15:36:31 -0700
+
+autobuilder (2.7) unstable; urgency=low
+
+  * Require a new entry in debian/changelog for targets to build
+  * Require a changelog file in the patch directory of all quilt targets
+
+ -- David Fox <david.fox@linspire.com>  Wed, 14 Mar 2007 08:24:18 -0700
+
+autobuilder (2.6) unstable; urgency=low
+
+  * Add the Omit-Targets directive, which is used to disable targets
+    which are temporarily broken.
+
+ -- David Fox <david.fox@linspire.com>  Thu,  1 Mar 2007 05:22:57 -0800
+
+autobuilder (2.5) unstable; urgency=low
+
+  * Add a Required-Version flag to force upgrade of autobuilder when
+    there are compatibility problems.
+
+ -- David Fox <david.fox@linspire.com>  Tue, 27 Feb 2007 06:47:39 -0800
+
+autobuilder (2.4) unstable; urgency=low
+
+  * Fixes for building against Ubuntu.  Add --extra-essential flag to supply
+    upstart as an extra essential package to build-env.
+
+ -- David Fox <david.fox@linspire.com>  Wed,  6 Dec 2006 08:50:56 -0500
+
+autobuilder (2.3) unstable; urgency=low
+
+  * Add repository compatibility level setting and checking.
+
+ -- David Fox <david.fox@linspire.com>  Tue, 28 Nov 2006 14:09:07 -0500
+
+autobuilder (2.2) unstable; urgency=low
+
+  * fixed bugs in build-env, haskell-debian
+  * Changed application name from autobuild to autobuilder
+
+ -- David Fox <david.fox@linspire.com>  Wed, 16 Aug 2006 09:36:33 -0700
+
+autobuilder (2.1) unstable; urgency=low
+
+  * Add newdist, a Debian pool manager.
+
+ -- David Fox <david.fox@linspire.com>  Tue, 15 Aug 2006 06:02:26 -0700
+
+autobuilder (2.0) unstable; urgency=low
+
+  * Initial release of version 2
+
+ -- David Fox <david.fox@linspire.com>  Mon, 14 Aug 2006 11:45:38 -0700

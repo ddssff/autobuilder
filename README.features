@@ -1,0 +1,9 @@
+- Creates build environments for operating systems which
+  are different from the host system
+- Able to maintain multiple build environments on a single system
+- Computes and installs build dependencies
+- Retrieves source code from a variety of revision control systems:
+  apt, tla, mercurial
+- Maintains a local repository of packages built but not yet
+  uploaded to a remote repository
+- All builds take place in a clean environment

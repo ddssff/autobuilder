@@ -1,0 +1,101 @@
+To Do:
+
+  1. Add more target types: cvs, svn, darcs, etc
+  3. Add stuff to the changelog:
+	- TLA patch level (done)
+	- TLA log entries since last build
+	- CVS info?
+  4. Catch ^C while constructing or updating the clean
+     build environment or the clean source or duploading.
+ 13. Circular dependencies: Some packages, generally compilers,
+     are their own build dependencies.  Obviously, it makes little
+     sense to rebuild such a package every time one of its build
+     dependencies changed!  The same is true for build dependency
+     graphs with larger cycles, the "up-to-date" state would never
+     be reached.  There are several ways to make the build decision:
+
+       * If a package's source code revision changes, it must be built.
+       * If a build dependency of a package was rebuilt during the current
+         run of the autobuilder, the package should be rebuilt.
+       * If a build dependency of a package is newer than it was the
+         last time the package was built, and that dependency is not
+         part of a dependency graph cycle that includes the package,
+         the package should be rebuilt.
+
+     This means, for example, that just because debhelper was rebuilt
+     does not cause dpkg to be rebuilt, and vice versa.  It is necessary
+     to actually change dpkg or one of its other build dependencies to
+     cause a rebuild.
+
+ 18. Find the transitive closure of the build dependencies and put all the
+     versions into the revision string.
+ 21. It is ugly how the "Format:" line comes first in the Sources entries.
+ 23. Notice whether there are any repeated binary package names across
+     the set of targets(?)
+ 26. Signal handling
+ 27. 
+
+Done:
+
+  2. Decide whether to build based on TLA revision number
+  5. Build pool with local build results
+  6. Eliminate noVersionFix - we need to add an entry to the
+     changelog, and it can't have the version number of the
+     previous entry.
+  7. How to record build dependencies? (ans: in Revision)
+  8. Always include some sort of revision string - use the
+     changelog version if nothing else is available.
+ 10. Handle "Provides" in build dependencies
+ 11. Get displayed command to appear *after* start message,
+     not before
+ 12. systemTask should print the command output *and* the command
+     itself on failure.
+ 14. The architecture "i386" is hard coded in Dependencies.solutions.
+     Use the output of dpkg-architecture instead.  (Waiting for
+     architecture support in build-env.)
+ 15. Find out why the %z formatting directive of formatCalendarTime
+     isn't working (Linspire.Debian.ChangeLog)
+ 16. Use the Repository module to build multiple dists in the local
+     repository.  Right now it all goes into a single Packages file.
+ 17. Build the combined sources.list by searching the repository for
+     Packages files.  (Done for local repository, can we do it for
+     the upload repository?)
+ 19. Get the Revision string into the status file.
+ 20. Record build host and elapsed time somewhere.
+ 22. Honor the --dist flag on --upload-all
+ 24. Locking
+ 25. Replace Build-Time and Build-Host with
+     Build-Info:
+       Time: xx secs.
+       Host: dsf
+       CPU: xxx
+       CPU Mhz: xxx
+       CPU Cache: xxx
+
+--------------------
+
+OLD ENTRIES:
+
+   4. Add a SourcePackage.SourcePackage object to the SourceTree datatype.
+      Then we can print the package name in SourceTree.copy, for example.
+   7. Sometimes /dev, /proc, and /sys get mounted in the clean build
+      environment, these need to be unmounted before the environment is
+      copyied to build.
+
+------------------- DONE -----------------
+
+*  1. When a binary package has a different version number than
+      the source package that produced it, write the version number
+      of the source package in parentheses in the binary package's
+      "Source:" field. (Repository.hs)  Use this value when locating
+      the debs that belong in a source package (e.g. removeSourcePackage.)
+*  2. Option to prohibit uploads that have a revision string of "none".
+*  3. Add an option to say "this package must have a freespire tag."
+*  5. Do NOT add architecture "all" packages to every binary package index,
+      it will confuse apt when there are equals dependencies between "all"
+      packages and (missing) arch packages.  Only add them to the indexes
+      for the build architecture.
+*  6. Have an option to ignore certain build dependencies, i.e. don't
+      rebuild the kernel just because sysvinit or debhelper changed.
+      This means specifying where to break the build dependency cycle.
+      (Relax-Depends)

@@ -1,0 +1,137 @@
+Name:           AutoBuilder
+Version:        6.67
+License:        BSD3
+Copyright:      (c) 2006-2013, SeeReason Partners LLC
+Author:         David Fox <dsf@seereason.com>
+Maintainer:     David Fox <dsf@seereason.com>
+Synopsis:       Build Debian source packages in suitable environments.
+Description:
+  The autobuilder program is now shipped as a haskell source file
+  which uses the autobuilder library.  To configure it make a copy of
+  @\/usr\/bin\/AutoBuilder.hs@ to somewhere such as @~\/AutoBuilder.hs@, edit
+  the parameters in that file, and then use the command
+  @
+    sudo runhaskell ~\/AutoBuilder.hs
+  @
+  Documentation for the parameters is found in the
+  'ParamClass' type class in the "Debian.AutoBuilder.ParamClass"
+  module, and for the different build target types in the description
+  of "Debian.AutoBuilder.BuildTarget".
+Cabal-Version:  >= 1.2
+Build-type:     Simple
+
+flag local-debian-repo
+  Description: Link directly to the source of the debian-repo library
+  Default: False
+  Manual: True
+
+flag local-cabal-debian
+  Description: Link directly to the source of the cabal-debian library
+  Default: False
+  Manual: True
+
+Library
+  Hs-Source-Dirs: .
+  if flag (local-debian-repo) || flag (local-cabal-debian)
+    Hs-Source-Dirs: ../debian-repo
+  else
+    Build-Depends: debian-repo >= 5.59
+
+  if flag (local-cabal-debian)
+    Hs-Source-Dirs: ../cabal-debian/src
+    Build-Depends: Diff, set-extra, hsemail, memoize, syb
+  else
+    Hs-Source-Dirs: ../debian-repo
+    Build-Depends: cabal-debian >= 4.12, deepseq, data-lens-template
+
+  Build-Depends:
+        applicative-extras >= 0.1.8
+      , base
+      , bytestring
+      , bzlib
+      , Cabal
+      , containers
+      , data-lens
+      , debian >= 3.81
+      , directory
+      , exceptions >= 0.6
+      , Extra
+      , file-embed
+      , filepath
+      , happstack-util
+      , HaXml >= 1.22.5
+      , ListLike >= 4.0
+      , magic
+      , MIME >= 1.1
+      , mtl
+      , network
+      , old-locale
+      , old-time
+      , parsec
+      , process
+      , process-listlike >= 0.6
+      , process-progress >= 0.6
+      , pureMD5
+      , regex-compat
+      , regex-posix
+      , regex-tdfa
+      , tar >= 0.4
+      , template-haskell
+      , text
+      , time
+      , unix
+      , Unixutils >= 1.51
+      , utf8-string
+      , xhtml
+      , zlib
+  GHC-Options: -O2 -threaded -Wall -fno-warn-missing-signatures -fno-warn-name-shadowing -fno-warn-type-defaults
+  Exposed-modules:
+    Debian.AutoBuilder.BuildEnv,
+    Debian.AutoBuilder.BuildTarget,
+    Debian.AutoBuilder.BuildTarget.Apt,
+    Debian.AutoBuilder.BuildTarget.Bzr,
+    Debian.AutoBuilder.BuildTarget.Cd,
+    Debian.AutoBuilder.BuildTarget.Darcs,
+    Debian.AutoBuilder.BuildTarget.DebDir,
+    Debian.AutoBuilder.BuildTarget.Debianize,
+    Debian.AutoBuilder.BuildTarget.Git,
+    Debian.AutoBuilder.BuildTarget.Hackage,
+    Debian.AutoBuilder.BuildTarget.Hg,
+    Debian.AutoBuilder.BuildTarget.Patch,
+    Debian.AutoBuilder.BuildTarget.Proc,
+    Debian.AutoBuilder.BuildTarget.Quilt,
+    Debian.AutoBuilder.BuildTarget.SourceDeb,
+    Debian.AutoBuilder.BuildTarget.Svn,
+    Debian.AutoBuilder.BuildTarget.Tla,
+    Debian.AutoBuilder.BuildTarget.Twice,
+    Debian.AutoBuilder.BuildTarget.Uri,
+    Debian.AutoBuilder.LocalRepo,
+    Debian.AutoBuilder.Main,
+    Debian.AutoBuilder.Params,
+    Debian.AutoBuilder.Target,
+    Debian.AutoBuilder.Types.Buildable
+    Debian.AutoBuilder.Types.CacheRec
+    Debian.AutoBuilder.Types.DefaultParams
+    Debian.AutoBuilder.Types.Download
+    Debian.AutoBuilder.Types.Fingerprint
+    Debian.AutoBuilder.Types.Packages,
+    Debian.AutoBuilder.Types.ParamRec
+    Debian.AutoBuilder.Version
+    Paths_AutoBuilder
+
+Executable autobuilder-tests
+  Main-Is: Test/Test.hs
+  ghc-options: -O2 -threaded -Wall
+  Build-Depends: HUnit
+  Build-Depends: debian >= 3.81
+
+  if flag (local-debian-repo) || flag (local-cabal-debian)
+    Hs-Source-Dirs: ., ../debian-repo
+    Build-Depends: deepseq, data-lens-template
+  else
+    Build-Depends: debian-repo >= 5.59
+
+  if flag (local-cabal-debian)
+    Hs-Source-Dirs: ., ../cabal-debian/src
+  else
+    Build-Depends: cabal-debian >= 4.12
