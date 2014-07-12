@@ -5,6 +5,7 @@ Copyright:      (c) 2006-2013, SeeReason Partners LLC
 Author:         David Fox <dsf@seereason.com>
 Maintainer:     David Fox <dsf@seereason.com>
 Synopsis:       Build Debian source packages in suitable environments.
+Homepage:       http://src.seereason.com/autobuilder
 Description:
   The autobuilder program is now shipped as a haskell source file
   which uses the autobuilder library.  To configure it make a copy of
