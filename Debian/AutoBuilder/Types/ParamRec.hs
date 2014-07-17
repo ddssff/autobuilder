@@ -16,7 +16,8 @@ import Data.List as List (map)
 import Data.Map as Map (Map, insertWith, elems, empty)
 import Data.Set as Set (Set, insert, empty, fold, member)
 import Debian.Arch (Arch)
-import Debian.AutoBuilder.Types.Packages (Packages(Packages, Package, NoPackage, name, list, group), TargetName(TargetName))
+import Debian.AutoBuilder.Prelude (gFind)
+import Debian.AutoBuilder.Types.Packages (Packages(Packages, Package, NoPackage, name, list, group), TargetName(TargetName, unTargetName))
 import Debian.Pretty (Pretty(pretty), vcat)
 import Debian.Release (ReleaseName )
 import Debian.Repo.Slice (SourcesChangedAction)
@@ -530,7 +531,7 @@ buildTargets params knownTargets =
             collectName :: TargetName -> Map.Map TargetName Packages -> Map.Map TargetName Packages
             collectName n collected =
               case findByName n knownTargets of
-                [] -> error $ "Unknown target name: " ++ show n
+                [] -> error $ "Unknown target name: " ++ show (unTargetName n) ++ "\n  known: " ++ show (map unTargetName (gFind knownTargets :: [TargetName]))
                 ps -> foldr (\ p collected' -> 
                               case p of
                                 (Package {}) -> Map.insertWith check (name p) p collected'

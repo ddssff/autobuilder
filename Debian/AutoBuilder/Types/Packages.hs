@@ -1,4 +1,4 @@
-{-# LANGUAGE RankNTypes, ScopedTypeVariables #-}
+{-# LANGUAGE DeriveDataTypeable, RankNTypes, ScopedTypeVariables #-}
 -- | The Packages type specifies how to obtain the source code for one
 -- or more packages.
 module Debian.AutoBuilder.Types.Packages
@@ -44,6 +44,7 @@ import Debug.Trace as D
 import Control.Exception (SomeException, try)
 import Data.ByteString (ByteString)
 import Data.Char (toLower)
+import Data.Generics (Data, Typeable)
 import Data.List (nub, sort)
 import Data.Maybe (catMaybes)
 import Data.Monoid (Monoid(mempty, mappend))
@@ -57,7 +58,7 @@ import System.FilePath ((</>))
 -- | A type for the target name of a Packages record, used to
 -- reference packages or groups of packages.  This is usually
 -- been very much like the debian source package name.
-newtype TargetName = TargetName {unTargetName :: String} deriving (Eq, Ord, Show)
+newtype TargetName = TargetName {unTargetName :: String} deriving (Eq, Ord, Show, Data, Typeable)
 
 instance IsString TargetName where
     fromString = TargetName
@@ -78,7 +79,7 @@ data Packages
     | Packages
       { group :: Set TargetName
       , list :: [Packages]
-      } deriving (Show)
+      } deriving (Show, Data, Typeable)
     -- deriving (Show, Eq, Ord)
 
 instance Eq Packages where
@@ -139,12 +140,12 @@ data RetrieveMethod
     | Tla String                             -- ^ Download from a TLA repository
     | Twice RetrieveMethod                   -- ^ Perform the build twice (should be a package flag)
     | Uri String String                      -- ^ Download a tarball from the URI.  The checksum is used to implement caching.
-    deriving (Read, Show, Eq)
+    deriving (Read, Show, Eq, Data, Typeable)
 
 data GitSpec
     = Branch String
     | Commit String
-    deriving (Read, Show, Eq)
+    deriving (Read, Show, Eq, Data, Typeable)
 
 -- | Flags that are applicable to any debianized package, which means
 -- any package because this autobuilder only builds debs.
@@ -220,7 +221,7 @@ data PackageFlag
     | KeepRCS
     -- ^ Don't clean out the subdirectory containing the revision control info,
     -- i.e. _darcs or .git or whatever.
-    deriving (Show)
+    deriving (Show, Data, Typeable)
 
 relaxInfo :: [PackageFlag] -> [String]
 relaxInfo flags =

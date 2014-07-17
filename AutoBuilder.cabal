@@ -43,7 +43,7 @@ Library
     Build-Depends: Diff, set-extra, hsemail, memoize, syb
   else
     Hs-Source-Dirs: ../debian-repo
-    Build-Depends: cabal-debian >= 4.12, deepseq, data-lens-template
+    Build-Depends: cabal-debian >= 4.15.1, deepseq, data-lens-template
 
   Build-Depends:
         applicative-extras >= 0.1.8
@@ -76,6 +76,7 @@ Library
       , regex-compat
       , regex-posix
       , regex-tdfa
+      , syb
       , tar >= 0.4
       , template-haskell
       , text
@@ -109,6 +110,7 @@ Library
     Debian.AutoBuilder.LocalRepo,
     Debian.AutoBuilder.Main,
     Debian.AutoBuilder.Params,
+    Debian.AutoBuilder.Prelude,
     Debian.AutoBuilder.Target,
     Debian.AutoBuilder.Types.Buildable
     Debian.AutoBuilder.Types.CacheRec
@@ -135,4 +137,4 @@ Executable autobuilder-tests
   if flag (local-cabal-debian)
     Hs-Source-Dirs: ., ../cabal-debian/src
   else
-    Build-Depends: cabal-debian >= 4.12
+    Build-Depends: cabal-debian >= 4.15.1
