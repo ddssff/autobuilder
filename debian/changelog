@@ -1,4 +1,4 @@
-autobuilder (6.67) unstable; urgency=low
+haskell-autobuilder (6.67) unstable; urgency=low
 
   * Replace the GitBranch constructor of PackageFlag with a
     [GitSpec] field added to the Git target type.
