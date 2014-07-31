@@ -16,18 +16,22 @@ import Control.Monad.State (MonadIO(liftIO))
 import qualified Data.ByteString.Lazy as L
 import Data.Either (partitionEithers)
 import Data.List as List (intercalate, null, nub)
+import Data.Maybe (catMaybes)
+import Data.Monoid ((<>))
 import Data.Set as Set (Set, insert, empty, fromList, toList, null, difference)
+import Data.Text (unpack)
 import Data.Time(NominalDiffTime)
 import Debian.AutoBuilder.BuildEnv (prepareDependOS, prepareBuildOS)
 import Debian.AutoBuilder.BuildTarget (retrieve)
 import qualified Debian.AutoBuilder.Params as P
 import Debian.AutoBuilder.Target (buildTargets, showTargets)
-import Debian.AutoBuilder.Types.Buildable (Target, targetName, asBuildable)
+import Debian.AutoBuilder.Types.Buildable (Target, targetName, Buildable(debianSourceTree), asBuildable)
 import qualified Debian.AutoBuilder.Types.CacheRec as C
-import Debian.AutoBuilder.Types.Download (Download)
+import Debian.AutoBuilder.Types.Download (Download(package))
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import qualified Debian.AutoBuilder.Version as V
+import Debian.Control (Control'(unControl), fieldValue)
 import Debian.Debianize (DebT)
 import Debian.Pretty (pretty)
 import Debian.Release (ReleaseName(ReleaseName, relName), releaseName')
@@ -39,6 +43,7 @@ import Debian.Repo.Release (Release(releaseName))
 import Debian.Repo.Repo (repoReleaseInfo)
 import Debian.Repo.Slice (NamedSliceList(..), SliceList(slices), Slice(sliceRepoKey),
                           appendSliceLists, inexactPathSlices, releaseSlices)
+import Debian.Repo.SourceTree (control')
 import Debian.Repo.State.AptImage (withAptImage)
 import Debian.Repo.State.Repository (foldRepository)
 import Debian.Repo.State.Slice (repoSources, updateCacheSources)
@@ -163,9 +168,18 @@ runParameterSet hc init cache =
       qPutStrLn "Retrieving all source code:\n"
       retrieved <-
           countTasks' (map (\ (target :: P.Packages) ->
-                                (show (P.spec target), (Right <$> evalMonadOS (retrieve hc init cache target) buildOS) `catch` handleRetrieveException target))
+                                (P.unTargetName (P.name target) <> " - " <> show (P.spec target), (Right <$> evalMonadOS (retrieve hc init cache target) buildOS) `catch` handleRetrieveException target))
                            (P.foldPackages (\ name spec flags l -> P.Package name spec flags : l) allTargets []))
-      (failures, targets) <- mapM (either (return . Left) (\ download -> liftIO (try (asBuildable download)) >>= return. either (\ (e :: SomeException) -> Left (show e)) Right)) retrieved >>= return . partitionEithers
+      (failures, targets) <- mapM (either (return . Left)
+                                          (\ download -> liftIO (try (asBuildable download)) >>=
+                                                         either (\ (e :: SomeException) -> return (Left (show e)))
+                                                                (\ (t :: Buildable) ->
+                                                                     qPutStrLn (case unControl (control' (debianSourceTree t)) of
+                                                                                  (src : bins) -> "Target " ++ P.unTargetName (P.name (package download)) ++ ", source deb: " <> maybe "(missing)" unpack (fieldValue "Source" src) <>
+                                                                                        ", binary debs: [" <> intercalate ", " (map unpack (catMaybes (map (fieldValue "Package") bins))) <> "]"
+                                                                                  _ -> "Invalid control file") >>
+                                                                     return (Right t)))) retrieved >>=
+                             return . partitionEithers
       when (not $ List.null $ failures) (error $ unlines $ "Some targets could not be retrieved:" : map ("  " ++) failures)
 
       -- Compute a list of sources for all the releases in the repository we will upload to,
