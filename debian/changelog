@@ -1,3 +1,9 @@
+haskell-autobuilder (6.68) unstable; urgency=low
+
+  * Show debian package names for each target
+
+ -- David Fox <dsf@seereason.com>  Mon, 04 Aug 2014 14:21:12 -0700
+
 haskell-autobuilder (6.67) unstable; urgency=low
 
   * Replace the GitBranch constructor of PackageFlag with a

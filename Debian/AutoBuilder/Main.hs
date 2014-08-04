@@ -27,7 +27,6 @@ import qualified Debian.AutoBuilder.Params as P
 import Debian.AutoBuilder.Target (buildTargets, showTargets)
 import Debian.AutoBuilder.Types.Buildable (Target, targetName, Buildable(debianSourceTree), asBuildable)
 import qualified Debian.AutoBuilder.Types.CacheRec as C
-import Debian.AutoBuilder.Types.Download (Download(package))
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import qualified Debian.AutoBuilder.Version as V
@@ -35,6 +34,7 @@ import Debian.Control (Control'(unControl), fieldValue)
 import Debian.Debianize (DebT)
 import Debian.Pretty (pretty)
 import Debian.Release (ReleaseName(ReleaseName, relName), releaseName')
+import Debian.Repo.EnvPath (EnvRoot)
 import Debian.Repo.Internal.Repos (MonadRepos, runReposCachedT, MonadReposCached)
 import Debian.Repo.LocalRepository(uploadRemote, verifyUploadURI)
 import Debian.Repo.MonadOS (MonadOS(getOS), evalMonadOS)
@@ -61,7 +61,7 @@ import System.Environment (getArgs, getEnv)
 import System.Directory(createDirectoryIfMissing)
 import System.Exit(ExitCode(..), exitWith)
 import System.FilePath ((</>))
-import qualified System.IO as IO
+import System.IO as IO
 import System.Process (proc)
 import System.Process.Progress (Output, timeTask, defaultVerbosity, withModifiedVerbosity, withModifiedVerbosity, qPutStrLn, qPutStr, ePutStrLn, ePutStr)
 import System.Unix.Directory(removeRecursiveSafely)
@@ -159,27 +159,14 @@ runParameterSet hc init cache =
       liftIO checkPermissions
       maybe (return ()) (verifyUploadURI (P.doSSHExport $ params)) (P.uploadURI params)
       dependOS <- prepareDependOS params buildRelease
-      let allTargets = P.buildPackages params
+      let allTargets = (P.foldPackages (\ name spec flags l -> P.Package name spec flags : l) (P.buildPackages params) [])
       buildOS <- evalMonadOS (do sources <- osBaseDistro <$> getOS
                                  updateCacheSources (P.ifSourcesChanged params) sources
-                                 when (P.report params) (ePutStrLn . doReport $ allTargets)
-                                 qPutStr ("\n" ++ showTargets allTargets ++ "\n")
+                                 when (P.report params) (ePutStrLn . doReport $ P.buildPackages params)
+                                 qPutStr ("\n" ++ showTargets (P.buildPackages params) ++ "\n")
                                  getOS >>= prepareBuildOS (P.buildRelease params)) dependOS
       qPutStrLn "Retrieving all source code:\n"
-      retrieved <-
-          countTasks' (map (\ (target :: P.Packages) ->
-                                (P.unTargetName (P.name target) <> " - " <> show (P.spec target), (Right <$> evalMonadOS (retrieve hc init cache target) buildOS) `catch` handleRetrieveException target))
-                           (P.foldPackages (\ name spec flags l -> P.Package name spec flags : l) allTargets []))
-      (failures, targets) <- mapM (either (return . Left)
-                                          (\ download -> liftIO (try (asBuildable download)) >>=
-                                                         either (\ (e :: SomeException) -> return (Left (show e)))
-                                                                (\ (t :: Buildable) ->
-                                                                     qPutStrLn (case unControl (control' (debianSourceTree t)) of
-                                                                                  (src : bins) -> "Target " ++ P.unTargetName (P.name (package download)) ++ ", source deb: " <> maybe "(missing)" unpack (fieldValue "Source" src) <>
-                                                                                        ", binary debs: [" <> intercalate ", " (map unpack (catMaybes (map (fieldValue "Package") bins))) <> "]"
-                                                                                  _ -> "Invalid control file") >>
-                                                                     return (Right t)))) retrieved >>=
-                             return . partitionEithers
+      (failures, targets) <- partitionEithers <$> (mapM (uncurry (retrieveTarget buildOS (length allTargets))) (zip [1..] allTargets))
       when (not $ List.null $ failures) (error $ unlines $ "Some targets could not be retrieved:" : map ("  " ++) failures)
 
       -- Compute a list of sources for all the releases in the repository we will upload to,
@@ -195,6 +182,17 @@ runParameterSet hc init cache =
                         upload >>=
                         liftIO . newDist)
     where
+      retrieveTarget :: MonadReposCached m => EnvRoot -> Int -> Int -> P.Packages -> m (Either String Buildable)
+      retrieveTarget buildOS count index target = do
+            liftIO (hPutStrLn stderr (printf "[%2d of %2d] %s:" index count (limit 100 (P.unTargetName (P.name target) <> " - " <> show (P.spec target)) :: String)))
+            res <- (Right <$> evalMonadOS (do download <- retrieve hc init cache target
+                                              buildable <- liftIO (asBuildable download)
+                                              liftIO $ hPutStrLn stderr $ case unControl (control' (debianSourceTree buildable)) of
+                                                                            (src : bins) -> "Source deb: " <> maybe "(missing)" unpack (fieldValue "Source" src) <>
+                                                                                            "\nBinary debs: [" <> intercalate ", " (map unpack (catMaybes (map (fieldValue "Package") bins))) <> "]"
+                                                                            _ -> "Invalid control file"
+                                              return buildable) buildOS) `catch` handleRetrieveException target
+            return res
       params = C.params cache
       baseRelease =  either (error . show) id (P.findSlice cache (P.baseRelease params))
       buildRepoSources = C.buildRepoSources cache
@@ -286,30 +284,20 @@ doVerifyBuildRepo cache =
                    error $ "Build repository does not exist on remote server: " ++ rel ++ "\nUse newdist there to create it:" ++
                            "\n  ssh " ++ ssh ++ " " ++ P.newDistProgram params ++ " --root=" ++ top ++ " --create-release=" ++ rel ++
                            "\n  ssh " ++ ssh ++ " " ++ P.newDistProgram params ++ " --root=" ++ top ++ " --create-section=" ++ rel ++ ",main" ++
-                           "\nYou will also need to remove the local file ~/.autobuilder/repoCache.")
+                           "\nYou will also need to remove the local file ~/.autobuilder/repoCache." ++
+                           "\n(Available: " ++ show repoNames ++ ")")
     where
       f = return . repoReleaseInfo
       g = return . repoReleaseInfo
       params = C.params cache
 
-handleRetrieveException :: MonadReposCached m => P.Packages -> SomeException -> m (Either String Download)
+handleRetrieveException :: MonadReposCached m => P.Packages -> SomeException -> m (Either String Buildable)
 handleRetrieveException target e =
           case (fromException (toException e) :: Maybe AsyncException) of
             Just UserInterrupt ->
                 throwM e -- break out of loop
             _ -> let message = ("Failure retrieving " ++ show (P.spec target) ++ ":\n  " ++ show e) in
                  liftIO (IO.hPutStrLn IO.stderr message) >> return (Left message)
-
--- | Perform a list of tasks with log messages.
-countTasks' :: MonadIO m => [(String, m a)] -> m [a]
-countTasks' tasks =
-    mapM (countTask (length tasks)) (zip [1..] tasks)
-    where
-      countTask :: MonadIO m => Int -> (Int, (String, m a)) -> m a
-      countTask count (index, (message, task)) =
-          liftIO (IO.hPutStrLn IO.stderr (printf "[%2d of %2d] %s:" index count (limit 100 message))) >>
-          task >>= \ a ->
-          return a
 
 limit n s = if length s > n + 3 then take n s ++ "..." else s
 
