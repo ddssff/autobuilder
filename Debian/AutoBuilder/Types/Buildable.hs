@@ -6,7 +6,6 @@ module Debian.AutoBuilder.Types.Buildable
     , relaxDepends
     , srcPkgName
     , Target(Target, tgt, cleanSource, targetDepends)
-    , targetName
     , prepareTarget
     , debianSourcePackageName
     , targetRelaxed
@@ -28,7 +27,7 @@ import qualified Debian.AutoBuilder.Types.Download as T
 import Debian.AutoBuilder.Types.Download (Download(..))
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as R
-import Debian.AutoBuilder.Types.Packages (foldPackages, TargetName)
+import Debian.AutoBuilder.Types.Packages (foldPackages)
 import Debian.AutoBuilder.Types.ParamRec (ParamRec(..))
 import Debian.Changes (logVersion, ChangeLogEntry(..))
 import Debian.Control (Control'(Control), fieldValue,  Paragraph'(Paragraph), Field'(Comment), parseControlFromFile)
@@ -38,7 +37,7 @@ import Debian.Relation.ByteString(Relations)
 import Debian.Repo.MonadOS (MonadOS(getOS))
 import Debian.Repo.OSImage (osRoot)
 import Debian.Repo.SourceTree (DebianBuildTree(..), control, entry, subdir, debdir, findDebianBuildTrees, findBuildTree, copySourceTree,
-                               DebianSourceTree(..), findSourceTree {-, SourceTree(dir')-})
+                               DebianSourceTree(..), findSourceTree, HasSrcDebName(srcDebName) {-, SourceTree(dir')-})
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
 import qualified Debian.Version
 import System.Directory(renameDirectory)
@@ -74,6 +73,9 @@ data Buildable
       -- this, since this program only builds debian packages.
       }
 
+instance HasSrcDebName Buildable where
+    srcDebName = srcDebName . debianSourceTree
+
 -- | Try to turn a Download into a Target.  First look for a debianization in the
 -- top directory, then for debianizations in subdirectory.  This will throw an
 -- exception if we can't find any, or we find too many.
@@ -99,7 +101,7 @@ asBuildable download =
 relaxDepends :: C.CacheRec -> Buildable -> G.OldRelaxInfo
 relaxDepends cache@(C.CacheRec {C.params = p}) tgt =
     G.RelaxInfo $ map (\ target -> (BinPkgName target, Nothing)) (globalRelaxInfo (C.params cache)) ++
-                  foldPackages (\ _ _spec flags xs -> xs ++ map (\ binPkg -> (BinPkgName binPkg, Just (srcPkgName tgt))) (P.relaxInfo flags)) (R.buildPackages p) []
+                  foldPackages (\ _spec flags xs -> xs ++ map (\ binPkg -> (BinPkgName binPkg, Just (srcPkgName tgt))) (P.relaxInfo flags)) (R.buildPackages p) []
 
 _makeRelaxInfo :: G.OldRelaxInfo -> G.RelaxInfo
 _makeRelaxInfo (G.RelaxInfo xs) srcPkgName binPkgName =
@@ -118,11 +120,11 @@ data Target
              , targetDepends :: G.DepInfo	-- ^ The dependency info parsed from the control file
              }
 
+instance HasSrcDebName Target where
+    srcDebName = srcDebName . tgt
+
 instance Eq Target where
     a == b = debianSourcePackageName a == debianSourcePackageName b
-
-targetName :: Target -> TargetName
-targetName = T.handle . download . tgt
 
 -- |Prepare a target for building in the given environment.  At this
 -- point, the target needs to be a DebianSourceTree or a

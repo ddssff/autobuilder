@@ -3,12 +3,14 @@
 -- or more packages.
 module Debian.AutoBuilder.Types.Packages
     ( Packages(..)
-    , TargetName(..)
+    , GroupName(..)
     , foldPackages
+    , foldPackages'
     , filterPackages
     , packageCount
     , RetrieveMethod(..)
     , GitSpec(..)
+    , DebSpec(..)
     , PackageFlag(..)
     , relaxInfo
     , hackage
@@ -43,33 +45,29 @@ import Debug.Trace as D
 
 import Control.Exception (SomeException, try)
 import Data.ByteString (ByteString)
-import Data.Char (toLower)
+--import Data.Char (toLower)
 import Data.Generics (Data, Typeable)
 import Data.List (nub, sort)
 import Data.Maybe (catMaybes)
 import Data.Monoid (Monoid(mempty, mappend))
-import Data.Set (Set, empty, union)
+import Data.Set (Set, empty, union, singleton)
 import Data.String (IsString(fromString))
 import qualified Debian.Debianize as CD
-import Debian.Relation (Relations)
+import Debian.Relation (Relations, SrcPkgName)
 import Debian.Repo (DebianSourceTree, findDebianSourceTrees)
 import System.FilePath ((</>))
 
--- | A type for the target name of a Packages record, used to
--- reference packages or groups of packages.  This is usually
--- been very much like the debian source package name.
-newtype TargetName = TargetName {unTargetName :: String} deriving (Eq, Ord, Show, Data, Typeable)
+-- | A type for the group name of a Packages record, used to reference
+-- a group of packages.
+newtype GroupName = GroupName {unGroupName :: String} deriving (Eq, Ord, Show, Data, Typeable)
 
-instance IsString TargetName where
-    fromString = TargetName
+instance IsString GroupName where
+    fromString = GroupName
 
 data Packages
     = NoPackage
     | Package
-      { name :: TargetName
-      -- ^ This name is only used as a reference for choosing packages
-      -- to build, it is neither Debian nor Cabal package name.
-      , spec :: RetrieveMethod
+      { spec :: RetrieveMethod
       -- ^ This value describes the method used to download the
       -- package's source code.
       , flags :: [PackageFlag]
@@ -77,13 +75,13 @@ data Packages
       -- the package.
       }
     | Packages
-      { group :: Set TargetName
+      { group :: Set GroupName
       , list :: [Packages]
       } deriving (Show, Data, Typeable)
     -- deriving (Show, Eq, Ord)
 
 instance Eq Packages where
-    (Package {name = n1, spec = s1}) == (Package {name = n2, spec = s2}) = n1 == n2 && s1 == s2
+    (Package {spec = s1}) == (Package {spec = s2}) = s1 == s2
     (Packages {group = g1, list = l1}) == (Packages {group = g2, list = l2}) = g1 == g2 && l1 == l2
     NoPackage == NoPackage = True
     _ == _ = False
@@ -99,26 +97,35 @@ instance Monoid Packages where
         Packages { group = union (group x) (group y)
                  , list = list x ++ list y }
 
-foldPackages :: (TargetName -> RetrieveMethod -> [PackageFlag] -> r -> r) -> Packages -> r -> r
+foldPackages' :: (RetrieveMethod -> [PackageFlag] -> r -> r)
+              -> (Set GroupName -> [Packages] -> r -> r)
+              -> (r -> r)
+              -> Packages -> r -> r
+foldPackages' _ g _ ps@(Packages {}) r = g (group ps) (list ps) r
+foldPackages' f _ _ p@(Package {}) r = f (spec p) (flags p) r
+foldPackages' _ _ h NoPackage r = h r
+
+-- FIXME: this can be implemented using foldPackages'
+foldPackages :: (RetrieveMethod -> [PackageFlag] -> r -> r) -> Packages -> r -> r
 foldPackages _ NoPackage r = r
-foldPackages f x@(Package {}) r = f (name x) (spec x) (flags x) r
+foldPackages f x@(Package {}) r = f (spec x) (flags x) r
 foldPackages f x@(Packages {}) r = foldr (foldPackages f) r (list x)
 
 filterPackages :: (Packages -> Bool) -> Packages -> Packages
 filterPackages p xs =
-    foldPackages (\ pname spec flags xs' ->
-                      if p (Package pname spec flags)
-                      then mappend (Package pname spec flags) xs'
+    foldPackages (\ spec flags xs' ->
+                      if p (Package spec flags)
+                      then mappend (Package spec flags) xs'
                       else xs')
-                 NoPackage
                  xs
+                 mempty
 
 packageCount :: Packages -> Int
-packageCount ps = foldPackages (\ _ _ _ n -> n + 1) ps 0
+packageCount ps = foldPackages (\ _ _ n -> n + 1) ps 0
 
 -- | The methods we know for obtaining source code.
 data RetrieveMethod
-    = Apt String String                      -- ^ Apt dist name - download using apt-get
+    = Apt String String                      -- ^ Apt dist name - download using apt-get (FIXME: Apt String SrcPkgName would be better, but that breaks read/show)
     | Bzr String                             -- ^ Download from a Bazaar repository
     | Cd FilePath RetrieveMethod             -- ^ Get the source code from a subdirectory of another download
     | Darcs String                           -- ^ Download from a Darcs repository
@@ -128,6 +135,7 @@ data RetrieveMethod
                                              -- the cabal file to add entries to the Data-Files list.
     | DebDir RetrieveMethod RetrieveMethod   -- ^ Combine the upstream download with a download for a debian directory
     | Debianize RetrieveMethod               -- ^ Retrieve a cabal package from Hackage and use cabal-debian to debianize it
+    | Debianize' RetrieveMethod [DebSpec]    -- ^ Retrieve a cabal package from Hackage and use cabal-debian to debianize it
     | Dir FilePath                           -- ^ Retrieve the source code from a directory on a local machine
     | Git String [GitSpec]                   -- ^ Download from a Git repository, optional commit hashes and/or branch names
     | Hackage String                         -- ^ Download a cabal package from hackage
@@ -145,6 +153,10 @@ data RetrieveMethod
 data GitSpec
     = Branch String
     | Commit String
+    deriving (Read, Show, Eq, Data, Typeable)
+
+data DebSpec
+    = SrcDeb SrcPkgName
     deriving (Read, Show, Eq, Data, Typeable)
 
 -- | Flags that are applicable to any debianized package, which means
@@ -231,10 +243,9 @@ relaxInfo flags =
 
 -- Combinators for the Packages type
 
-method :: String -> RetrieveMethod -> Packages
-method s m =
-    Package { name = fromString s
-            , spec = m
+method :: RetrieveMethod -> Packages
+method m =
+    Package { spec = m
             , flags = [] }
 
 -- | Add a flag to every package in p
@@ -252,8 +263,8 @@ patch package@(Package {}) s = package {spec = Patch (spec package) s}
 patch p@(Packages {}) s = p {list = map (`patch` s) (list p)}
 patch NoPackage _ = NoPackage
 
-rename :: Packages -> TargetName -> Packages
-rename p s = p {name = s}
+rename :: Packages -> GroupName -> Packages
+rename p s = p {group = singleton s}
 
 mapSpec :: (RetrieveMethod -> RetrieveMethod) -> Packages -> Packages
 mapSpec f p@(Package {spec = x}) = p {spec = f x}
@@ -263,27 +274,25 @@ mapSpec f p@(Packages {list = xs}) = p {list = map (mapSpec f) xs}
 cd :: Packages -> FilePath -> Packages
 cd p path = p {spec = Cd path (spec p)}
 
-apt :: String -> TargetName -> Packages
+apt :: String -> String -> Packages
 apt dist name =
           Package
-               { name = name
-               , spec = Apt dist (unTargetName name)
+               { spec = Apt dist name
                , flags = [] }
 
-bzr :: String -> String -> Packages
-bzr name path = method name (Bzr path)
+bzr :: String -> Packages
+bzr path = method (Bzr path)
 
-darcs :: String -> String -> Packages
-darcs s path =
-    Package { name = fromString s
-            , spec = Darcs path
+darcs :: String -> Packages
+darcs path =
+    Package { spec = Darcs path
             , flags = [] }
 
-datafiles :: String -> RetrieveMethod -> RetrieveMethod -> FilePath -> Packages
-datafiles name cabal files dest = method name (DataFiles cabal files dest)
+datafiles :: RetrieveMethod -> RetrieveMethod -> FilePath -> Packages
+datafiles cabal files dest = method (DataFiles cabal files dest)
 
 debianize :: Packages -> Packages
-debianize p = p { spec = Debianize (spec p) }
+debianize p = p { spec = Debianize' (spec p) [] }
 
 -- debdir :: String -> RetrieveMethod -> RetrieveMethod -> Packages
 -- debdir name method1 method2 = method name (DebDir method1 method1)
@@ -291,20 +300,19 @@ debianize p = p { spec = Debianize (spec p) }
 debdir :: Packages -> RetrieveMethod -> Packages
 debdir p debian = p {spec = DebDir (spec p) debian}
 
-dir :: String -> FilePath -> Packages
-dir name path = method name (Dir path)
+dir :: FilePath -> Packages
+dir path = method (Dir path)
 
-git :: String -> String -> [GitSpec] -> Packages
-git name path gitspecs = method name (Git path gitspecs)
+git :: String -> [GitSpec] -> Packages
+git path gitspecs = method (Git path gitspecs)
 
 hackage :: String -> Packages
 hackage s =
-    Package { name = fromString (targetNameFromCabal s)
-            , spec = Hackage s
+    Package { spec = Hackage s
             , flags = [] }
 
-hg :: String -> String -> Packages
-hg name path = method name (Hg path)
+hg :: String -> Packages
+hg path = method (Hg path)
 
 proc :: Packages -> Packages
 proc = mapSpec Proc
@@ -312,29 +320,33 @@ proc = mapSpec Proc
 quilt :: RetrieveMethod -> Packages -> Packages
 quilt patchdir p = p {spec = Quilt (spec p) patchdir}
 
-sourceDeb :: String -> Packages -> Packages
-sourceDeb name p = method name (SourceDeb (spec p))
+sourceDeb :: Packages -> Packages
+sourceDeb p = method (SourceDeb (spec p))
 
-svn :: String -> String -> Packages
-svn name path = method name (Svn path)
+svn :: String -> Packages
+svn path = method (Svn path)
 
-tla :: String -> String -> Packages
-tla name path = method name (Tla path)
+tla :: String -> Packages
+tla path = method (Tla path)
 
 twice :: Packages -> Packages
 twice p = p {spec = Twice (spec p)}
 
-uri :: String -> String -> String -> Packages
-uri name tarball checksum = method name (Uri tarball checksum)
+uri :: String -> String -> Packages
+uri tarball checksum = method (Uri tarball checksum)
 
 -- | The target name returned is only used by the autobuilder command
 -- line interface to choose targets.  They look a lot like debian
--- source package names for historical reasons.
+-- source package names for historical reasons.  (Deprecated, see
+-- debianDefaultAtoms in debian-repo and seereasonDefaultAtoms in
+-- autobuilder-seereason.)
+{-
 targetNameFromCabal "QuickCheck" = "haskell-quickcheck2"
 targetNameFromCabal "parsec" = "haskell-parsec3"
 targetNameFromCabal "gtk2hs-buildtools" = "gtk2hs-buildtools"
 targetNameFromCabal "MissingH" = "haskell-missingh"
 targetNameFromCabal s = "haskell-" ++ map toLower s
+-}
 
 -- | For the Apt target, the real source tree is in a subdirctory.
 findSource :: RetrieveMethod -> FilePath -> IO FilePath

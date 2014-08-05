@@ -39,7 +39,7 @@ defaultParams myBuildRelease -- e.g. wheezy or precise
     , uploadURI = defaultUploadURI myBuildRelease myUploadURIPrefix
     , buildURI = defaultBuildURI myBuildRelease myBuildURIPrefix myUploadURIPrefix
     -- What we plan to build
-    , targets = TargetSpec {allTargets = False, targetNames = Set.empty}
+    , targets = TargetSpec {allTargets = False, groupNames = Set.empty}
     -- If true, upload the packages after a successful build
     , doUpload = False
     -- If true, run newdist on the upload repository after a successful

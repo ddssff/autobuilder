@@ -11,7 +11,6 @@ import Control.Monad (when)
 import Control.Monad.State (modify)
 import Control.Monad.Catch (MonadMask, bracket)
 import Control.Monad.Trans (MonadIO, liftIO)
-import Data.Lens.Lazy (getL)
 import Data.List (isSuffixOf)
 import Debian.AutoBuilder.BuildEnv (envSet)
 import Debian.AutoBuilder.Params (computeTopDir)
@@ -21,7 +20,7 @@ import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import Debian.Debianize as Cabal hiding (verbosity, withCurrentDirectory)
 import Debian.Pretty (pretty)
-import Debian.Relation ()
+import Debian.Relation (SrcPkgName(..))
 import Debian.Repo.Prelude (rsync)
 import Debian.Repo.Internal.Repos (MonadRepos)
 import Debian.Repo.Top (MonadTop, sub, runTopT)
@@ -40,8 +39,8 @@ documentation = [ "hackage:<name> or hackage:<name>=<version> - a target of this
                 , "retrieves source code from http://hackage.haskell.org." ]
 
 -- | Debianize the download, which is assumed to be a cabal package.
-prepare :: (MonadRepos m, MonadTop m) => CompilerFlavor -> DebT IO () -> P.CacheRec -> P.Packages -> T.Download -> m T.Download
-prepare hc defaultAtoms cache package' target =
+prepare :: (MonadRepos m, MonadTop m) => CompilerFlavor -> DebT IO () -> P.CacheRec -> P.Packages -> [P.DebSpec] -> T.Download -> m T.Download
+prepare hc defaultAtoms cache package' specs target =
     do dir <- sub ("debianize" </> takeFileName (T.getTop target))
        liftIO $ createDirectoryIfMissing True dir
        _ <- rsync [] (T.getTop target) dir
@@ -53,7 +52,7 @@ prepare hc defaultAtoms cache package' target =
                 let version = pkgVersion . package . Distribution.PackageDescription.packageDescription $ desc
                 -- We want to see the original changelog, so don't remove this
                 -- removeRecursiveSafely (dir </> "debian")
-                liftIO $ autobuilderCabal hc cache (P.flags package') dir defaultAtoms
+                liftIO $ autobuilderCabal hc cache (P.flags package') specs dir defaultAtoms
                 return $ T.Download { T.package = package'
                                     , T.getTop = dir
                                     , T.logText =  "Built from hackage, revision: " ++ show (P.spec package')
@@ -87,8 +86,8 @@ collectPackageFlags _cache pflags =
        return $ ["--verbose=" ++ show v] ++
                 concatMap asCabalFlags pflags
 
-autobuilderCabal :: CompilerFlavor -> P.CacheRec -> [P.PackageFlag] -> FilePath -> DebT IO () -> IO ()
-autobuilderCabal hc cache pflags debianizeDirectory defaultAtoms =
+autobuilderCabal :: CompilerFlavor -> P.CacheRec -> [P.PackageFlag] -> [P.DebSpec] -> FilePath -> DebT IO () -> IO ()
+autobuilderCabal hc cache pflags specs debianizeDirectory defaultAtoms =
     withCurrentDirectory debianizeDirectory $
     do let rel = P.buildRelease $ P.params cache
        top <- computeTopDir (P.params cache)
@@ -98,8 +97,14 @@ autobuilderCabal hc cache pflags debianizeDirectory defaultAtoms =
        -- This will be false if the package has no debian/Debianize.hs script
        done <- runDebianizeScript args'
        when (not done) (withArgs [] (do let atoms = makeAtoms hc eset
-                                        Cabal.evalDebT (do debianization defaultAtoms (applyPackageFlags pflags)
+                                        Cabal.evalDebT (do debianization defaultAtoms (applyDebSpecs specs >> applyPackageFlags pflags)
                                                            writeDebianization) atoms))
+
+applyDebSpecs :: [P.DebSpec] -> DebT IO ()
+applyDebSpecs specs = mapM_ applyDebSpec specs
+
+applyDebSpec:: P.DebSpec -> DebT IO ()
+applyDebSpec (P.SrcDeb name) = compileArgs ["--source-package-name", unSrcPkgName name]
 
 applyPackageFlags :: [P.PackageFlag] -> DebT IO ()
 applyPackageFlags flags = mapM_ applyPackageFlag flags

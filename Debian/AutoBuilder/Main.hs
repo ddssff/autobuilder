@@ -18,14 +18,13 @@ import Data.Either (partitionEithers)
 import Data.List as List (intercalate, null, nub)
 import Data.Maybe (catMaybes)
 import Data.Monoid ((<>))
-import Data.Set as Set (Set, insert, empty, fromList, toList, null, difference)
 import Data.Text (unpack)
 import Data.Time(NominalDiffTime)
 import Debian.AutoBuilder.BuildEnv (prepareDependOS, prepareBuildOS)
 import Debian.AutoBuilder.BuildTarget (retrieve)
 import qualified Debian.AutoBuilder.Params as P
-import Debian.AutoBuilder.Target (buildTargets, showTargets)
-import Debian.AutoBuilder.Types.Buildable (Target, targetName, Buildable(debianSourceTree), asBuildable)
+import Debian.AutoBuilder.Target (buildTargets, showTargets, display)
+import Debian.AutoBuilder.Types.Buildable (Target, Buildable(debianSourceTree), asBuildable)
 import qualified Debian.AutoBuilder.Types.CacheRec as C
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
@@ -33,6 +32,7 @@ import qualified Debian.AutoBuilder.Version as V
 import Debian.Control (Control'(unControl), fieldValue)
 import Debian.Debianize (DebT)
 import Debian.Pretty (pretty)
+import Debian.Relation (BinPkgName(unBinPkgName), SrcPkgName(unSrcPkgName))
 import Debian.Release (ReleaseName(ReleaseName, relName), releaseName')
 import Debian.Repo.EnvPath (EnvRoot)
 import Debian.Repo.Internal.Repos (MonadRepos, runReposCachedT, MonadReposCached)
@@ -43,7 +43,7 @@ import Debian.Repo.Release (Release(releaseName))
 import Debian.Repo.Repo (repoReleaseInfo)
 import Debian.Repo.Slice (NamedSliceList(..), SliceList(slices), Slice(sliceRepoKey),
                           appendSliceLists, inexactPathSlices, releaseSlices)
-import Debian.Repo.SourceTree (control')
+import Debian.Repo.SourceTree (control', srcDebName, debNames)
 import Debian.Repo.State.AptImage (withAptImage)
 import Debian.Repo.State.Repository (foldRepository)
 import Debian.Repo.State.Slice (repoSources, updateCacheSources)
@@ -109,15 +109,17 @@ main init myParams =
 doParameterSet :: (MonadReposCached m, MonadMask m) => DebT IO () -> [Failing ([Output L.ByteString], NominalDiffTime)] -> P.ParamRec -> m [Failing ([Output L.ByteString], NominalDiffTime)]
 doParameterSet init results params =
     case () of
+{-
       _ | not (Set.null badForceBuild) ->
-            error $ "Invalid forceBuild target name(s): " ++ intercalate ", " (map P.unTargetName (toList badForceBuild))
+            error $ "Invalid forceBuild target name(s): " ++ intercalate ", " (map unSrcPkgName (toList badForceBuild))
         | not (Set.null badBuildTrumped) ->
-            error $ "Invalid buildTrumped target name(s): " ++ intercalate ", " (map P.unTargetName (toList badBuildTrumped))
+            error $ "Invalid buildTrumped target name(s): " ++ intercalate ", " (map unSrcPkgName (toList badBuildTrumped))
         | not (Set.null badGoals) ->
-            error $ "Invalid goal target name(s): " ++ intercalate ", " (map P.unTargetName (toList badGoals))
+            error $ "Invalid goal target name(s): " ++ intercalate ", " (map unSrcPkgName (toList badGoals))
         | not (Set.null badDiscards) ->
-            error $ "Invalid discard target name(s): " ++ intercalate ", " (map P.unTargetName (toList badDiscards))
-        | any isFailure results ->
+            error $ "Invalid discard target name(s): " ++ intercalate ", " (map unSrcPkgName (toList badDiscards))
+-}
+      _ | any isFailure results ->
             return results
       _ ->
           withModifiedVerbosity (const (P.verbosity params))
@@ -126,16 +128,18 @@ doParameterSet init results params =
             `catch` (\ (e :: SomeException) -> return (Failure [show e])) >>=
           (\ result -> return (result : results))
     where
+      isFailure (Failure _) = True
+      isFailure _ = False
+{-
       badForceBuild = difference (fromList (P.forceBuild params)) allTargetNames
       badBuildTrumped = difference (fromList (P.buildTrumped params)) allTargetNames
       badGoals = difference (fromList (P.goals params)) allTargetNames
       badDiscards = difference (P.discard params) allTargetNames
       -- Set of bogus target names in the forceBuild list
       -- badTargetNames names = difference names allTargetNames
-      isFailure (Failure _) = True
-      isFailure _ = False
-      allTargetNames :: Set P.TargetName
-      allTargetNames = P.foldPackages (\ name _ _ result -> insert name result) (P.buildPackages params) empty
+      allTargetNames :: Set SrcPkgName
+      allTargetNames = P.foldPackages (\ _ _ result -> insert name result) (P.buildPackages params) empty
+-}
 
 -- | Get the sources.list for the local upload repository associated
 -- with the OSImage.  The resulting paths are for running inside the
@@ -159,7 +163,7 @@ runParameterSet hc init cache =
       liftIO checkPermissions
       maybe (return ()) (verifyUploadURI (P.doSSHExport $ params)) (P.uploadURI params)
       dependOS <- prepareDependOS params buildRelease
-      let allTargets = (P.foldPackages (\ name spec flags l -> P.Package name spec flags : l) (P.buildPackages params) [])
+      let allTargets = (P.foldPackages (\ spec flags l -> P.Package spec flags : l) (P.buildPackages params) [])
       buildOS <- evalMonadOS (do sources <- osBaseDistro <$> getOS
                                  updateCacheSources (P.ifSourcesChanged params) sources
                                  when (P.report params) (ePutStrLn . doReport $ P.buildPackages params)
@@ -184,13 +188,12 @@ runParameterSet hc init cache =
     where
       retrieveTarget :: MonadReposCached m => EnvRoot -> Int -> Int -> P.Packages -> m (Either String Buildable)
       retrieveTarget buildOS count index target = do
-            liftIO (hPutStrLn stderr (printf "[%2d of %2d] %s:" index count (limit 100 (P.unTargetName (P.name target) <> " - " <> show (P.spec target)) :: String)))
+            liftIO (hPutStr stderr (printf "[%2d of %2d]" index count))
             res <- (Right <$> evalMonadOS (do download <- retrieve hc init cache target
                                               buildable <- liftIO (asBuildable download)
-                                              liftIO $ hPutStrLn stderr $ case unControl (control' (debianSourceTree buildable)) of
-                                                                            (src : bins) -> "Source deb: " <> maybe "(missing)" unpack (fieldValue "Source" src) <>
-                                                                                            "\nBinary debs: [" <> intercalate ", " (map unpack (catMaybes (map (fieldValue "Package") bins))) <> "]"
-                                                                            _ -> "Invalid control file"
+                                              let (src, bins) = either error id (debNames (debianSourceTree buildable))
+                                              liftIO (hPutStrLn stderr (printf " %s - %s:" (unSrcPkgName src) (limit 100 (show (P.spec target)) :: String)))
+                                              qPutStrLn $ "Binary debs: [" <> intercalate ", " (map unBinPkgName bins) <> "]"
                                               return buildable) buildOS) `catch` handleRetrieveException target
             return res
       params = C.params cache
@@ -239,7 +242,7 @@ runParameterSet hc init cache =
                 Just uri -> qPutStrLn "Uploading from local repository to remote" >> liftIO (uploadRemote repo uri)
           | True = return []
       upload (_, failed) =
-          do let msg = ("Some targets failed to build:\n  " ++ intercalate "\n  " (map (P.unTargetName . targetName) failed))
+          do let msg = ("Some targets failed to build:\n  " ++ intercalate "\n  " (map (display . srcDebName) failed))
              qPutStrLn msg
              case P.doUpload params of
                True -> qPutStrLn "Skipping upload."
@@ -312,11 +315,12 @@ doReport =
           patched (P.spec p) ++ pinned (P.flags p)
           where
             patched :: P.RetrieveMethod -> [String]
-            patched (P.Patch _ _) = [P.unTargetName (P.name p) ++ " is patched"]
+            patched (P.Patch _ _) = [show (P.spec p) ++ " is patched"]
             patched (P.Cd _ x) = patched x
             patched (P.DataFiles x y _) = patched x ++ patched y
             patched (P.DebDir x y) = patched x ++ patched y
             patched (P.Debianize x) = patched x
+            patched (P.Debianize' x _) = patched x
             patched (P.Proc x) = patched x
             patched (P.Quilt x y) = patched x ++ patched y
             patched (P.SourceDeb x) = patched x
@@ -324,5 +328,5 @@ doReport =
             patched _ = []
             pinned :: [P.PackageFlag] -> [String]
             pinned [] = []
-            pinned (P.CabalPin v : more) = [P.unTargetName (P.name p) ++ " is pinned at version " ++ v] ++ pinned more
+            pinned (P.CabalPin v : more) = [show (P.spec p) ++ " is pinned at version " ++ v] ++ pinned more
             pinned (_ : more) = pinned more

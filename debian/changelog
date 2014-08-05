@@ -1,3 +1,11 @@
+haskell-autobuilder (6.69) unstable; urgency=low
+
+  * Remove the target name field from the individual targets, only
+    groups will have names.  Individual targets can be referenced
+    by debian source package name.
+
+ -- David Fox <dsf@seereason.com>  Tue, 05 Aug 2014 11:22:17 -0700
+
 haskell-autobuilder (6.68) unstable; urgency=low
 
   * Show debian package names for each target

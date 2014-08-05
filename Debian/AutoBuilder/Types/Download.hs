@@ -2,7 +2,6 @@
 {-# OPTIONS -fwarn-unused-imports #-}
 module Debian.AutoBuilder.Types.Download
     ( Download(..)
-    , handle
     , method
     , flags
     ) where
@@ -12,8 +11,8 @@ import Control.Monad.Trans (MonadIO)
 import qualified Data.ByteString.Lazy as L (ByteString)
 import Data.Time (NominalDiffTime)
 import Data.Version (Version)
-import Debian.AutoBuilder.Types.Packages (PackageFlag, Packages, RetrieveMethod(..), TargetName)
-import qualified Debian.AutoBuilder.Types.Packages as P (Packages(flags, name, spec))
+import Debian.AutoBuilder.Types.Packages (PackageFlag, Packages, RetrieveMethod(..))
+import qualified Debian.AutoBuilder.Types.Packages as P (Packages(flags, spec))
 import Debian.Repo.MonadOS (MonadOS)
 import System.Process.Read.Chunks (Output)
 
@@ -38,9 +37,6 @@ data Download
       -- proc target modifies this by mounting and then unmounting /proc.
       }
 
--- | The name used to identify the package in the target list.
-handle :: Download -> TargetName
-handle = P.name . package
 -- | The method used to retrieve this target.
 method :: Download -> RetrieveMethod
 method = P.spec . package

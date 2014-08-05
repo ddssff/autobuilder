@@ -71,8 +71,10 @@ retrieve hc defaultAtoms cache target =
              debian' <- retrieve hc defaultAtoms cache (target {P.spec = debian})
              DebDir.prepare target upstream' debian'
       P.Debianize package ->
+          retrieve hc defaultAtoms cache (target {P.spec = P.Debianize' package []})
+      P.Debianize' package specs ->
           retrieve hc defaultAtoms cache (target {P.spec = package}) >>=
-          Debianize.prepare hc defaultAtoms cache target
+          Debianize.prepare hc defaultAtoms cache target specs
 
       -- Dir is a simple instance of BuildTarget representing building the
       -- debian source in a local directory.  This type of target is used

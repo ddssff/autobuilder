@@ -9,6 +9,7 @@ module Debian.AutoBuilder.Target
     , buildTargets
     , showTargets
     , decode
+    , display
     ) where
 
 import Control.Applicative ((<$>))
@@ -30,17 +31,17 @@ import qualified Data.Text as T (pack, Text, unpack)
 import Data.Time (NominalDiffTime)
 import Debian.Arch (Arch)
 import qualified Debian.AutoBuilder.Params as P (baseRelease, isDevelopmentRelease)
-import Debian.AutoBuilder.Types.Buildable (Buildable(..), debianSourcePackageName, failing, prepareTarget, relaxDepends, Target(tgt, cleanSource, targetDepends), targetControl, targetName, targetRelaxed)
+import Debian.AutoBuilder.Types.Buildable (Buildable(..), debianSourcePackageName, failing, prepareTarget, relaxDepends, Target(tgt, cleanSource, targetDepends), targetControl, targetRelaxed)
 import qualified Debian.AutoBuilder.Types.CacheRec as P (CacheRec(params))
-import qualified Debian.AutoBuilder.Types.Download as T (Download(buildWrapper, getTop, logText), flags, handle, method)
+import qualified Debian.AutoBuilder.Types.Download as T (Download(buildWrapper, getTop, logText), flags, method)
 import Debian.AutoBuilder.Types.Fingerprint (buildDecision, dependencyChanges, Fingerprint, packageFingerprint, showDependencies', showFingerprint, targetFingerprint)
-import qualified Debian.AutoBuilder.Types.Packages as P (foldPackages, packageCount, PackageFlag(UDeb), Packages, TargetName(unTargetName))
-import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec(autobuilderEmail, buildDepends, buildRelease, buildTrumped, discard, doNotChangeVersion, dryRun, extraReleaseTag, goals, noClean, oldVendorTags, preferred, releaseAliases, setEnv, strictness, vendorTag), Strictness(Lax))
+import qualified Debian.AutoBuilder.Types.Packages as P (foldPackages, packageCount, PackageFlag(UDeb), Packages)
+import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec(autobuilderEmail, buildDepends, buildRelease, buildTrumped, discard, doNotChangeVersion, dryRun, extraReleaseTag, noClean, oldVendorTags, preferred, releaseAliases, setEnv, strictness, vendorTag), Strictness(Lax))
 import qualified Debian.AutoBuilder.Version as V (autoBuilderVersion)
 import Debian.Changes (ChangedFileSpec(changedFileSize, changedFileName, changedFileMD5sum, changedFileSHA1sum, changedFileSHA256sum), ChangeLogEntry(logWho, logVersion, logDists, logDate, logComments), ChangesFile(changeRelease, changeInfo, changeFiles, changeDir))
 import Debian.Control (Control'(Control), ControlFunctions(parseControlFromFile), Field'(Comment, Field), fieldValue, Paragraph'(..), raiseFields)
 import qualified Debian.GenBuildDeps as G (buildable, BuildableInfo(CycleInfo, readyTriples), buildDependencies, compareSource, DepInfo(binaryNames, relations, sourceName))
-import Debian.Pretty (pretty)
+import Debian.Pretty (Pretty(pretty))
 import Debian.Relation (BinPkgName(..), SrcPkgName(..))
 import Debian.Relation.ByteString (Relation(..), Relations)
 import Debian.Release (ReleaseName(relName), releaseName')
@@ -56,7 +57,7 @@ import Debian.Repo.Package (binaryPackageSourceVersion, sourcePackageBinaryNames
 import Debian.Repo.PackageID (PackageID(packageVersion))
 import Debian.Repo.PackageIndex (BinaryPackage(packageInfo), prettyBinaryPackage, SourcePackage(sourceParagraph, sourcePackageID), sortBinaryPackages, sortSourcePackages)
 import Debian.Repo.Prelude (symbol, runProc, readProc)
-import Debian.Repo.SourceTree (addLogEntry, buildDebs, copySourceTree, DebianBuildTree, DebianSourceTreeC(..), findChanges, findOneDebianBuildTree, SourcePackageStatus(..), SourceTreeC(..), BuildDecision(..))
+import Debian.Repo.SourceTree (addLogEntry, buildDebs, copySourceTree, DebianBuildTree, DebianSourceTreeC(..), findChanges, findOneDebianBuildTree, SourcePackageStatus(..), SourceTreeC(..), BuildDecision(..), srcDebName)
 import Debian.Repo.State.AptImage (aptSourcePackages)
 import Debian.Repo.State.OSImage (osSourcePackages, osBinaryPackages, updateOS, buildArchOfOS)
 import Debian.Repo.State.Package (scanIncoming, InstallResult(Ok), showErrors, MonadInstall, evalInstall)
@@ -79,6 +80,9 @@ import System.Process.Read (readCreateProcess)
 import System.Unix.Chroot (useEnv)
 import Text.Printf (printf)
 import Text.Regex (matchRegex, mkRegex)
+
+display :: Pretty a => a -> String
+display = show . pretty
 
 instance Ord Target where
     compare = compare `on` debianSourcePackageName
@@ -123,7 +127,7 @@ prepareTargets cache globalBuildDeps targetSpecs =
     where
       prepare :: (MonadOS m, MonadRepos m) => Int -> (Int, Buildable) -> m (Either SomeException Target)
       prepare count (index, tgt) =
-          do qPutStrLn (printf "[%2d of %2d] %s in %s" index count (P.unTargetName (T.handle $ download $ tgt)) (T.getTop $ download $ tgt))
+          do qPutStrLn (printf "[%2d of %2d] %s in %s" index count (display . srcDebName . debianSourceTree $ tgt) (T.getTop $ download $ tgt))
              try (prepareTarget cache globalBuildDeps tgt) >>=
                  either (\ (e :: SomeException) ->
                              ePutStrLn (printf "[%2d of %2d] - could not prepare %s: %s"
@@ -172,7 +176,7 @@ buildLoop cache localRepo dependOS buildOS !targets =
       loop unbuilt failed | Set.null unbuilt = return failed
       loop unbuilt failed =
           ePutStrLn "\nComputing ready targets..." >>
-          case readyTargets cache (goals (Set.toList unbuilt)) (Set.toList unbuilt) of
+          case readyTargets cache (Set.toList unbuilt) of
             [] -> return failed
             triples -> do ePutStrLn (makeTable triples)
                           let ready = Set.fromList $ map (\ (x, _, _) -> x) triples
@@ -187,17 +191,17 @@ buildLoop cache localRepo dependOS buildOS !targets =
           loop unbuilt failed
       loop2 unbuilt failed ((target, blocked, _) : ready') =
           do ePutStrLn (printf "[%2d of %2d] TARGET: %s - %s"
-                        (length targets - (Set.size unbuilt + length ready')) (length targets) (P.unTargetName (targetName target)) (show (T.method (download (tgt target)))))
+                        (length targets - (Set.size unbuilt + length ready')) (length targets) (display . srcDebName $ target) (show (T.method (download (tgt target)))))
              -- Build one target.
-             result <- if Set.member (targetName target) (P.discard (P.params cache))
+             result <- if Set.member (srcDebName target) (P.discard (P.params cache))
                        then return (Failure ["--discard option set"])
                        else (Success <$> buildTarget cache dependOS buildOS localRepo target) `catch` handleBuildException
              failing -- On failure the target and its dependencies get
                      -- added to failed.
                      (\ errs ->
                           do ePutStrLn ("Package build failed:\n " ++ intercalate "\n " errs ++ "\n" ++
-                                        "Discarding " ++ P.unTargetName (targetName target) ++ " and its dependencies:\n  " ++
-                                        concat (intersperse "\n  " (map (P.unTargetName . targetName) blocked)))
+                                        "Discarding " ++ display (srcDebName target) ++ " and its dependencies:\n  " ++
+                                        concat (intersperse "\n  " (map (display . srcDebName) blocked)))
                              let -- Remove the dependencies of the failed packages from unbuilt
                                  unbuilt' = Set.difference unbuilt (Set.fromList blocked)
                                  -- Add the target and its dependencies to failed
@@ -223,10 +227,12 @@ buildLoop cache localRepo dependOS buildOS !targets =
             _ -> return (Failure [show e])
       -- If no goals are given in the build parameters, assume all
       -- known targets are goals.
+{-
       goals targets =
           case P.goals (P.params cache) of
             [] -> targets
-            goalNames -> filter (\ target -> elem (targetName target) goalNames) targets
+            goalNames -> filter (\ target -> elem (srcDebName target) goalNames) targets
+-}
 
       -- Find the sources.list for the distribution we will be building in.
       --indent s = setStyle (addPrefix stderr s)
@@ -239,7 +245,7 @@ makeTable triples =
       goalsLine = []
       readyLines = map readyLine triples
       readyLine (ready, blocked, _other) =
-          [" Ready:", P.unTargetName (targetName ready), "Blocking " ++ show (length blocked) ++ ": [" ++ intercalate ", " (map (P.unTargetName . targetName) blocked) ++ "]"]
+          [" Ready:", display (srcDebName ready), "Blocking " ++ show (length blocked) ++ ": [" ++ intercalate ", " (map (display . srcDebName) blocked) ++ "]"]
 
 -- |Compute the list of targets that are ready to build from the build
 -- dependency relations.  The return value is a list of target lists,
@@ -259,9 +265,8 @@ makeTable triples =
 -- from the target set, and repeat until all targets are built.  We
 -- can build a graph of the "has build dependency" relation and find
 -- any node that has no inbound arcs and (maybe) build that.
-readyTargets :: P.CacheRec -> [Target] -> [Target] -> [ReadyTarget]
-readyTargets _ [] _ = []
-readyTargets cache goals targets =
+readyTargets :: P.CacheRec -> {- [SrcPkgName] -> -} [Target] -> [ReadyTarget]
+readyTargets cache targets =
     -- q12 "Choosing next target" $
     -- Compute the list of build dependency groups, each of which
     -- starts with a target that is ready to build followed by
@@ -269,7 +274,7 @@ readyTargets cache goals targets =
     case G.buildable depends targets of
       (G.CycleInfo arcs) -> error (cycleMessage cache arcs)
       info ->
-          case sortBy (compareReady goals) . G.readyTriples $ info of
+          case sortBy compareReady . G.readyTriples $ info of
             [] -> []
             ready -> ready
     where
@@ -282,16 +287,10 @@ readyTargets cache goals targets =
       -- packages.  If there are goal targets but none of them are
       -- ready to build or directly block
       -- targets include a goal as readyamongoals none of the
-      compareReady :: [Target] -> ReadyTarget ->  ReadyTarget -> Ordering
-      compareReady goals' (aReady, aBlocked, _) (bReady, bBlocked, _) =
+      compareReady :: ReadyTarget ->  ReadyTarget -> Ordering
+      compareReady (aReady, aBlocked, _) (bReady, bBlocked, _) =
           -- Prefer targets which include a goal
-          case compare (length bGoals) (length aGoals) of
-            -- Otherwise, prefer the target which blocks the most other targets
-            EQ -> compare (length bBlocked) (length aBlocked)
-            x -> x
-          where
-            aGoals = intersect goals' (aReady : aBlocked)
-            bGoals = intersect goals' (bReady : bBlocked)
+          compare (length bBlocked) (length aBlocked)
 
 cycleMessage :: P.CacheRec -> [(Target, Target)] -> String
 cycleMessage cache arcs =
@@ -304,7 +303,7 @@ cycleMessage cache arcs =
     where
       arcTuple (pkg, dep) =
           let rels = targetRelaxed (relaxDepends cache (tgt pkg)) pkg in
-          [(show (intersect (binaryNames pkg dep) (binaryNamesOfRelations rels))), P.unTargetName (targetName dep), " -> ", P.unTargetName (targetName pkg)]
+          [(show (intersect (binaryNames pkg dep) (binaryNamesOfRelations rels))), display (srcDebName dep), " -> ", display (srcDebName pkg)]
       relaxLine :: (BinPkgName, SrcPkgName) -> String
       relaxLine (bin, src) = "Relax-Depends: " ++ unBinPkgName bin ++ " " ++ unSrcPkgName src
       pairs :: (Target, Target) -> [(BinPkgName, SrcPkgName)]
@@ -321,7 +320,7 @@ showTargets :: P.Packages -> String
 showTargets targets =
     unlines (heading :
              map (const '-') heading :
-             map concat (columns (reverse (snd (P.foldPackages (\ name spec _flags (count, rows) -> (count + 1, [printf "%4d. " count, P.unTargetName name, " ", limit 100 (show spec)] : rows)) targets (1 :: Int, []))))))
+             map concat (columns (reverse (snd (P.foldPackages (\ spec _flags (count, rows) -> (count + 1, [printf "%4d. " count, " ", limit 100 (show spec)] : rows)) targets (1 :: Int, []))))))
     where
       heading = show (P.packageCount targets) ++ " Targets:"
 
@@ -645,7 +644,7 @@ computeNewVersion cache target releaseControlInfo _releaseStatus = do
       -- The control file paragraph for the currently uploaded
       -- version in this dist.  The new version must be newer
       -- than this.
-      buildTrumped = elem (targetName target) (P.buildTrumped (P.params cache))
+      buildTrumped = elem (srcDebName target) (P.buildTrumped (P.params cache))
 
 -- | Return the first build dependency solution if it can be computed.
 -- The actual list could be arbitrarily long, this prevents the caller

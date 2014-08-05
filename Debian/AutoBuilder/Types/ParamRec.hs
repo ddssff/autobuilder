@@ -13,12 +13,12 @@ module Debian.AutoBuilder.Types.ParamRec
 import Control.Arrow (first)
 import Data.Char (toUpper)
 import Data.List as List (map)
-import Data.Map as Map (Map, insertWith, elems, empty)
-import Data.Set as Set (Set, insert, empty, fold, member)
+import Data.Monoid (mempty, mappend)
+import Data.Set as Set (Set, insert, member, toList)
 import Debian.Arch (Arch)
-import Debian.AutoBuilder.Prelude (gFind)
-import Debian.AutoBuilder.Types.Packages (Packages(Packages, Package, NoPackage, name, list, group), TargetName(TargetName, unTargetName))
+import Debian.AutoBuilder.Types.Packages (Packages(Packages, list, group), GroupName(GroupName), foldPackages')
 import Debian.Pretty (Pretty(pretty), vcat)
+import Debian.Relation (SrcPkgName(SrcPkgName))
 import Debian.Release (ReleaseName )
 import Debian.Repo.Slice (SourcesChangedAction)
 import Debian.Sources (DebSource)
@@ -95,10 +95,10 @@ data ParamRec =
     -- that no releases have been added or removed from the
     --,  repositories listed.  This is usually safe and saves some
     -- time querying each remote repository before using it.
-    , forceBuild :: [TargetName]
+    , forceBuild :: [SrcPkgName]
       -- ^,  Build the named source package(s) whether or not they seem
     -- to need it.
-    , buildTrumped :: [TargetName]
+    , buildTrumped :: [SrcPkgName]
     -- ^ Build the named source package(s) whether or not they seem
     -- to be older than the version already in the repository.
     , doSSHExport :: Bool
@@ -110,7 +110,7 @@ data ParamRec =
 
     -- THINGS THAT ARE OCCASIONALLY USEFUL
 
-    , goals :: [TargetName]
+    , goals :: [SrcPkgName]
     -- ^ Specify a source package which we want to build, and stop
     -- once all goals are built.  If not given all targets are
     -- considered goals.
@@ -157,7 +157,7 @@ data ParamRec =
     -- can lead to attempts to upload packages that are already
     -- present in the repository, or packages that are trumped by
     -- versions already uploaded to the release.
-    , discard :: Set.Set TargetName
+    , discard :: Set.Set SrcPkgName
     -- ^ When any of these targets become ready to build, fail them.
     -- This is to save time on targets we know will fail.
     , testWithPrivate :: Bool
@@ -284,7 +284,7 @@ data Strictness
 data TargetSpec
      = TargetSpec
        { allTargets :: Bool
-       , targetNames :: Set.Set TargetName }
+       , groupNames :: Set.Set GroupName }
      deriving Show
 
 instance Pretty (String, [DebSource]) where
@@ -395,16 +395,16 @@ optSpecs =
                , "previous build.  This option relaxes that assumption, in case the"
                , "newer version of the dependency was withdrawn from the repository,"
                , "or was flushed from the local repository without being uploaded."])
-    , Option [] ["target"] (ReqArg (\ s -> (Right (\ p -> p {targets = addTarget (TargetName s) p}))) "PACKAGE")
+    , Option [] ["target", "group"] (ReqArg (\ s -> (Right (\ p -> p {targets = addTarget (GroupName s) p}))) "GROUP NAME")
       "Add a target to the target list."
-    , Option [] ["discard"] (ReqArg (\ s -> (Right (\ p -> p {discard = Set.insert (TargetName s) (discard p)}))) "PACKAGE")
+    , Option [] ["discard"] (ReqArg (\ s -> (Right (\ p -> p {discard = Set.insert (SrcPkgName s) (discard p)}))) "PACKAGE")
       (unlines [ "Add a target to the discard list, packages which we discard as soon"
                , "as they are ready to build, along with any packages that depend on them." ])
     , Option [] ["test-with-private"] (NoArg (Right (\ p -> p {testWithPrivate = True})))
       (unlines [ "Build everything required to build the private targets, but don't"
                , "actually build the private targets.  This is to avoid the risk of"
                , "uploading private targets to the public repository" ])
-    , Option [] ["goal"] (ReqArg (\ s -> (Right (\ p -> p { goals = goals p ++ [TargetName s]
+    , Option [] ["goal"] (ReqArg (\ s -> (Right (\ p -> p { goals = goals p ++ [SrcPkgName s]
                                                           -- , targets = TargetSet (myTargets home (const True) (relName (buildRelease p)))
                                                           }))) "PACKAGE")
       (unlines [ "If one or more goal package names are given the autobuilder"
@@ -413,11 +413,11 @@ optSpecs =
                , "targets will be built.  (As of version 5.2 there are known bugs with"
                , "this this option which may cause the autobuilder to exit before the"
                , "goal package is built.)"])
-    , Option [] ["force"] (ReqArg (\ s -> (Right (\ p -> p {forceBuild = forceBuild p ++ [TargetName s], targets = addTarget (TargetName s) p}))) "PACKAGE")
+    , Option [] ["force"] (ReqArg (\ s -> (Right (\ p -> p {forceBuild = forceBuild p ++ [SrcPkgName s]}))) "PACKAGE")
       ("Build the specified source package even if it doesn't seem to need it.")
     , Option [] ["strict"] (NoArg (Right (\ p -> p {strictness = Strict})))
       "Use the lax build environment, where dependencies are not removed between package builds."
-    , Option [] ["build-trumped"] (ReqArg (\ s -> (Right (\ p -> p {buildTrumped = buildTrumped p ++ [TargetName s]}))) "PACKAGE")
+    , Option [] ["build-trumped"] (ReqArg (\ s -> (Right (\ p -> p {buildTrumped = buildTrumped p ++ [SrcPkgName s]}))) "PACKAGE")
       ("Build the specified source package even if it seems older than the uploaded version.")
     , Option [] ["report"] (NoArg (Right (\ p -> p {report = True})))
       "Output a report of packages that are pinned or patched."
@@ -425,7 +425,7 @@ optSpecs =
       "Print a help message and exit."
     ]
     where
-      addTarget s p = (targets p) {targetNames = Set.insert s (targetNames (targets p))}
+      addTarget s p = (targets p) {groupNames = Set.insert s (groupNames (targets p))}
 {-
       allTargets p =
           p {targets = let name = (relName (buildRelease p)) in TargetList (myTargets (releaseTargetNamePred name) name)})
@@ -523,37 +523,52 @@ fmtParam (OptArg _ ad) po = po ++ ": " ++ ad
 
 buildTargets :: ParamRec -> Packages -> Packages
 buildTargets params knownTargets =
-          Packages { group = Set.empty
-                   , list = Map.elems $ if allTargets (targets params)
-                                        then collectAll knownTargets Map.empty
-                                        else Set.fold collectName Map.empty (targetNames (targets params) :: Set TargetName) }
+    case targets params of
+      TargetSpec {allTargets = True} -> knownTargets
+      TargetSpec {groupNames = names} -> Packages {group = names, list = map findByName (toList names)}
+{-
+    if allTargets (targets params)
+    then knownTargets
+    else Packages { group = Set.empty
+                  , list = Map.elems $ Set.fold collectName Map.empty (groupNames (targets params) :: Set GroupName) }
+-}
+    where
+      -- collectName :: GroupName -> Map.Map GroupName Packages -> Map.Map GroupName Packages
+      -- Collect the packages in group n
+{-
+      collectName :: GroupName -> Packages
+      collectName n =
+          case findByName n mempty of
+            NoPackage -> error $ "Unknown target name: " ++ show (unGroupName n) ++ "\n  known: " ++ show (map unGroupName (gFind knownTargets :: [GroupName]))
+            ps@(Packages {}) ->
+                foldr (\ p collected' ->
+                           case p of
+                             (Packages {}) -> Map.insertWith check (group p) p collected'
+                             _ -> error $ "Internal error: " ++ show p) collected ps
+-}
+      findByName :: GroupName -> Packages
+      findByName n =
+          foldPackages' f g h knownTargets mempty
           where
-            collectName :: TargetName -> Map.Map TargetName Packages -> Map.Map TargetName Packages
-            collectName n collected =
-              case findByName n knownTargets of
-                [] -> error $ "Unknown target name: " ++ show (unTargetName n) ++ "\n  known: " ++ show (map unTargetName (gFind knownTargets :: [TargetName]))
-                ps -> foldr (\ p collected' -> 
-                              case p of
-                                (Package {}) -> Map.insertWith check (name p) p collected'
-                                _ -> error $ "Internal error: " ++ show p) collected ps
-            findByName n known =
-              case known of
-                NoPackage -> []
+            f _ _ r = r
+            g s ps r = if Set.member n s
+                       then mappend r (Packages s ps)
+                       else foldr (foldPackages' f g h) r ps
+            h r = r
+{-
+              case knownTargets of
+                NoPackage -> NoPackage
                 ps@(Packages {}) ->
                   if Set.member n (group ps)
-                  then concatMap findAll (list ps)
-                  else concatMap (findByName n) (list ps)
-                p@(Package {}) ->
-                  if name p == n
-                  then [p]
-                  else []
-            findAll known =
+                  then mappend ps
+                  else foldr findByName n (list ps) concatMap (findByName n) (list ps)
+                p@(Package {}) -> NoPackage
+      findAll known =
               case known of
                 NoPackage -> []
                 ps@(Packages {}) -> concatMap findAll (list ps)
                 p@(Package {}) -> [p]
-{-
-            collectByName known n collected =
+      collectByName known n collected =
                 case known of
                   NoPackage -> collected
                   p@(Package {}) -> if name p == n then Map.insertWith check n p collected else collected
@@ -561,12 +576,12 @@ buildTargets params knownTargets =
                       if Set.member n (group ps)
                       then foldr collectAll collected (packages ps)
                       else foldr (collect' n) collected (packages ps)
-            collect' n known collected = collectByName known n collected
--}
-            collectAll :: Packages -> Map.Map TargetName Packages -> Map.Map TargetName Packages
-            collectAll p collected =
+      collect' n known collected = collectByName known n collected
+      collectAll :: Packages -> Map.Map GroupName Packages -> Map.Map GroupName Packages
+      collectAll p collected =
                 case p of
                   NoPackage -> collected
-                  Package {} -> Map.insertWith check (name p) p collected
+                  Package {} -> Map.insertWith check (group p) p collected
                   Packages {} -> foldr collectAll collected (list p)
-            check old new = if old /= new then error ("Multiple packages with same name: " ++ show old ++ ", " ++ show new) else old
+      check old new = if old /= new then error ("Multiple packages with same name: " ++ show old ++ ", " ++ show new) else old
+-}
