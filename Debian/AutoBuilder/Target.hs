@@ -515,7 +515,10 @@ prepareBuildTree cache dependOS buildOS sourceFingerprint target = do
 
 -- | Get the control info for the newest version of a source package
 -- available in a release.  Make sure that the files for this build
--- architecture are available.
+-- architecture are available.  FIXME: Note that this should *not*
+-- find packages which are simply installed in the environment but not
+-- available from the repositories listed in sources.list (but
+-- currently it does.)
 getReleaseControlInfo :: (MonadOS m, MonadRepos m) => Target -> m (Maybe SourcePackage, SourcePackageStatus, String)
 getReleaseControlInfo target = do
   sourcePackages' <- (sortBy compareVersion . sortSourcePackages [packageName]) <$> osSourcePackages
