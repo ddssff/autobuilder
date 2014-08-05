@@ -11,8 +11,6 @@ module Debian.AutoBuilder.Types.Fingerprint
     , buildDecision
     ) where
 
-import Debug.Trace
-
 import Control.Applicative.Error (maybeRead)
 import Data.Generics (everywhere, mkT)
 import Data.List (intercalate, intersperse, find, partition, nub)
@@ -60,10 +58,7 @@ data Fingerprint
     deriving Show
 
 readMethod :: String -> Maybe P.RetrieveMethod
-readMethod s = t1 s (maybeRead s)
-
-t2 ms = trace ("method String: " ++ show ms) ms
-t1 s m = trace ("readMethod " ++ show s ++ " -> " ++ show m) m
+readMethod s = maybeRead s
 
 packageFingerprint :: Maybe SourcePackage -> Fingerprint
 packageFingerprint Nothing = NoFingerprint
@@ -73,7 +68,7 @@ packageFingerprint (Just package) =
       parseRevision s =
           case reads s :: [(String, String)] of
             [(method, etc)] ->
-                case readMethod (t2 method) of
+                case readMethod method of
                   Nothing -> NoFingerprint
                   Just method' ->
                       let method'' = modernizeMethod method' in
@@ -82,7 +77,7 @@ packageFingerprint (Just package) =
                           | not (elem '=' sourceVersion) ->
                               Fingerprint method'' (Just (parseDebianVersion sourceVersion)) (map readSimpleRelation buildDeps) (Just . packageVersion . sourcePackageID $ package)
                         buildDeps -> Fingerprint method'' Nothing (map readSimpleRelation buildDeps) (Just . packageVersion . sourcePackageID $ package)
-            x -> trace ("reads " ++ show s ++ " -> " ++ show x) NoFingerprint
+            x -> NoFingerprint
 
 modernizeMethod :: P.RetrieveMethod -> P.RetrieveMethod
 modernizeMethod = everywhere (mkT modernizeMethod1)
