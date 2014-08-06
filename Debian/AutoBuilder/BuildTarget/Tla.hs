@@ -16,6 +16,7 @@ import System.Process (shell)
 import System.Process.Progress (timeTask, qPutStrLn)
 import System.Directory
 
+documentation :: [String]
 documentation = [ "tla:<revision> - A target of this form retrieves the a TLA archive with the"
                 , "given revision name." ]
 

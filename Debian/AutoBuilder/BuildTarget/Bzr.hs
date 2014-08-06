@@ -20,6 +20,7 @@ import System.Process (shell)
 import System.Process.Progress (keepOutput, timeTask, qPutStrLn)
 import System.Directory
 
+documentation :: [String]
 documentation = [ "bzr:<revision> - A target of this form retrieves the a Bazaar archive with the"
                 , "given revision name." ]
 

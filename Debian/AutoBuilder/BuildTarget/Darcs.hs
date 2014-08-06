@@ -21,6 +21,7 @@ import System.Process (shell)
 import System.Process.Progress (keepResult, timeTask)
 import System.Unix.Directory
 
+documentation :: [String]
 documentation = [ "darcs:<string> - a target of this form obtains the source code by running"
                 , "darcs get <string>.  If the argument needs to use ssh to reach the darcs"
                 , "repository, it is necessary to set up ssh keys to allow access without"

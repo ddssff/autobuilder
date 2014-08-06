@@ -22,6 +22,7 @@ import System.Process (shell, proc)
 import System.Process.Progress (Output, keepStdout, keepStderr, keepResult, timeTask)
 import System.Unix.Directory
 
+documentation :: [String]
 documentation = [ "svn:<uri> - A target of this form retrieves the source code from"
                 , "a subversion repository." ]
 

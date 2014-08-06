@@ -30,6 +30,7 @@ import System.Process (shell)
 import System.Process.Progress (timeTask)
 import System.Unix.Directory
 
+documentation :: [String]
 documentation = [ "uri:<string>:<md5sum> - A target of this form retrieves the file at the"
                 , "given URI, which is assumed to be a gzipped tarball.  The optional md5sum"
                 , "suffix causes the build to fail if the downloaded file does not match"

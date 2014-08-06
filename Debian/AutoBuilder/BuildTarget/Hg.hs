@@ -17,6 +17,7 @@ import System.Process (shell)
 import System.Process.Progress (timeTask)
 import System.Unix.Directory
 
+documentation :: [String]
 documentation = [ "hg:<string> - A target of this form target obtains the source"
                 , "code by running the Mercurial command 'hg clone <string>'." ]
 
