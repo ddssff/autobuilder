@@ -31,6 +31,11 @@ flag local-cabal-debian
   Default: False
   Manual: True
 
+flag local-debian
+  Description: Link directly to the source of the debian library
+  Default: False
+  Manual: True
+
 Library
   Hs-Source-Dirs: .
   if flag (local-debian-repo) || flag (local-cabal-debian)
@@ -45,6 +50,12 @@ Library
     Hs-Source-Dirs: ../debian-repo
     Build-Depends: cabal-debian >= 4.15.1, deepseq, data-lens-template
 
+  if flag (local-debian)
+    Hs-Source-Dirs: ../haskell-debian
+    Build-Depends: ListLike
+  else
+    Build-Depends: debian >= 3.82
+
   Build-Depends:
         applicative-extras >= 0.1.8
       , base
@@ -53,7 +64,6 @@ Library
       , Cabal
       , containers
       , data-lens
-      , debian >= 3.81
       , directory
       , exceptions >= 0.6
       , Extra
@@ -126,7 +136,6 @@ Executable autobuilder-tests
   Main-Is: Test/Test.hs
   ghc-options: -O2 -threaded -Wall
   Build-Depends: HUnit
-  Build-Depends: debian >= 3.81
 
   if flag (local-debian-repo) || flag (local-cabal-debian)
     Hs-Source-Dirs: ., ../debian-repo
@@ -138,3 +147,8 @@ Executable autobuilder-tests
     Hs-Source-Dirs: ., ../cabal-debian/src
   else
     Build-Depends: cabal-debian >= 4.15.1
+
+  if flag (local-debian)
+    Hs-Source-Dirs: ../haskell-debian
+  else
+    Build-Depends: debian >= 3.82
