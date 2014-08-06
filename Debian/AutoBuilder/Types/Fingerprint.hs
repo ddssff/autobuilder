@@ -18,19 +18,20 @@ import qualified Data.Map as Map
 import Data.Maybe(fromJust, isJust, isNothing, mapMaybe)
 import qualified Data.Set as Set
 import Data.Text (unpack)
-import Debian.AutoBuilder.Types.Buildable (Target(tgt, cleanSource), Buildable(download, debianSourceTree), targetRelaxed, targetControl, relaxDepends)
+import Debian.AutoBuilder.Types.Buildable (Target(tgt, cleanSource), Buildable(download, debianSourceTree), targetRelaxed, relaxDepends)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Changes (logVersion)
-import Debian.Control (lookupP, unControl, stripWS)
+import Debian.Control (lookupP, unControl, stripWS, debianControl)
+import Debian.Control.Policy (debianSourcePackageNameE)
 import qualified Debian.Control.String as S
 import qualified Debian.GenBuildDeps as G
 import Debian.Pretty (pretty)
 import Debian.Relation (Relation(Rel), BinPkgName(..))
 import Debian.Repo.Dependencies (prettySimpleRelation, readSimpleRelation, showSimpleRelation)
-import Debian.Repo.SourceTree (DebianSourceTreeC(entry), SourcePackageStatus(..), BuildDecision(..), srcDebName)
+import Debian.Repo.SourceTree (DebianSourceTreeC(entry), SourcePackageStatus(..), BuildDecision(..))
 import Debian.Repo.PackageID (PackageID(PackageID, packageName, packageVersion))
 import Debian.Repo.PackageIndex (SourcePackage(sourceParagraph, sourcePackageID), BinaryPackage(packageID))
 import Debian.Version (DebianVersion, parseDebianVersion, prettyDebianVersion)
@@ -77,7 +78,7 @@ packageFingerprint (Just package) =
                           | not (elem '=' sourceVersion) ->
                               Fingerprint method'' (Just (parseDebianVersion sourceVersion)) (map readSimpleRelation buildDeps) (Just . packageVersion . sourcePackageID $ package)
                         buildDeps -> Fingerprint method'' Nothing (map readSimpleRelation buildDeps) (Just . packageVersion . sourcePackageID $ package)
-            x -> NoFingerprint
+            _ -> NoFingerprint
 
 modernizeMethod :: P.RetrieveMethod -> P.RetrieveMethod
 modernizeMethod = everywhere (mkT modernizeMethod1)
@@ -152,7 +153,7 @@ buildDecision :: P.CacheRec
                                         -- to the architecture we are building - either all binary packages
                                         -- are available, or none, or only the architecture independent.
               -> BuildDecision
-buildDecision cache target _ _ _ | elem (srcDebName (debianSourceTree (tgt target))) (P.forceBuild (P.params cache)) = Yes "--force-build option is set"
+buildDecision cache target _ _ _ | elem (debianSourcePackageNameE (debianSourceTree (tgt target))) (P.forceBuild (P.params cache)) = Yes "--force-build option is set"
 buildDecision _ target _ (Fingerprint _ (Just sourceVersion) _ _) _
     | any (== (show (prettyDebianVersion sourceVersion))) (mapMaybe skipVersion . P.flags . T.package . download . tgt $ target) =
         No ("Skipped version " ++ show (prettyDebianVersion sourceVersion))
@@ -213,7 +214,7 @@ buildDecision cache target (Fingerprint _ oldSrcVersion builtDependencies repoVe
       -- are not completely protected from this possibility.
       sameSourceTests =
           case releaseStatus of
-            Indep missing | missing /= [] && not (notArchDep (targetControl target)) ->
+            Indep missing | missing /= [] && not (notArchDep (debianControl target)) ->
                   -- The binary packages are missing, we need an arch only build.
                   Arch ("Version " ++ maybe "Nothing" show (fmap prettyDebianVersion repoVersion) ++ " needs arch only build. (Missing: " ++ show missing ++ ")")
             _ | badDependencies /= [] && not allowBuildDependencyRegressions ->
@@ -233,7 +234,7 @@ buildDecision cache target (Fingerprint _ oldSrcVersion builtDependencies repoVe
                   -- If the package *was* previously built by the autobuilder we rebuild when any
                   -- of its build dependencies are revved or new ones appear.
                   Auto ("Build dependencies changed:\n" ++ buildDependencyChangeText (revvedDependencies ++ newDependencies))
-            Indep _ | notArchDep (targetControl target) ->
+            Indep _ | notArchDep (debianControl target) ->
                   No ("Version " ++ show (prettyDebianVersion sourceVersion) ++ " of architecture independent package is already in release.")
             Indep missing ->
                   -- The binary packages are missing, we need an arch only build.

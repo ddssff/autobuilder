@@ -16,9 +16,7 @@ import Control.Monad.State (MonadIO(liftIO))
 import qualified Data.ByteString.Lazy as L
 import Data.Either (partitionEithers)
 import Data.List as List (intercalate, null, nub)
-import Data.Maybe (catMaybes)
 import Data.Monoid ((<>))
-import Data.Text (unpack)
 import Data.Time(NominalDiffTime)
 import Debian.AutoBuilder.BuildEnv (prepareDependOS, prepareBuildOS)
 import Debian.AutoBuilder.BuildTarget (retrieve)
@@ -29,7 +27,7 @@ import qualified Debian.AutoBuilder.Types.CacheRec as C
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import qualified Debian.AutoBuilder.Version as V
-import Debian.Control (Control'(unControl), fieldValue)
+import Debian.Control.Policy (debianPackageNamesE, debianSourcePackageNameE)
 import Debian.Debianize (DebT)
 import Debian.Pretty (pretty)
 import Debian.Relation (BinPkgName(unBinPkgName), SrcPkgName(unSrcPkgName))
@@ -43,7 +41,6 @@ import Debian.Repo.Release (Release(releaseName))
 import Debian.Repo.Repo (repoReleaseInfo)
 import Debian.Repo.Slice (NamedSliceList(..), SliceList(slices), Slice(sliceRepoKey),
                           appendSliceLists, inexactPathSlices, releaseSlices)
-import Debian.Repo.SourceTree (control', srcDebName, debNames)
 import Debian.Repo.State.AptImage (withAptImage)
 import Debian.Repo.State.Repository (foldRepository)
 import Debian.Repo.State.Slice (repoSources, updateCacheSources)
@@ -108,8 +105,18 @@ main init myParams =
 -- can be several which are run sequentially.  Stop on first failure.
 doParameterSet :: (MonadReposCached m, MonadMask m) => DebT IO () -> [Failing ([Output L.ByteString], NominalDiffTime)] -> P.ParamRec -> m [Failing ([Output L.ByteString], NominalDiffTime)]
 doParameterSet init results params =
+#if 0
+    let -- Set of bogus target names in the forceBuild list
+        -- badTargetNames names = difference names allTargetNames
+        allTargetNames :: Set SrcPkgName
+        allTargetNames = P.foldPackages (\ _ _ result -> insert name result) (P.buildPackages params) empty
+        badForceBuild = difference (fromList (P.forceBuild params)) allTargetNames
+        badBuildTrumped = difference (fromList (P.buildTrumped params)) allTargetNames
+        badGoals = difference (fromList (P.goals params)) allTargetNames
+        badDiscards = difference (P.discard params) allTargetNames in
+#endif
     case () of
-{-
+#if 0
       _ | not (Set.null badForceBuild) ->
             error $ "Invalid forceBuild target name(s): " ++ intercalate ", " (map unSrcPkgName (toList badForceBuild))
         | not (Set.null badBuildTrumped) ->
@@ -118,7 +125,7 @@ doParameterSet init results params =
             error $ "Invalid goal target name(s): " ++ intercalate ", " (map unSrcPkgName (toList badGoals))
         | not (Set.null badDiscards) ->
             error $ "Invalid discard target name(s): " ++ intercalate ", " (map unSrcPkgName (toList badDiscards))
--}
+#endif
       _ | any isFailure results ->
             return results
       _ ->
@@ -130,16 +137,6 @@ doParameterSet init results params =
     where
       isFailure (Failure _) = True
       isFailure _ = False
-{-
-      badForceBuild = difference (fromList (P.forceBuild params)) allTargetNames
-      badBuildTrumped = difference (fromList (P.buildTrumped params)) allTargetNames
-      badGoals = difference (fromList (P.goals params)) allTargetNames
-      badDiscards = difference (P.discard params) allTargetNames
-      -- Set of bogus target names in the forceBuild list
-      -- badTargetNames names = difference names allTargetNames
-      allTargetNames :: Set SrcPkgName
-      allTargetNames = P.foldPackages (\ _ _ result -> insert name result) (P.buildPackages params) empty
--}
 
 -- | Get the sources.list for the local upload repository associated
 -- with the OSImage.  The resulting paths are for running inside the
@@ -191,7 +188,7 @@ runParameterSet hc init cache =
             liftIO (hPutStr stderr (printf "[%2d of %2d]" index count))
             res <- (Right <$> evalMonadOS (do download <- retrieve hc init cache target
                                               buildable <- liftIO (asBuildable download)
-                                              let (src, bins) = either error id (debNames (debianSourceTree buildable))
+                                              let (src, bins) = debianPackageNamesE (debianSourceTree buildable)
                                               liftIO (hPutStrLn stderr (printf " %s - %s:" (unSrcPkgName src) (limit 100 (show (P.spec target)) :: String)))
                                               qPutStrLn $ "Binary debs: [" <> intercalate ", " (map unBinPkgName bins) <> "]"
                                               return buildable) buildOS) `catch` handleRetrieveException target
@@ -242,7 +239,7 @@ runParameterSet hc init cache =
                 Just uri -> qPutStrLn "Uploading from local repository to remote" >> liftIO (uploadRemote repo uri)
           | True = return []
       upload (_, failed) =
-          do let msg = ("Some targets failed to build:\n  " ++ intercalate "\n  " (map (display . srcDebName) failed))
+          do let msg = ("Some targets failed to build:\n  " ++ intercalate "\n  " (map (display . debianSourcePackageNameE) failed))
              qPutStrLn msg
              case P.doUpload params of
                True -> qPutStrLn "Skipping upload."
