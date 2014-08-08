@@ -14,9 +14,9 @@ import Control.Arrow (first)
 import Data.Char (toUpper)
 import Data.List as List (map)
 import Data.Monoid (mempty, mappend)
-import Data.Set as Set (Set, insert, member, toList)
+import Data.Set as Set (Set, insert, toList)
 import Debian.Arch (Arch)
-import Debian.AutoBuilder.Types.Packages (Packages(Packages, list, group), GroupName(GroupName), foldPackages')
+import Debian.AutoBuilder.Types.Packages (Packages(Packages, list, group), GroupName(GroupName, NoName), foldPackages')
 import Debian.Pretty (Pretty(pretty), vcat)
 import Debian.Relation (SrcPkgName(SrcPkgName))
 import Debian.Release (ReleaseName )
@@ -284,7 +284,7 @@ data Strictness
 data TargetSpec
      = TargetSpec
        { allTargets :: Bool
-       , groupNames :: Set.Set GroupName }
+       , groups :: Set.Set GroupName }
      deriving Show
 
 instance Pretty (String, [DebSource]) where
@@ -425,7 +425,7 @@ optSpecs =
       "Print a help message and exit."
     ]
     where
-      addTarget s p = (targets p) {groupNames = Set.insert s (groupNames (targets p))}
+      addTarget s p = (targets p) {groups = Set.insert s (groups (targets p))}
 {-
       allTargets p =
           p {targets = let name = (relName (buildRelease p)) in TargetList (myTargets (releaseTargetNamePred name) name)})
@@ -514,74 +514,18 @@ fmtLong (NoArg  _   ) lo = "--" ++ lo
 fmtLong (ReqArg _ ad) lo = "--" ++ lo ++ "=" ++ ad
 fmtLong (OptArg _ ad) lo = "--" ++ lo ++ "[=" ++ ad ++ "]"
 
-{-
-fmtParam :: ArgDescr a -> String -> String
-fmtParam (NoArg  _   ) po = po ++ ": Yes"
-fmtParam (ReqArg _ ad) po = po ++ ": " ++ ad
-fmtParam (OptArg _ ad) po = po ++ ": " ++ ad
--}
-
 buildTargets :: ParamRec -> Packages -> Packages
 buildTargets params knownTargets =
     case targets params of
       TargetSpec {allTargets = True} -> knownTargets
-      TargetSpec {groupNames = names} -> Packages {group = names, list = map findByName (toList names)}
-{-
-    if allTargets (targets params)
-    then knownTargets
-    else Packages { group = Set.empty
-                  , list = Map.elems $ Set.fold collectName Map.empty (groupNames (targets params) :: Set GroupName) }
--}
+      TargetSpec {groups = names} -> Packages {group = NoName, list = map findByName (toList names)}
     where
-      -- collectName :: GroupName -> Map.Map GroupName Packages -> Map.Map GroupName Packages
-      -- Collect the packages in group n
-{-
-      collectName :: GroupName -> Packages
-      collectName n =
-          case findByName n mempty of
-            NoPackage -> error $ "Unknown target name: " ++ show (unGroupName n) ++ "\n  known: " ++ show (map unGroupName (gFind knownTargets :: [GroupName]))
-            ps@(Packages {}) ->
-                foldr (\ p collected' ->
-                           case p of
-                             (Packages {}) -> Map.insertWith check (group p) p collected'
-                             _ -> error $ "Internal error: " ++ show p) collected ps
--}
       findByName :: GroupName -> Packages
       findByName n =
           foldPackages' f g h knownTargets mempty
           where
             f _ _ r = r
-            g s ps r = if Set.member n s
+            g s ps r = if n == s
                        then mappend r (Packages s ps)
                        else foldr (foldPackages' f g h) r ps
             h r = r
-{-
-              case knownTargets of
-                NoPackage -> NoPackage
-                ps@(Packages {}) ->
-                  if Set.member n (group ps)
-                  then mappend ps
-                  else foldr findByName n (list ps) concatMap (findByName n) (list ps)
-                p@(Package {}) -> NoPackage
-      findAll known =
-              case known of
-                NoPackage -> []
-                ps@(Packages {}) -> concatMap findAll (list ps)
-                p@(Package {}) -> [p]
-      collectByName known n collected =
-                case known of
-                  NoPackage -> collected
-                  p@(Package {}) -> if name p == n then Map.insertWith check n p collected else collected
-                  ps@(Packages {}) ->
-                      if Set.member n (group ps)
-                      then foldr collectAll collected (packages ps)
-                      else foldr (collect' n) collected (packages ps)
-      collect' n known collected = collectByName known n collected
-      collectAll :: Packages -> Map.Map GroupName Packages -> Map.Map GroupName Packages
-      collectAll p collected =
-                case p of
-                  NoPackage -> collected
-                  Package {} -> Map.insertWith check (group p) p collected
-                  Packages {} -> foldr collectAll collected (list p)
-      check old new = if old /= new then error ("Multiple packages with same name: " ++ show old ++ ", " ++ show new) else old
--}

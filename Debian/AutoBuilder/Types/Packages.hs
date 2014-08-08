@@ -50,7 +50,6 @@ import Data.Generics (Data, Typeable)
 import Data.List (nub, sort)
 import Data.Maybe (catMaybes)
 import Data.Monoid (Monoid(mempty, mappend))
-import Data.Set (Set, empty, union, singleton)
 import Data.String (IsString(fromString))
 import qualified Debian.Debianize as CD
 import Debian.Relation (Relations, SrcPkgName)
@@ -59,7 +58,10 @@ import System.FilePath ((</>))
 
 -- | A type for the group name of a Packages record, used to reference
 -- a group of packages.
-newtype GroupName = GroupName {unGroupName :: String} deriving (Eq, Ord, Show, Data, Typeable)
+data GroupName
+    = GroupName {unGroupName :: String}
+    | NoName
+    deriving (Eq, Ord, Show, Data, Typeable)
 
 instance IsString GroupName where
     fromString = GroupName
@@ -75,7 +77,7 @@ data Packages
       -- the package.
       }
     | Packages
-      { group :: Set GroupName
+      { group :: GroupName
       , list :: [Packages]
       } deriving (Show, Data, Typeable)
     -- deriving (Show, Eq, Ord)
@@ -86,19 +88,24 @@ instance Eq Packages where
     NoPackage == NoPackage = True
     _ == _ = False
 
+instance Monoid GroupName where
+    mempty = NoName
+    mappend NoName x = x
+    mappend x _ = x
+
 instance Monoid Packages where
     mempty = NoPackage
     mappend NoPackage y = y
     mappend x NoPackage = x
-    mappend x@(Package {}) y@(Package {}) = Packages empty [x, y]
+    mappend x@(Package {}) y@(Package {}) = Packages NoName [x, y]
     mappend x@(Package {}) y@(Packages {}) = y {list = [x] ++ list y}
     mappend x@(Packages {}) y@(Package {}) = x {list = list x ++ [y]}
     mappend x@(Packages {}) y@(Packages {}) =
-        Packages { group = union (group x) (group y)
+        Packages { group = mappend (group x) (group y)
                  , list = list x ++ list y }
 
 foldPackages' :: (RetrieveMethod -> [PackageFlag] -> r -> r)
-              -> (Set GroupName -> [Packages] -> r -> r)
+              -> (GroupName -> [Packages] -> r -> r)
               -> (r -> r)
               -> Packages -> r -> r
 foldPackages' _ g _ ps@(Packages {}) r = g (group ps) (list ps) r
@@ -264,7 +271,7 @@ patch p@(Packages {}) s = p {list = map (`patch` s) (list p)}
 patch NoPackage _ = NoPackage
 
 rename :: Packages -> GroupName -> Packages
-rename p s = p {group = singleton s}
+rename p s = p {group = s}
 
 mapSpec :: (RetrieveMethod -> RetrieveMethod) -> Packages -> Packages
 mapSpec f p@(Package {spec = x}) = p {spec = f x}
