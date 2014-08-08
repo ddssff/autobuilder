@@ -14,12 +14,9 @@ import Control.Applicative ((<$>))
 import Control.Applicative.Error (Failing(Success, Failure), ErrorMsg)
 import Control.Exception as E (SomeException, try, catch, throw)
 import Control.Monad(when)
-import Control.Monad.Identity (runIdentity)
 import Control.Monad.Trans (MonadIO, liftIO)
-import Control.Monad.Trans.Either (runEitherT)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
-import Data.Text (Text)
 import qualified Debian.AutoBuilder.Types.CacheRec as C
 import qualified Debian.AutoBuilder.Types.Download as T
 import Debian.AutoBuilder.Types.Download (Download(..))
@@ -28,8 +25,8 @@ import qualified Debian.AutoBuilder.Types.ParamRec as R
 import Debian.AutoBuilder.Types.Packages (foldPackages)
 import Debian.AutoBuilder.Types.ParamRec (ParamRec(..))
 import Debian.Changes (logVersion, ChangeLogEntry(..))
-import Debian.Control (Control'(Control), Paragraph'(Paragraph), Field'(Comment), parseControlFromFile, HasDebianControl(debianControl))
-import Debian.Control.Policy (ControlFileError(ParseRelationsError), debianSourcePackageNameE)
+import Debian.Control (HasDebianControl(debianControl))
+import Debian.Control.Policy (debianSourcePackageName, parseDebianControlFromFile)
 import qualified Debian.GenBuildDeps as G
 import Debian.Relation (SrcPkgName(..), BinPkgName(..))
 import Debian.Relation.ByteString(Relations)
@@ -72,7 +69,7 @@ data Buildable
       -- this, since this program only builds debian packages.
       }
 
-instance HasDebianControl Buildable Text where
+instance HasDebianControl Buildable where
     debianControl = control' . debianSourceTree
 
 -- | Try to turn a Download into a Target.  First look for a debianization in the
@@ -90,8 +87,6 @@ asBuildable download =
                           _ -> error $ "Multiple build trees found in " ++ getTop download)
                    (\ tree -> return (Buildable { download = download, debianSourceTree = tree}))
 
-runEither = runIdentity . runEitherT
-
 -- | Prevent the appearance of a new binary package from
 -- triggering builds of its build dependencies.  Optionally, a
 -- particular source package can be specified whose rebuild will
@@ -101,7 +96,7 @@ runEither = runIdentity . runEitherT
 -- its build dependencies.\"
 relaxDepends :: C.CacheRec -> Buildable -> G.OldRelaxInfo
 relaxDepends cache@(C.CacheRec {C.params = p}) tgt =
-    let srcPkg = debianSourcePackageNameE tgt in
+    let srcPkg = debianSourcePackageName tgt in
     G.RelaxInfo $ map (\ target -> (BinPkgName target, Nothing)) (globalRelaxInfo (C.params cache)) ++
                   foldPackages (\ _spec flags xs -> xs ++ map (\ binPkg -> (BinPkgName binPkg, Just srcPkg)) (P.relaxInfo flags)) (R.buildPackages p) []
 
@@ -122,11 +117,11 @@ data Target
              , targetDepends :: G.DepInfo	-- ^ The dependency info parsed from the control file
              }
 
-instance HasDebianControl Target Text where
+instance HasDebianControl Target where
     debianControl = debianControl . tgt
 
 instance Eq Target where
-    a == b = debianSourcePackageNameE a == debianSourcePackageNameE b
+    a == b = debianSourcePackageName a == debianSourcePackageName b
 
 -- |Prepare a target for building in the given environment.  At this
 -- point, the target needs to be a DebianSourceTree or a
@@ -214,13 +209,6 @@ escapeForBuild =
       escape '+' = '_'
       escape c = c
 
-removeCommentParagraphs (Control paragraphs) =
-    Control (filter (not . isCommentParagraph) paragraphs)
-    where
-      isCommentParagraph (Paragraph fields) = all isCommentField fields
-      isCommentField (Comment _) = True
-      isCommentField _ = False
-
 {-
 updateDependencyInfo :: G.RelaxInfo -> Relations -> [Target] -> IO [Target]
 updateDependencyInfo relaxInfo globalBuildDeps targets =
@@ -273,8 +261,8 @@ targetRelaxed relaxInfo target = head $ G.oldRelaxDeps relaxInfo [targetDepends 
 -- |Retrieve the dependency information for a single target
 getTargetDependencyInfo :: Relations -> DebianBuildTree -> IO G.DepInfo
 getTargetDependencyInfo globalBuildDeps buildTree =
-    parseControlFromFile controlPath >>=
-    either (throw . ParseRelationsError) (return . G.buildDependenciesE . removeCommentParagraphs) >>=
+    parseDebianControlFromFile controlPath >>=
+    return . either throw G.buildDependencies >>=
     return . addRelations globalBuildDeps
     where
       controlPath = debdir buildTree ++ "/debian/control"

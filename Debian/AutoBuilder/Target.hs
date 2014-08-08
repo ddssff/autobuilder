@@ -24,11 +24,10 @@ import qualified Data.ByteString.UTF8 as UTF8 (toString)
 import Data.Either (partitionEithers)
 import Data.Function (on)
 import Data.List (intercalate, intersect, intersperse, isSuffixOf, nub, partition, sortBy)
-import Data.ListLike (ListLike)
 import Data.Maybe (catMaybes, fromJust, isNothing, listToMaybe)
 import Data.Monoid ((<>))
 import qualified Data.Set as Set (difference, empty, fromList, insert, member, null, partition, Set, size, toList, union)
-import qualified Data.Text as T (pack, Text, unpack)
+import qualified Data.Text as T (pack, unpack)
 import Data.Time (NominalDiffTime)
 import Debian.Arch (Arch)
 import qualified Debian.AutoBuilder.Params as P (baseRelease, isDevelopmentRelease)
@@ -40,9 +39,9 @@ import qualified Debian.AutoBuilder.Types.Packages as P (foldPackages, packageCo
 import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec(autobuilderEmail, buildDepends, buildRelease, buildTrumped, discard, doNotChangeVersion, dryRun, extraReleaseTag, noClean, oldVendorTags, preferred, releaseAliases, setEnv, strictness, vendorTag), Strictness(Lax))
 import qualified Debian.AutoBuilder.Version as V (autoBuilderVersion)
 import Debian.Changes (ChangedFileSpec(changedFileSize, changedFileName, changedFileMD5sum, changedFileSHA1sum, changedFileSHA256sum), ChangeLogEntry(logWho, logVersion, logDists, logDate, logComments), ChangesFile(changeRelease, changeInfo, changeFiles, changeDir))
-import Debian.Control (Control'(Control), ControlFunctions(parseControlFromFile), Field'(Comment, Field), fieldValue, Paragraph'(..), raiseFields, HasDebianControl(debianControl))
-import Debian.Control.Policy (debianSourcePackageNameE)
-import qualified Debian.GenBuildDeps as G (buildable, BuildableInfo(CycleInfo, readyTargets), ReadyTarget(..), buildDependenciesE, compareSource, DepInfo(binaryNames, relations, sourceName))
+import Debian.Control (Control'(Control), ControlFunctions(parseControlFromFile), Field'(Comment, Field), fieldValue, Paragraph'(..), raiseFields, HasDebianControl)
+import Debian.Control.Policy (debianSourcePackageName)
+import qualified Debian.GenBuildDeps as G (buildable, BuildableInfo(CycleInfo, readyTargets), ReadyTarget(..), buildDependencies, compareSource, DepInfo(binaryNames, relations, sourceName))
 import Debian.Pretty (Pretty(pretty), display)
 import Debian.Relation (BinPkgName(..), SrcPkgName(..))
 import Debian.Relation.ByteString (Relation(..), Relations)
@@ -59,7 +58,7 @@ import Debian.Repo.Package (binaryPackageSourceVersion, sourcePackageBinaryNames
 import Debian.Repo.PackageID (PackageID(packageVersion))
 import Debian.Repo.PackageIndex (BinaryPackage(packageInfo), prettyBinaryPackage, SourcePackage(sourceParagraph, sourcePackageID), sortBinaryPackages, sortSourcePackages)
 import Debian.Repo.Prelude (symbol, runProc, readProc)
-import Debian.Repo.SourceTree (addLogEntry, buildDebs, copySourceTree, DebianBuildTree, DebianSourceTreeC(..), findChanges, findOneDebianBuildTree, SourcePackageStatus(..), SourceTreeC(..), BuildDecision(..))
+import Debian.Repo.SourceTree (addLogEntry, buildDebs, copySourceTree, DebianBuildTree, findChanges, findOneDebianBuildTree, SourcePackageStatus(..), BuildDecision(..), HasChangeLog(entry), HasDebDir(debdir), HasTopDir(topdir))
 import Debian.Repo.State.AptImage (aptSourcePackages)
 import Debian.Repo.State.OSImage (osSourcePackages, osBinaryPackages, updateOS, buildArchOfOS)
 import Debian.Repo.State.Package (scanIncoming, InstallResult(Ok), showErrors, MonadInstall, evalInstall)
@@ -84,7 +83,7 @@ import Text.Printf (printf)
 import Text.Regex (matchRegex, mkRegex)
 
 instance Ord Target where
-    compare = compare `on` debianSourcePackageNameE
+    compare = compare `on` debianSourcePackageName
 
 instance Monad Failing where
   return = Success
@@ -126,7 +125,7 @@ prepareTargets cache globalBuildDeps targetSpecs =
     where
       prepare :: (MonadOS m, MonadRepos m) => Int -> (Int, Buildable) -> m (Either SomeException Target)
       prepare count (index, tgt) =
-          do qPutStrLn (printf "[%2d of %2d] %s in %s" index count (display . debianSourcePackageNameE $ tgt) (T.getTop $ download $ tgt))
+          do qPutStrLn (printf "[%2d of %2d] %s in %s" index count (display . debianSourcePackageName $ tgt) (T.getTop $ download $ tgt))
              try (prepareTarget cache globalBuildDeps tgt) >>=
                  either (\ (e :: SomeException) ->
                              ePutStrLn (printf "[%2d of %2d] - could not prepare %s: %s"
@@ -187,17 +186,17 @@ buildLoop cache localRepo dependOS buildOS !targets =
           loop unbuilt failed
       loop2 unbuilt failed (G.ReadyTarget {G.ready = target, G.waiting = blocked} : ready') =
           do ePutStrLn (printf "[%2d of %2d] TARGET: %s - %s"
-                        (length targets - (Set.size unbuilt + length ready')) (length targets) (display . debianSourcePackageNameE $ target) (show (T.method (download (tgt target)))))
+                        (length targets - (Set.size unbuilt + length ready')) (length targets) (display . debianSourcePackageName $ target) (show (T.method (download (tgt target)))))
              -- Build one target.
-             result <- if Set.member (debianSourcePackageNameE target) (P.discard (P.params cache))
+             result <- if Set.member (debianSourcePackageName target) (P.discard (P.params cache))
                        then return (Failure ["--discard option set"])
                        else (Success <$> buildTarget cache dependOS buildOS localRepo target) `catch` handleBuildException
              failing -- On failure the target and its dependencies get
                      -- added to failed.
                      (\ errs ->
                           do ePutStrLn ("Package build failed:\n " ++ intercalate "\n " errs ++ "\n" ++
-                                        "Discarding " ++ display (debianSourcePackageNameE target) ++ " and its dependencies:\n  " ++
-                                        concat (intersperse "\n  " (map (display . debianSourcePackageNameE) blocked)))
+                                        "Discarding " ++ display (debianSourcePackageName target) ++ " and its dependencies:\n  " ++
+                                        concat (intersperse "\n  " (map (display . debianSourcePackageName) blocked)))
                              let -- Remove the dependencies of the failed packages from unbuilt
                                  unbuilt' = Set.difference unbuilt (Set.fromList blocked)
                                  -- Add the target and its dependencies to failed
@@ -227,21 +226,21 @@ buildLoop cache localRepo dependOS buildOS !targets =
       goals targets =
           case P.goals (P.params cache) of
             [] -> targets
-            goalNames -> filter (\ target -> elem (debianSourcePackageNameE target) goalNames) targets
+            goalNames -> filter (\ target -> elem (debianSourcePackageName target) goalNames) targets
 -}
 
       -- Find the sources.list for the distribution we will be building in.
       --indent s = setStyle (addPrefix stderr s)
       --debugStyle = setStyle (cond Debian.IO.dryRun Debian.IO.realRun (P.debug params))
 
-makeTable :: (HasDebianControl control text, ListLike text Char) => [G.ReadyTarget control] -> String
-makeTable triples =
+makeTable :: HasDebianControl control => [G.ReadyTarget control] -> String
+makeTable ready =
     unlines . map (intercalate " ") . columns $ goalsLine ++ [[""]] ++ readyLines
     where
       goalsLine = []
-      readyLines = map readyLine triples
+      readyLines = map readyLine ready
       readyLine (G.ReadyTarget {G.ready = ready, G.waiting = blocked}) =
-          [" Ready:", display (debianSourcePackageNameE ready), "Blocking " ++ show (length blocked) ++ ": [" ++ intercalate ", " (map (display . debianSourcePackageNameE) blocked) ++ "]"]
+          [" Ready:", display (debianSourcePackageName ready), "Blocking " ++ show (length blocked) ++ ": [" ++ intercalate ", " (map (display . debianSourcePackageName) blocked) ++ "]"]
 
 -- |Compute the list of targets that are ready to build from the build
 -- dependency relations.  The return value is a list of target lists,
@@ -298,7 +297,7 @@ cycleMessage cache arcs =
     where
       arcTuple (pkg, dep) =
           let rels = targetRelaxed (relaxDepends cache (tgt pkg)) pkg in
-          [(show (intersect (binaryNames pkg dep) (binaryNamesOfRelations rels))), display (debianSourcePackageNameE dep), " -> ", display (debianSourcePackageNameE pkg)]
+          [(show (intersect (binaryNames pkg dep) (binaryNamesOfRelations rels))), display (debianSourcePackageName dep), " -> ", display (debianSourcePackageName pkg)]
       relaxLine :: (BinPkgName, SrcPkgName) -> String
       relaxLine (bin, src) = "Relax-Depends: " ++ unBinPkgName bin ++ " " ++ unSrcPkgName src
       pairs :: (Target, Target) -> [(BinPkgName, SrcPkgName)]
@@ -339,8 +338,7 @@ buildTarget cache dependOS buildOS repo !target = do
   -- build dependencies
   arch <- evalMonadOS buildArchOfOS dependOS
   quieter 1 $ qPutStrLn "Looking for build dependency solutions..."
-  soln <- evalMonadOS (buildDepSolution arch (map BinPkgName (P.preferred (P.params cache))) (debianControl target)) dependOS
-  -- let solns = buildDepSolutions' arch (map BinPkgName (P.preferred (P.params cache))) dependOS globalBuildDeps debianControl
+  soln <- evalMonadOS (buildDepSolution arch (map BinPkgName (P.preferred (P.params cache))) target) dependOS
   case soln of
         Failure excuses -> qError $ intercalate "\n  " ("Couldn't satisfy build dependencies" : excuses)
         Success packages ->
@@ -638,12 +636,12 @@ computeNewVersion cache target releaseControlInfo _releaseStatus = do
       -- The control file paragraph for the currently uploaded
       -- version in this dist.  The new version must be newer
       -- than this.
-      buildTrumped = elem (debianSourcePackageNameE target) (P.buildTrumped (P.params cache))
+      buildTrumped = elem (debianSourcePackageName target) (P.buildTrumped (P.params cache))
 
 -- | Return the first build dependency solution if it can be computed.
 -- The actual list could be arbitrarily long, this prevents the caller
 -- from trying to look at it.
-buildDepSolution :: (MonadOS m, MonadIO m, MonadRepos m, HasDebianControl control T.Text) => Arch -> [BinPkgName] -> control -> m (Failing [BinaryPackage])
+buildDepSolution :: (MonadOS m, MonadIO m, MonadRepos m, HasDebianControl control) => Arch -> [BinPkgName] -> control -> m (Failing [BinaryPackage])
 buildDepSolution arch preferred target = do
   solns <- buildDepSolutions arch preferred target
   return $ case solns of
@@ -652,11 +650,11 @@ buildDepSolution arch preferred target = do
              _ -> Failure [$(symbol 'buildDepSolution) ++ ": Internal error 4"]
 
 -- FIXME: Most of this code should move into Debian.Repo.Dependencies
-buildDepSolutions :: (MonadOS m, MonadIO m, MonadRepos m, HasDebianControl control T.Text) => Arch -> [BinPkgName] -> control -> m (Failing [(Int, [BinaryPackage])])
+buildDepSolutions :: (MonadOS m, MonadIO m, MonadRepos m, HasDebianControl control) => Arch -> [BinPkgName] -> control -> m (Failing [(Int, [BinaryPackage])])
 buildDepSolutions arch preferred target =
     do globalBuildDeps <- buildEssential
        packages <- osBinaryPackages
-       let info = G.buildDependenciesE target
+       let info = G.buildDependencies target
        -- q12 "Searching for build dependency solution" $
        -- We don't discard any dependencies here even if they are
        -- mentioned in Relax-Depends, that only applies to deciding

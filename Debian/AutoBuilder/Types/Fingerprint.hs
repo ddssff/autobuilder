@@ -24,14 +24,13 @@ import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Changes (logVersion)
-import Debian.Control (lookupP, unControl, stripWS, debianControl)
-import Debian.Control.Policy (debianSourcePackageNameE)
+import Debian.Control (fieldValue, debianSourcePackageName, debianBinaryParagraphs)
 import qualified Debian.Control.String as S
 import qualified Debian.GenBuildDeps as G
 import Debian.Pretty (pretty)
 import Debian.Relation (Relation(Rel), BinPkgName(..))
 import Debian.Repo.Dependencies (prettySimpleRelation, readSimpleRelation, showSimpleRelation)
-import Debian.Repo.SourceTree (DebianSourceTreeC(entry), SourcePackageStatus(..), BuildDecision(..))
+import Debian.Repo.SourceTree (HasChangeLog(entry), SourcePackageStatus(..), BuildDecision(..))
 import Debian.Repo.PackageID (PackageID(PackageID, packageName, packageVersion))
 import Debian.Repo.PackageIndex (SourcePackage(sourceParagraph, sourcePackageID), BinaryPackage(packageID))
 import Debian.Version (DebianVersion, parseDebianVersion, prettyDebianVersion)
@@ -153,7 +152,7 @@ buildDecision :: P.CacheRec
                                         -- to the architecture we are building - either all binary packages
                                         -- are available, or none, or only the architecture independent.
               -> BuildDecision
-buildDecision cache target _ _ _ | elem (debianSourcePackageNameE (debianSourceTree (tgt target))) (P.forceBuild (P.params cache)) = Yes "--force-build option is set"
+buildDecision cache target _ _ _ | elem (debianSourcePackageName (debianSourceTree (tgt target))) (P.forceBuild (P.params cache)) = Yes "--force-build option is set"
 buildDecision _ target _ (Fingerprint _ (Just sourceVersion) _ _) _
     | any (== (show (prettyDebianVersion sourceVersion))) (mapMaybe skipVersion . P.flags . T.package . download . tgt $ target) =
         No ("Skipped version " ++ show (prettyDebianVersion sourceVersion))
@@ -214,7 +213,7 @@ buildDecision cache target (Fingerprint _ oldSrcVersion builtDependencies repoVe
       -- are not completely protected from this possibility.
       sameSourceTests =
           case releaseStatus of
-            Indep missing | missing /= [] && not (notArchDep (debianControl target)) ->
+            Indep missing | missing /= [] && not (notArchDep target) ->
                   -- The binary packages are missing, we need an arch only build.
                   Arch ("Version " ++ maybe "Nothing" show (fmap prettyDebianVersion repoVersion) ++ " needs arch only build. (Missing: " ++ show missing ++ ")")
             _ | badDependencies /= [] && not allowBuildDependencyRegressions ->
@@ -229,12 +228,12 @@ buildDecision cache target (Fingerprint _ oldSrcVersion builtDependencies repoVe
                   -- know whether a build is required, so we could go either way.  The decision
                   -- here is to only built if some of the build dependencies were built by the
                   -- autobuilder (so their version numbers have been tagged by it.)
-                  Auto ("Build dependency status unknown:\n" ++ buildDependencyChangeText autobuiltDependencies)
+                  Auto ("Build dependency status unknown:\n" ++ displayDependencyChanges autobuiltDependencies)
               | (revvedDependencies ++ newDependencies) /= [] && isJust oldSrcVersion ->
                   -- If the package *was* previously built by the autobuilder we rebuild when any
                   -- of its build dependencies are revved or new ones appear.
-                  Auto ("Build dependencies changed:\n" ++ buildDependencyChangeText (revvedDependencies ++ newDependencies))
-            Indep _ | notArchDep (debianControl target) ->
+                  Auto ("Build dependencies changed:\n" ++ displayDependencyChanges (revvedDependencies ++ newDependencies))
+            Indep _ | notArchDep target ->
                   No ("Version " ++ show (prettyDebianVersion sourceVersion) ++ " of architecture independent package is already in release.")
             Indep missing ->
                   -- The binary packages are missing, we need an arch only build.
@@ -243,11 +242,8 @@ buildDecision cache target (Fingerprint _ oldSrcVersion builtDependencies repoVe
                   No ("Version " ++ show (prettyDebianVersion sourceVersion) ++ " is already in release.")
             _ ->
                   error ("Unexpected releaseStatus: " ++ show releaseStatus)
-      notArchDep control =
-          all (== "all") . map (maybe "all" strip) . map (lookupP "Architecture") . unControl $ control
-          where strip (S.Field (_, s)) = stripWS s
-                strip (S.Comment _) = ""
-      buildDependencyChangeText dependencies =
+      notArchDep = all (== Just "all") . map (fieldValue "Architecture") . debianBinaryParagraphs
+      displayDependencyChanges dependencies =
           "  " ++ intercalate "\n  " changes
           where
             changes = map (\ (built, new) -> show (prettySimpleRelation built) ++ " -> " ++ show (prettySimpleRelation (Just new))) (zip builtVersions dependencies)
@@ -255,6 +251,7 @@ buildDecision cache target (Fingerprint _ oldSrcVersion builtDependencies repoVe
             findDepByName new = find (\ old -> packageName new == packageName old) builtDependencies
       -- The list of the revved and new dependencies which were built by the autobuilder.
       autobuiltDependencies = filter isTagged (revvedDependencies ++ newDependencies)
+      -- Versions we generated, with vendor and release tags
       isTagged :: PackageID BinPkgName -> Bool
       isTagged dep = isJust . snd . parseTag allTags . packageVersion $ dep
       allTags :: [String]

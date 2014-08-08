@@ -41,7 +41,7 @@ Library
   if flag (local-debian-repo) || flag (local-cabal-debian)
     Hs-Source-Dirs: ../debian-repo
   else
-    Build-Depends: debian-repo >= 5.59
+    Build-Depends: debian-repo >= 5.67
 
   if flag (local-cabal-debian)
     Hs-Source-Dirs: ../cabal-debian/src
@@ -141,7 +141,7 @@ Executable autobuilder-tests
     Hs-Source-Dirs: ., ../debian-repo
     Build-Depends: deepseq, data-lens-template
   else
-    Build-Depends: debian-repo >= 5.59
+    Build-Depends: debian-repo >= 5.67
 
   if flag (local-cabal-debian)
     Hs-Source-Dirs: ., ../cabal-debian/src

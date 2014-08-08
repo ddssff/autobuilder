@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables, TemplateHaskell, TypeFamilies #-}
+{-# LANGUAGE CPP, FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables, TemplateHaskell, TypeFamilies #-}
 -- |AutoBuilder - application to build Debian packages in a clean
 -- environment.  In the following list, each module's dependencies
 -- appear above it:
@@ -27,7 +27,7 @@ import qualified Debian.AutoBuilder.Types.CacheRec as C
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import qualified Debian.AutoBuilder.Version as V
-import Debian.Control.Policy (debianPackageNamesE, debianSourcePackageNameE)
+import Debian.Control.Policy (debianPackageNames, debianSourcePackageName)
 import Debian.Debianize (DebT)
 import Debian.Pretty (pretty)
 import Debian.Relation (BinPkgName(unBinPkgName), SrcPkgName(unSrcPkgName))
@@ -188,7 +188,7 @@ runParameterSet hc init cache =
             liftIO (hPutStr stderr (printf "[%2d of %2d]" index count))
             res <- (Right <$> evalMonadOS (do download <- retrieve hc init cache target
                                               buildable <- liftIO (asBuildable download)
-                                              let (src, bins) = debianPackageNamesE (debianSourceTree buildable)
+                                              let (src, bins) = debianPackageNames (debianSourceTree buildable)
                                               liftIO (hPutStrLn stderr (printf " %s - %s:" (unSrcPkgName src) (limit 100 (show (P.spec target)) :: String)))
                                               qPutStrLn $ "Binary debs: [" <> intercalate ", " (map unBinPkgName bins) <> "]"
                                               return buildable) buildOS) `catch` handleRetrieveException target
@@ -239,7 +239,7 @@ runParameterSet hc init cache =
                 Just uri -> qPutStrLn "Uploading from local repository to remote" >> liftIO (uploadRemote repo uri)
           | True = return []
       upload (_, failed) =
-          do let msg = ("Some targets failed to build:\n  " ++ intercalate "\n  " (map (display . debianSourcePackageNameE) failed))
+          do let msg = ("Some targets failed to build:\n  " ++ intercalate "\n  " (map (display . debianSourcePackageName) failed))
              qPutStrLn msg
              case P.doUpload params of
                True -> qPutStrLn "Skipping upload."
