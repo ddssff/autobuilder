@@ -518,14 +518,15 @@ buildTargets :: ParamRec -> Packages -> Packages
 buildTargets params knownTargets =
     case targets params of
       TargetSpec {allTargets = True} -> knownTargets
-      TargetSpec {groups = names} -> Packages {group = NoName, list = map findByName (toList names)}
+      TargetSpec {groups = names} -> Packages {list = map findByName (toList names)}
     where
       findByName :: GroupName -> Packages
-      findByName n =
-          foldPackages' f g h knownTargets mempty
+      findByName s =
+          foldPackages' f n g h knownTargets mempty
           where
             f _ _ r = r
-            g s ps r = if n == s
-                       then mappend r (Packages s ps)
-                       else foldr (foldPackages' f g h) r ps
+            n s' p r = if s == s'
+                       then mappend r p
+                       else foldPackages' f n g h r p
+            g ps r = foldr (foldPackages' f n g h) r ps
             h r = r

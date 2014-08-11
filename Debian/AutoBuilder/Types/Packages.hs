@@ -77,14 +77,18 @@ data Packages
       -- the package.
       }
     | Packages
+      { list :: [Packages]
+      }
+    | Named
       { group :: GroupName
-      , list :: [Packages]
+      , packages :: Packages
       } deriving (Show, Data, Typeable)
     -- deriving (Show, Eq, Ord)
 
 instance Eq Packages where
     (Package {spec = s1}) == (Package {spec = s2}) = s1 == s2
-    (Packages {group = g1, list = l1}) == (Packages {group = g2, list = l2}) = g1 == g2 && l1 == l2
+    (Packages {list = l1}) == (Packages {list = l2}) = l1 == l2
+    (Named {group = g1, packages = p1}) == (Named {group = g2, packages = p2}) = g1 == g2 && p1 == p2
     NoPackage == NoPackage = True
     _ == _ = False
 
@@ -97,26 +101,31 @@ instance Monoid Packages where
     mempty = NoPackage
     mappend NoPackage y = y
     mappend x NoPackage = x
-    mappend x@(Package {}) y@(Package {}) = Packages NoName [x, y]
-    mappend x@(Package {}) y@(Packages {}) = y {list = [x] ++ list y}
-    mappend x@(Packages {}) y@(Package {}) = x {list = list x ++ [y]}
-    mappend x@(Packages {}) y@(Packages {}) =
-        Packages { group = mappend (group x) (group y)
-                 , list = list x ++ list y }
+    mappend x@(Package {}) y = mappend (Packages [x]) y
+    mappend x y@(Package {}) = mappend x (Packages [y])
+    mappend x@(Packages {}) y@(Packages {}) = Packages { list = list x ++ list y }
+    mappend x@(Named {}) y@(Named {}) =
+        Named { group = mappend (group x) (group y)
+              , packages = mappend (packages x) (packages y) }
+    mappend x@(Named {}) y = x {packages = mappend (packages x) y}
+    mappend x y@(Named {}) = y {packages = mappend x (packages y)}
 
 foldPackages' :: (RetrieveMethod -> [PackageFlag] -> r -> r)
-              -> (GroupName -> [Packages] -> r -> r)
+              -> (GroupName -> Packages -> r -> r)
+              -> ([Packages] -> r -> r)
               -> (r -> r)
               -> Packages -> r -> r
-foldPackages' _ g _ ps@(Packages {}) r = g (group ps) (list ps) r
-foldPackages' f _ _ p@(Package {}) r = f (spec p) (flags p) r
-foldPackages' _ _ h NoPackage r = h r
+foldPackages' _ n _ _ ps@(Named {}) r = n (group ps) (packages ps) r
+foldPackages' _ _ g _ ps@(Packages {}) r = g (list ps) r
+foldPackages' f _ _ _ p@(Package {}) r = f (spec p) (flags p) r
+foldPackages' _ _ _ h NoPackage r = h r
 
 -- FIXME: this can be implemented using foldPackages'
 foldPackages :: (RetrieveMethod -> [PackageFlag] -> r -> r) -> Packages -> r -> r
 foldPackages _ NoPackage r = r
 foldPackages f x@(Package {}) r = f (spec x) (flags x) r
 foldPackages f x@(Packages {}) r = foldr (foldPackages f) r (list x)
+foldPackages f x@(Named {}) r = foldPackages f (packages x) r
 
 filterPackages :: (Packages -> Bool) -> Packages -> Packages
 filterPackages p xs =
@@ -257,6 +266,7 @@ method m =
 
 -- | Add a flag to every package in p
 flag :: Packages -> PackageFlag -> Packages
+flag p@(Named {}) f = p {packages = flag (packages p) f}
 flag p@(Package {}) f = p {flags = f : flags p}
 flag p@(Packages {}) f = p {list = map (`flag` f) (list p)}
 flag NoPackage _ = NoPackage
@@ -269,6 +279,7 @@ patch :: Packages -> ByteString -> Packages
 patch package@(Package {}) s = package {spec = Patch (spec package) s}
 patch p@(Packages {}) s = p {list = map (`patch` s) (list p)}
 patch NoPackage _ = NoPackage
+patch p@(Named {}) _ = p
 
 rename :: Packages -> GroupName -> Packages
 rename p s = p {group = s}
@@ -277,6 +288,7 @@ mapSpec :: (RetrieveMethod -> RetrieveMethod) -> Packages -> Packages
 mapSpec f p@(Package {spec = x}) = p {spec = f x}
 mapSpec _ NoPackage = NoPackage
 mapSpec f p@(Packages {list = xs}) = p {list = map (mapSpec f) xs}
+mapSpec f p@(Named {}) = p {packages = mapSpec f (packages p)}
 
 cd :: Packages -> FilePath -> Packages
 cd p path = p {spec = Cd path (spec p)}
