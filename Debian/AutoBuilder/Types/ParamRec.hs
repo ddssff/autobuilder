@@ -538,7 +538,7 @@ buildTargets params knownTargets =
             f _ _ r = r
             n s' p r = if s == s'
                        then mappend r p
-                       else foldPackages' f n g h r p
+                       else foldPackages' f n g h p r
             g ps r = foldr (foldPackages' f n g h) r ps
             h r = r
       -- Filter the singleton packages by whether its RetrieveMethod
