@@ -308,6 +308,7 @@ doReport =
       doReport' :: P.Packages -> [String]
       doReport' P.NoPackage = []
       doReport' p@(P.Packages {}) = concatMap doReport' (P.list p)
+      doReport' p@(P.Named {}) = doReport' (P.packages p)
       doReport' p@(P.Package {}) =
           patched (P.spec p) ++ pinned (P.flags p)
           where
