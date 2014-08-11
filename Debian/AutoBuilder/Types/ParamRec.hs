@@ -12,11 +12,12 @@ module Debian.AutoBuilder.Types.ParamRec
 
 import Control.Arrow (first)
 import Data.Char (toUpper)
+import Data.Generics (listify)
 import Data.List as List (map)
 import Data.Monoid (mempty, mappend)
 import Data.Set as Set (Set, insert, toList)
 import Debian.Arch (Arch)
-import Debian.AutoBuilder.Types.Packages (Packages(Packages, list, group), GroupName(GroupName, NoName), foldPackages')
+import Debian.AutoBuilder.Types.Packages (Packages(Packages, list, group, Package), GroupName(GroupName, NoName), foldPackages, foldPackages', RetrieveMethod)
 import Debian.Pretty (Pretty(pretty), vcat)
 import Debian.Relation (SrcPkgName(SrcPkgName))
 import Debian.Release (ReleaseName )
@@ -78,6 +79,10 @@ data ParamRec =
     -- changed.  some methods for obtaining the source code of a
     -- package to be built.  See "Debian.AutoBuilder.BuildTarget" for
     -- information about the available target types.
+    , patterns :: [RetrieveMethod]
+    -- ^ Targets will be retrieved from the global list based on
+    -- whether they contain any of these RetrieveMethod values:
+    -- e.g. Hackage "pureMD5"
     , doUpload :: Bool
     -- ^ After a successful build of all the targets, dupload all the
     -- packages in the local pool specified by the @uploadURI@
@@ -304,6 +309,7 @@ prettyPrint x =
             , "useRepoCache=" ++ take 120 (show (useRepoCache x))
             , "sources=" ++ take 120 (show (vcat (map pretty (sources x))))
             , "targets=" ++ take 120 (show (targets x))
+            , "patterns=" ++ take 120 (show (patterns x))
             , "goals=" ++ take 120 (show (goals x))
             , "discard=" ++ take 120 (show (discard x))
             , "vendorTag=" ++ take 120 (show (vendorTag x))
@@ -397,6 +403,8 @@ optSpecs =
                , "or was flushed from the local repository without being uploaded."])
     , Option [] ["target", "group"] (ReqArg (\ s -> (Right (\ p -> p {targets = addTarget (GroupName s) p}))) "GROUP NAME")
       "Add a target to the target list."
+    , Option [] ["pattern"] (ReqArg (\ s -> (Right (\ p -> p {patterns = readPattern s ++ patterns p}))) "EXPRESSION")
+      "Find targets by pattern matching"
     , Option [] ["discard"] (ReqArg (\ s -> (Right (\ p -> p {discard = Set.insert (SrcPkgName s) (discard p)}))) "PACKAGE")
       (unlines [ "Add a target to the discard list, packages which we discard as soon"
                , "as they are ready to build, along with any packages that depend on them." ])
@@ -435,6 +443,9 @@ optSpecs =
                    [] -> error $ "Package not found: " ++ s
                    xs -> error $ "Multiple packages found: " ++ show (map sourcePackageName xs)
 -}
+
+readPattern :: Monad m => String -> m RetrieveMethod
+readPattern s = maybe (fail $ "Invalid RetrieveMethod: " ++ show s) return (readMaybe s)
 
 -- |given a list of strings as they would be returned from getArgs,
 -- build the list of ParamRec which defines the build.
@@ -518,7 +529,7 @@ buildTargets :: ParamRec -> Packages -> Packages
 buildTargets params knownTargets =
     case targets params of
       TargetSpec {allTargets = True} -> knownTargets
-      TargetSpec {groups = names} -> Packages {list = map findByName (toList names)}
+      TargetSpec {groups = names} -> Packages {list = map findByName (toList names) ++ concatMap findByPattern (patterns params)}
     where
       findByName :: GroupName -> Packages
       findByName s =
@@ -530,3 +541,9 @@ buildTargets params knownTargets =
                        else foldPackages' f n g h r p
             g ps r = foldr (foldPackages' f n g h) r ps
             h r = r
+      -- Filter the singleton packages by whether its RetrieveMethod
+      -- contains pat.
+      findByPattern  :: RetrieveMethod -> [Packages]
+      findByPattern pat = foldPackages (\ method flags r -> case listify (== pat) method of
+                                                              [] -> r
+                                                              _ -> Package method flags : r) knownTargets []

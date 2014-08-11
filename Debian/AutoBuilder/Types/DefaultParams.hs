@@ -40,6 +40,7 @@ defaultParams myBuildRelease -- e.g. wheezy or precise
     , buildURI = defaultBuildURI myBuildRelease myBuildURIPrefix myUploadURIPrefix
     -- What we plan to build
     , targets = TargetSpec {allTargets = False, groups = Set.empty}
+    , patterns = []
     -- If true, upload the packages after a successful build
     , doUpload = False
     -- If true, run newdist on the upload repository after a successful
