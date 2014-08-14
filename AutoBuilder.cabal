@@ -48,7 +48,7 @@ Library
     Build-Depends: Diff, set-extra, hsemail, memoize, syb
   else
     Hs-Source-Dirs: ../debian-repo
-    Build-Depends: cabal-debian >= 4.15.1, deepseq, data-lens-template
+    Build-Depends: cabal-debian >= 4.16, deepseq, data-lens-template
 
   if flag (local-debian)
     Hs-Source-Dirs: ../haskell-debian
@@ -146,7 +146,7 @@ Executable autobuilder-tests
   if flag (local-cabal-debian)
     Hs-Source-Dirs: ., ../cabal-debian/src
   else
-    Build-Depends: cabal-debian >= 4.15.1
+    Build-Depends: cabal-debian >= 4.16
 
   if flag (local-debian)
     Hs-Source-Dirs: ../haskell-debian
