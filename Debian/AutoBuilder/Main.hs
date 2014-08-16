@@ -131,7 +131,7 @@ doParameterSet init results params =
       _ ->
           withModifiedVerbosity (const (P.verbosity params))
             (do top <- askTop
-                withLock (top </> "lockfile") (P.buildCache params >>= runParameterSet (P.compilerFlavor params) init))
+                withLock (top </> "lockfile") (P.buildCache params >>= runParameterSet init))
             `catch` (\ (e :: SomeException) -> return (Failure [show e])) >>=
           (\ result -> return (result : results))
     where
@@ -148,8 +148,8 @@ getLocalSources = do
     Nothing -> error $ "Invalid local repo root: " ++ show root
     Just uri -> repoSources (Just (envRoot root)) uri
 
-runParameterSet :: (MonadReposCached m, MonadMask m) => CompilerFlavor -> DebT IO () -> C.CacheRec -> m (Failing ([Output L.ByteString], NominalDiffTime))
-runParameterSet hc init cache =
+runParameterSet :: (MonadReposCached m, MonadMask m) => DebT IO () -> C.CacheRec -> m (Failing ([Output L.ByteString], NominalDiffTime))
+runParameterSet init cache =
     do
       top <- askTop
       liftIO doRequiredVersion
@@ -186,7 +186,7 @@ runParameterSet hc init cache =
       retrieveTarget :: MonadReposCached m => EnvRoot -> Int -> Int -> P.Packages -> m (Either String Buildable)
       retrieveTarget buildOS count index target = do
             liftIO (hPutStr stderr (printf "[%2d of %2d]" index count))
-            res <- (Right <$> evalMonadOS (do download <- retrieve hc init cache target
+            res <- (Right <$> evalMonadOS (do download <- retrieve init cache target
                                               buildable <- liftIO (asBuildable download)
                                               let (src, bins) = debianPackageNames (debianSourceTree buildable)
                                               liftIO (hPutStrLn stderr (printf " %s - %s:" (unSrcPkgName src) (limit 100 (show (P.spec target)) :: String)))

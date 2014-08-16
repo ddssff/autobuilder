@@ -39,8 +39,8 @@ documentation = [ "hackage:<name> or hackage:<name>=<version> - a target of this
                 , "retrieves source code from http://hackage.haskell.org." ]
 
 -- | Debianize the download, which is assumed to be a cabal package.
-prepare :: (MonadRepos m, MonadTop m) => CompilerFlavor -> DebT IO () -> P.CacheRec -> P.Packages -> [P.DebSpec] -> T.Download -> m T.Download
-prepare hc defaultAtoms cache package' specs target =
+prepare :: (MonadRepos m, MonadTop m) => DebT IO () -> P.CacheRec -> P.Packages -> [P.DebSpec] -> T.Download -> m T.Download
+prepare defaultAtoms cache package' specs target =
     do dir <- sub ("debianize" </> takeFileName (T.getTop target))
        liftIO $ createDirectoryIfMissing True dir
        _ <- rsync [] (T.getTop target) dir
@@ -52,7 +52,7 @@ prepare hc defaultAtoms cache package' specs target =
                 let version = pkgVersion . package . Distribution.PackageDescription.packageDescription $ desc
                 -- We want to see the original changelog, so don't remove this
                 -- removeRecursiveSafely (dir </> "debian")
-                liftIO $ autobuilderCabal hc cache (P.flags package') specs dir defaultAtoms
+                liftIO $ autobuilderCabal cache (P.flags package') specs dir defaultAtoms
                 return $ T.Download { T.package = package'
                                     , T.getTop = dir
                                     , T.logText =  "Built from hackage, revision: " ++ show (P.spec package')
@@ -86,8 +86,8 @@ collectPackageFlags _cache pflags =
        return $ ["--verbose=" ++ show v] ++
                 concatMap asCabalFlags pflags
 
-autobuilderCabal :: CompilerFlavor -> P.CacheRec -> [P.PackageFlag] -> [P.DebSpec] -> FilePath -> DebT IO () -> IO ()
-autobuilderCabal hc cache pflags specs debianizeDirectory defaultAtoms =
+autobuilderCabal :: P.CacheRec -> [P.PackageFlag] -> [P.DebSpec] -> FilePath -> DebT IO () -> IO ()
+autobuilderCabal cache pflags specs debianizeDirectory defaultAtoms =
     withCurrentDirectory debianizeDirectory $
     do let rel = P.buildRelease $ P.params cache
        top <- computeTopDir (P.params cache)

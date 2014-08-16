@@ -14,7 +14,6 @@ import Debian.Repo (SourcesChangedAction(SourcesChangedError))
 import Debian.Sources (DebSource, parseSourceLine)
 import Debian.URI
 import Debian.Version (parseDebianVersion)
-import Distribution.Compiler (CompilerFlavor(GHC))
 import Prelude hiding (map)
 import System.FilePath ((</>))
 
@@ -118,7 +117,6 @@ defaultParams myBuildRelease -- e.g. wheezy or precise
     , ifSourcesChanged = SourcesChangedError
     , knownPackages = NoPackage
     , buildPackages = NoPackage
-    , compilerFlavor = GHC
     }
 
 defaultVendorTag = "+" ++ defaultVendor
