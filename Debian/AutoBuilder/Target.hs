@@ -375,7 +375,7 @@ buildPackage :: (MonadRepos m, MonadTop m, MonadMask m) =>
                 P.CacheRec -> EnvRoot -> EnvRoot -> Maybe DebianVersion -> Fingerprint -> Fingerprint -> Target -> BuildDecision -> LocalRepository -> m LocalRepository
 buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !target decision repo = do
   checkDryRun
-  source <- prepareBuildTree cache dependOS buildOS newFingerprint target
+  source <- noisier 2 $ prepareBuildTree cache dependOS buildOS newFingerprint target
   logEntry source
   result <- evalMonadOS (build source) buildOS
   result' <- find result
