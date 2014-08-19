@@ -7,7 +7,6 @@ module Debian.AutoBuilder.BuildTarget.Debianize
     , documentation
     ) where
 
-import Control.Monad (when)
 import Control.Monad.State (modify)
 import Control.Monad.Catch (MonadMask, bracket)
 import Control.Monad.Trans (MonadIO, liftIO)
@@ -24,7 +23,6 @@ import Debian.Relation (SrcPkgName(..))
 import Debian.Repo.Prelude (rsync)
 import Debian.Repo.Internal.Repos (MonadRepos)
 import Debian.Repo.Top (MonadTop, sub, runTopT)
-import Distribution.Compiler (CompilerFlavor)
 import Distribution.Verbosity (normal)
 import Distribution.Package (PackageIdentifier(..))
 import Distribution.PackageDescription (GenericPackageDescription(..), PackageDescription(..))
@@ -32,7 +30,8 @@ import Distribution.PackageDescription.Parse (readPackageDescription)
 import System.Directory (getDirectoryContents, createDirectoryIfMissing, getCurrentDirectory, setCurrentDirectory)
 import System.Environment (withArgs)
 import System.FilePath ((</>), takeFileName, takeDirectory)
-import System.Process.Progress (verbosity)
+import System.Process (showCommandForUser)
+import System.Process.Progress (verbosity, qPutStrLn)
 
 documentation :: [String]
 documentation = [ "hackage:<name> or hackage:<name>=<version> - a target of this form"
@@ -96,71 +95,50 @@ autobuilderCabal cache pflags specs debianizeDirectory defaultAtoms =
        let args' = "--buildenvdir" : takeDirectory (dependOS eset) : args
        -- This will be false if the package has no debian/Debianize.hs script
        done <- runDebianizeScript args'
-       when (not done) (withArgs [] (do let atoms = makeAtoms eset
-                                        Cabal.evalDebT (do debianization defaultAtoms (applyDebSpecs specs >> applyPackageFlags pflags)
-                                                           writeDebianization) atoms))
+       case done of
+         True -> qPutStrLn (showCommandForUser "runhaskell" ("debian/Debianize.hs" : args'))
+         False -> withArgs [] $ Cabal.evalDebT (do qPutStrLn (showCommandForUser "cabal-debian" (concatMap asCabalFlags specs ++ concatMap asCabalFlags pflags))
+                                                   debianization defaultAtoms (applyDebSpecs specs >> mapM_ applyPackageFlag pflags)
+                                                   writeDebianization)
+                                               (makeAtoms eset)
 
 applyDebSpecs :: [P.DebSpec] -> DebT IO ()
 applyDebSpecs specs = mapM_ applyDebSpec specs
 
 applyDebSpec:: P.DebSpec -> DebT IO ()
-applyDebSpec (P.SrcDeb name) = compileArgs ["--source-package-name", unSrcPkgName name]
-
-applyPackageFlags :: [P.PackageFlag] -> DebT IO ()
-applyPackageFlags flags = mapM_ applyPackageFlag flags
+applyDebSpec = compileArgs . asCabalFlags
 
 applyPackageFlag :: P.PackageFlag -> DebT IO ()
-applyPackageFlag x@(P.Maintainer _) = compileArgs (asCabalFlags x)
-applyPackageFlag x@(P.BuildDep _) = compileArgs (asCabalFlags x)
-applyPackageFlag x@(P.DevelDep _) = compileArgs (asCabalFlags x)
-applyPackageFlag x@(P.MapDep _ _) = compileArgs (asCabalFlags x)
-applyPackageFlag x@(P.DebVersion _) = compileArgs (asCabalFlags x)
-applyPackageFlag (P.SkipVersion _) = return ()
-applyPackageFlag (P.FailVersion _) = return ()
-applyPackageFlag P.SkipPackage = return ()
-applyPackageFlag P.FailPackage = return ()
-applyPackageFlag x@(P.Revision _) = compileArgs (asCabalFlags x)
-applyPackageFlag x@(P.Epoch _ _) = compileArgs (asCabalFlags x)
-applyPackageFlag x@P.NoDoc = compileArgs (asCabalFlags x)
-applyPackageFlag x@P.NoHoogle = compileArgs (asCabalFlags x)
-applyPackageFlag (P.CabalDebian ss) = compileArgs ss
 applyPackageFlag (P.ModifyAtoms f) = modify f
-applyPackageFlag (P.RelaxDep _) = return ()
-applyPackageFlag (P.UDeb _) = return ()
-applyPackageFlag P.OmitLTDeps = return () -- I think this exists
-applyPackageFlag (P.AptPin _) = return ()
-applyPackageFlag (P.CabalPin _) = return ()
-applyPackageFlag (P.DarcsTag _) = return ()
-applyPackageFlag (P.GitBranch _) = return ()
-applyPackageFlag P.KeepRCS = return ()
+applyPackageFlag x = compileArgs . asCabalFlags $ x
 
-asCabalFlags :: P.PackageFlag -> [String]
-asCabalFlags (P.Maintainer s) = ["--maintainer", s]
-asCabalFlags (P.BuildDep s) = ["--build-dep", s]
-asCabalFlags (P.DevelDep s) = ["--build-dep", s, "--dev-dep", s]
-asCabalFlags (P.MapDep c d) = ["--map-dep", c ++ "=" ++ show (pretty d)]
-asCabalFlags (P.DebVersion s) = ["--deb-version", s]
-asCabalFlags (P.SkipVersion _) = []
-asCabalFlags (P.FailVersion _) = []
-asCabalFlags P.SkipPackage = []
-asCabalFlags P.FailPackage = []
-asCabalFlags (P.Revision s) = ["--revision", s]
-asCabalFlags (P.Epoch name d) = ["--epoch-map", name ++ "=" ++ show d]
-asCabalFlags P.NoDoc = ["--disable-haddock"]
-asCabalFlags P.NoHoogle = ["--no-hoogle"]
-asCabalFlags (P.CabalDebian ss) = ss
-asCabalFlags (P.RelaxDep _) = []
-asCabalFlags (P.UDeb _) = []
-asCabalFlags P.OmitLTDeps = [] -- I think this exists
-asCabalFlags (P.AptPin _) = []
-asCabalFlags (P.CabalPin _) = []
-asCabalFlags (P.ModifyAtoms _) = []
-asCabalFlags (P.DarcsTag _) = []
-asCabalFlags (P.GitBranch _) = []
-asCabalFlags P.KeepRCS = []
+class CabalFlags a where
+    asCabalFlags :: a -> [String]
 
--- | Apply a set of package flags to a cabal-debian configuration record.
-{-
-applyPackageFlag :: P.PackageFlag -> Cabal.Atoms -> Cabal.Atoms
-applyPackageFlag x atoms = Cabal.compileArgs atoms (asCabalFlags x)
--}
+instance CabalFlags P.DebSpec where
+    asCabalFlags (P.SrcDeb name) = ["--source-package-name", unSrcPkgName name]
+
+instance CabalFlags P.PackageFlag where
+    asCabalFlags (P.Maintainer s) = ["--maintainer", s]
+    asCabalFlags (P.BuildDep s) = ["--build-dep", s]
+    asCabalFlags (P.DevelDep s) = ["--build-dep", s, "--dev-dep", s]
+    asCabalFlags (P.MapDep c d) = ["--map-dep", c ++ "=" ++ show (pretty d)]
+    asCabalFlags (P.DebVersion s) = ["--deb-version", s]
+    asCabalFlags (P.SkipVersion _) = []
+    asCabalFlags (P.FailVersion _) = []
+    asCabalFlags P.SkipPackage = []
+    asCabalFlags P.FailPackage = []
+    asCabalFlags (P.Revision s) = ["--revision", s]
+    asCabalFlags (P.Epoch name d) = ["--epoch-map", name ++ "=" ++ show d]
+    asCabalFlags P.NoDoc = ["--disable-haddock"]
+    asCabalFlags P.NoHoogle = ["--no-hoogle"]
+    asCabalFlags (P.CabalDebian ss) = ss
+    asCabalFlags (P.RelaxDep _) = []
+    asCabalFlags (P.UDeb _) = []
+    asCabalFlags P.OmitLTDeps = [] -- I think this exists
+    asCabalFlags (P.AptPin _) = []
+    asCabalFlags (P.CabalPin _) = []
+    asCabalFlags (P.ModifyAtoms _) = ["<un-showable-modifyatoms-function>"]
+    asCabalFlags (P.DarcsTag _) = []
+    asCabalFlags (P.GitBranch _) = []
+    asCabalFlags P.KeepRCS = []

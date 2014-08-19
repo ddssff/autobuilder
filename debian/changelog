@@ -2,6 +2,7 @@ haskell-autobuilder (6.70) unstable; urgency=low
 
   * Remove the CompilerFlavor argument from retrieve and prepare.  It can
     be obtained from the Atoms value in the DebT monad.
+  * Display the arguments passed to cabal-debian
 
  -- David Fox <dsf@seereason.com>  Sat, 16 Aug 2014 14:50:37 -0700
 
