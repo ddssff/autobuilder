@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Debian.AutoBuilder.Types.Fingerprint
     ( Fingerprint
+    , DownstreamFingerprint
     , packageFingerprint
     , modernizeMethod
     , showFingerprint
@@ -51,16 +52,22 @@ data Fingerprint
         , buildDependencyVersions :: Set (PackageID BinPkgName)
           -- ^ The names and version numbers of the build dependencies which
           -- were present when the package was build.
-        , downstreamVersion :: Maybe DebianVersion
-          -- ^ This will be the same as the version field plus
-          -- the suffix that was added by the autobuilder.
+        }
+    deriving Show
+
+data DownstreamFingerprint
+    = DownstreamFingerprint
+        { upstreamFingerprint :: Fingerprint
+        , downstreamVersion :: DebianVersion
+          -- ^ This will be the the version field plus the suffix that
+          -- was added by the autobuilder.
         }
     deriving Show
 
 readMethod :: String -> Maybe P.RetrieveMethod
 readMethod s = maybeRead s
 
-packageFingerprint :: SourcePackage -> Maybe Fingerprint
+packageFingerprint :: SourcePackage -> Maybe DownstreamFingerprint
 packageFingerprint package =
     maybe Nothing (parseRevision . unpack) (S.fieldValue "Fingerprint" . sourceParagraph $ package)
     where
@@ -74,11 +81,12 @@ packageFingerprint package =
                       case words etc of
                         (sourceVersion : buildDeps)
                           | not (elem '=' sourceVersion) -> Just $
-                              Fingerprint
-                                { method = method''
-                                , upstreamVersion = parseDebianVersion sourceVersion
-                                , buildDependencyVersions = fromList (List.map readSimpleRelation buildDeps)
-                                , downstreamVersion = Just . packageVersion . sourcePackageID $ package }
+                              DownstreamFingerprint
+                              { upstreamFingerprint = Fingerprint
+                                                      { method = method''
+                                                      , upstreamVersion = parseDebianVersion sourceVersion
+                                                      , buildDependencyVersions = fromList (List.map readSimpleRelation buildDeps) }
+                              , downstreamVersion = packageVersion . sourcePackageID $ package }
                         -- Old style fingerprint field - no upstream
                         -- version number after the method.  I think
                         -- at this point we can ignore these.
@@ -103,7 +111,7 @@ showDependencies (Fingerprint {buildDependencyVersions = deps}) = toAscList $ Se
 showDependencies' :: Fingerprint -> [String]
 showDependencies' (Fingerprint {buildDependencyVersions = deps}) = toAscList $ Set.map (show . pretty . packageName) deps
 
-dependencyChanges :: Maybe Fingerprint -> Fingerprint -> String
+dependencyChanges :: Maybe DownstreamFingerprint -> Fingerprint -> String
 dependencyChanges old new =
     depChanges changedDeps
     where
@@ -112,7 +120,7 @@ dependencyChanges old new =
       padded = List.map concat . columns . List.map showDepChange $ changedDeps
       changedDeps = Set.toList (Set.difference (buildDependencyVersions new) (buildDependencyVersions new))
       showDepChange newDep =
-          case toList (Set.filter (hasName (packageName newDep)) (maybe empty buildDependencyVersions old)) of
+          case toList (Set.filter (hasName (packageName newDep)) (maybe empty (buildDependencyVersions . upstreamFingerprint) old)) of
             [] -> [" " ++ unBinPkgName (packageName newDep) ++ ": ", "(none)", " -> ", show (prettyDebianVersion (packageVersion newDep))]
             (oldDep : _) -> [" " ++ unBinPkgName (packageName newDep) ++ ": ", show (prettyDebianVersion (packageVersion oldDep)), " -> ", show (prettyDebianVersion (packageVersion newDep))]
       hasName name = ((== name) . packageName)
@@ -122,8 +130,7 @@ targetFingerprint :: Target -> [BinaryPackage] -> Fingerprint
 targetFingerprint target buildDependencySolution =
     Fingerprint { method = sourceRevision
                  , upstreamVersion = sourceVersion
-                 , buildDependencyVersions = sourceDependencies
-                 , downstreamVersion = Nothing }
+                 , buildDependencyVersions = sourceDependencies }
     where
       -- Compute the Revision: string for the source tree.  This
       -- string will appear in the .dsc file for the package, and will
@@ -150,11 +157,11 @@ makeVersion package =
 -- encoded into the uploaded version's control file.
 buildDecision :: P.CacheRec
               -> Target
-              -> Maybe Fingerprint      -- ^ The fingerprint of the most recent build
-              -> Fingerprint            -- ^ The fingerprint of the source package
-              -> SourcePackageStatus	-- ^ The status of the version in the repository with respect
-                                        -- to the architecture we are building - either all binary packages
-                                        -- are available, or none, or only the architecture independent.
+              -> Maybe DownstreamFingerprint -- ^ The fingerprint of the most recent build
+              -> Fingerprint -- ^ The fingerprint of the source package
+              -> SourcePackageStatus -- ^ The status of the version in the repository with respect
+                                     -- to the architecture we are building - either all binary packages
+                                     -- are available, or none, or only the architecture independent.
               -> BuildDecision
 buildDecision cache target _ _ _ | elem (debianSourcePackageName (debianSourceTree (tgt target))) (P.forceBuild (P.params cache)) = Yes "--force-build option is set"
 buildDecision _ target _ (Fingerprint {upstreamVersion = sourceVersion}) _
@@ -181,9 +188,12 @@ buildDecision _ target _ _ _
           isFailPackage _ = False
 buildDecision _ _ Nothing (Fingerprint {upstreamVersion = sourceVersion}) _ =
     Yes ("Initial build of version " ++ show (prettyDebianVersion sourceVersion))
-buildDecision _ _ (Just (Fingerprint {method = oldMethod})) (Fingerprint {method = newMethod}) _
+buildDecision _ _ (Just (DownstreamFingerprint {upstreamFingerprint = Fingerprint {method = oldMethod}})) (Fingerprint {method = newMethod}) _
     | oldMethod /= newMethod = Yes ("Retrieve method changed: " ++ show oldMethod ++ " -> " ++ show newMethod)
-buildDecision cache target (Just (Fingerprint {upstreamVersion =oldSrcVersion, buildDependencyVersions = builtDependencies, downstreamVersion = repoVersion})) -- I suspect oldSrcVersion is always equal to repoVersion
+buildDecision cache target (Just (DownstreamFingerprint { upstreamFingerprint =
+                                                              Fingerprint { upstreamVersion = oldSrcVersion
+                                                                          , buildDependencyVersions = builtDependencies }
+                                                        , downstreamVersion = repoVersion })) -- I suspect oldSrcVersion is always equal to repoVersion
                            (Fingerprint {upstreamVersion = sourceVersion, buildDependencyVersions = sourceDependencies})
                            releaseStatus =
     case compare sourceVersion oldSrcVersion of
@@ -205,7 +215,7 @@ buildDecision cache target (Just (Fingerprint {upstreamVersion =oldSrcVersion, b
           case releaseStatus of
             Indep missing | missing /= [] && not (notArchDep target) ->
                   -- The binary packages are missing, we need an arch only build.
-                  Arch ("Version " ++ maybe "Nothing" show (fmap prettyDebianVersion repoVersion) ++ " needs arch only build. (Missing: " ++ show missing ++ ")")
+                  Arch ("Version " ++ show (prettyDebianVersion repoVersion) ++ " needs arch only build. (Missing: " ++ show missing ++ ")")
             _ | badDependencies /= [] && not allowBuildDependencyRegressions ->
                   Error ("Build dependency regression (allow with --allow-build-dependency-regressions): " ++ 
                          concat (intersperse ", " (List.map (\ ver -> show (prettySimpleRelation (builtVersion ver)) ++ " -> " ++ show (prettySimpleRelation (Just ver))) badDependencies)))
@@ -220,7 +230,7 @@ buildDecision cache target (Just (Fingerprint {upstreamVersion =oldSrcVersion, b
                   No ("Version " ++ show (prettyDebianVersion sourceVersion) ++ " of architecture independent package is already in release.")
             Indep missing ->
                   -- The binary packages are missing, we need an arch only build.
-                  Arch ("Version " ++ maybe "Nothing" show (fmap prettyDebianVersion repoVersion) ++ " needs arch only build. (Missing: " ++ show missing ++ ")")
+                  Arch ("Version " ++ show (prettyDebianVersion repoVersion) ++ " needs arch only build. (Missing: " ++ show missing ++ ")")
             All ->
                   No ("Version " ++ show (prettyDebianVersion sourceVersion) ++ " is already in release.")
             _ ->

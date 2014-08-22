@@ -34,7 +34,7 @@ import qualified Debian.AutoBuilder.Params as P (baseRelease, isDevelopmentRelea
 import Debian.AutoBuilder.Types.Buildable (Buildable(..), failing, prepareTarget, relaxDepends, Target(tgt, cleanSource, targetDepends), targetRelaxed)
 import qualified Debian.AutoBuilder.Types.CacheRec as P (CacheRec(params))
 import qualified Debian.AutoBuilder.Types.Download as T (Download(buildWrapper, getTop, logText), flags, method)
-import Debian.AutoBuilder.Types.Fingerprint (buildDecision, dependencyChanges, Fingerprint, packageFingerprint, showDependencies', showFingerprint, targetFingerprint)
+import Debian.AutoBuilder.Types.Fingerprint (buildDecision, dependencyChanges, DownstreamFingerprint, Fingerprint, packageFingerprint, showDependencies', showFingerprint, targetFingerprint)
 import qualified Debian.AutoBuilder.Types.Packages as P (foldPackages, packageCount, PackageFlag(UDeb), Packages)
 import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec(autobuilderEmail, buildDepends, buildRelease, buildTrumped, discard, doNotChangeVersion, dryRun, extraReleaseTag, noClean, oldVendorTags, preferred, releaseAliases, setEnv, strictness, vendorTag), Strictness(Lax))
 import qualified Debian.AutoBuilder.Version as V (autoBuilderVersion)
@@ -101,7 +101,7 @@ decode = UTF8.toString . B.concat . L.toChunks
 -- revision info and build dependency versions in a human readable
 -- form.  FIXME: this should also include revision control log
 -- entries.
-changelogText :: Buildable -> Maybe Fingerprint -> Fingerprint -> String
+changelogText :: Buildable -> Maybe DownstreamFingerprint -> Fingerprint -> String
 changelogText buildable old new = ("  * " ++ T.logText (download buildable) ++ "\n" ++ dependencyChanges old new ++ "\n")
 
 -- |Generate the string of build dependency versions:
@@ -372,7 +372,7 @@ buildTarget cache dependOS buildOS repo !target = do
 
 -- | Build a package and upload it to the local repository.
 buildPackage :: (MonadRepos m, MonadTop m, MonadMask m) =>
-                P.CacheRec -> EnvRoot -> EnvRoot -> Maybe DebianVersion -> Maybe Fingerprint -> Fingerprint -> Target -> BuildDecision -> LocalRepository -> m LocalRepository
+                P.CacheRec -> EnvRoot -> EnvRoot -> Maybe DebianVersion -> Maybe DownstreamFingerprint -> Fingerprint -> Target -> BuildDecision -> LocalRepository -> m LocalRepository
 buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !target decision repo = do
   checkDryRun
   source <- noisier 2 $ prepareBuildTree cache dependOS buildOS newFingerprint target
