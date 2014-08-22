@@ -13,10 +13,11 @@ module Debian.AutoBuilder.Types.Fingerprint
 
 import Control.Applicative.Error (maybeRead)
 import Data.Generics (everywhere, mkT)
-import Data.List (intercalate, intersperse, find, partition, nub)
+import Data.List as List (intercalate, intersperse, filter, map, nub, partition)
 import qualified Data.Map as Map
-import Data.Maybe(fromJust, isJust, isNothing, mapMaybe)
-import qualified Data.Set as Set
+import Data.Maybe(fromJust, isJust, isNothing, listToMaybe, mapMaybe)
+import Data.Monoid (mempty)
+import Data.Set as Set (Set, toList, toAscList, difference, fromList, map, filter)
 import Data.Text (unpack)
 import Debian.AutoBuilder.Types.Buildable (Target(tgt, cleanSource), Buildable(download, debianSourceTree), targetRelaxed, relaxDepends)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
@@ -49,7 +50,7 @@ data Fingerprint
         , upstreamVersion :: Maybe DebianVersion
           -- ^ The version number in the changelog of the freshly downloaded
           -- package, before any suffix is added by the autobuilder.
-        , buildDependencyVersions :: [PackageID BinPkgName]
+        , buildDependencyVersions :: Set (PackageID BinPkgName)
           -- ^ The names and version numbers of the build dependencies which
           -- were present when the package was build.
         , downstreamVersion :: Maybe DebianVersion
@@ -80,13 +81,13 @@ packageFingerprint (Just package) =
                               Fingerprint
                                 { method = method''
                                 , upstreamVersion = Just (parseDebianVersion sourceVersion)
-                                , buildDependencyVersions = map readSimpleRelation buildDeps
+                                , buildDependencyVersions = fromList (List.map readSimpleRelation buildDeps)
                                 , downstreamVersion = Just . packageVersion . sourcePackageID $ package }
                         buildDeps ->
                             Fingerprint
                               { method = method''
                               , upstreamVersion = Nothing
-                              , buildDependencyVersions = map readSimpleRelation buildDeps
+                              , buildDependencyVersions = fromList (List.map readSimpleRelation buildDeps)
                               , downstreamVersion = Just . packageVersion . sourcePackageID $ package }
             _ -> NoFingerprint
 
@@ -99,17 +100,17 @@ modernizeMethod1 x = x
 
 showFingerprint :: Fingerprint -> S.Field
 showFingerprint (Fingerprint {method = method, upstreamVersion = Just sourceVersion, buildDependencyVersions = versions}) =
-    S.Field ("Fingerprint", " " ++ show (show method) ++ " " ++ show (prettyDebianVersion sourceVersion) ++ " " ++ intercalate " " (map showSimpleRelation versions))
+    S.Field ("Fingerprint", " " ++ show (show method) ++ " " ++ show (prettyDebianVersion sourceVersion) ++ " " ++ intercalate " " (List.map showSimpleRelation (toAscList versions)))
 showFingerprint _ = error "missing fingerprint info"
 
 showDependencies :: Fingerprint -> [String]
-showDependencies (Fingerprint {buildDependencyVersions = deps}) = map showSimpleRelation deps
-showDependencies _ = []
+showDependencies (Fingerprint {buildDependencyVersions = deps}) = toAscList $ Set.map showSimpleRelation deps
+showDependencies _ = mempty
 
 -- | Show the dependency list without the version numbers.
 showDependencies' :: Fingerprint -> [String]
-showDependencies' (Fingerprint {buildDependencyVersions = deps}) = map (show . pretty . packageName) deps
-showDependencies' _ = []
+showDependencies' (Fingerprint {buildDependencyVersions = deps}) = toAscList $ Set.map (show . pretty . packageName) deps
+showDependencies' _ = mempty
 
 dependencyChanges :: Fingerprint -> Fingerprint -> String
 dependencyChanges old new =
@@ -117,16 +118,16 @@ dependencyChanges old new =
     where
       depChanges [] = ""
       depChanges _ = "  * Build dependency changes:" ++ prefix ++ intercalate prefix padded ++ "\n"
-      padded = map concat . columns . map showDepChange $ changedDeps
-      changedDeps = Set.toList (Set.difference (Set.fromList (deps new)) (Set.fromList (deps new)))
+      padded = List.map concat . columns . List.map showDepChange $ changedDeps
+      changedDeps = Set.toList (Set.difference (deps new) (deps new))
       showDepChange newDep =
-          case filter (hasName (packageName newDep)) (deps old) of
+          case toList (Set.filter (hasName (packageName newDep)) (deps old)) of
             [] -> [" " ++ unBinPkgName (packageName newDep) ++ ": ", "(none)", " -> ", show (prettyDebianVersion (packageVersion newDep))]
             (oldDep : _) -> [" " ++ unBinPkgName (packageName newDep) ++ ": ", show (prettyDebianVersion (packageVersion oldDep)), " -> ", show (prettyDebianVersion (packageVersion newDep))]
       hasName name = ((== name) . packageName)
       prefix = "\n    "
       deps (Fingerprint {buildDependencyVersions = x}) = x
-      deps NoFingerprint = []
+      deps NoFingerprint = mempty
 
 targetFingerprint :: Target -> [BinaryPackage] -> Fingerprint
 targetFingerprint target buildDependencySolution =
@@ -145,7 +146,7 @@ targetFingerprint target buildDependencySolution =
       sourceRevision = {-T.revision-} T.method (download (tgt target))
       sourceVersion = logVersion sourceLog
       sourceLog = entry . cleanSource $ target
-      sourceDependencies = map makeVersion buildDependencySolution
+      sourceDependencies = fromList $ List.map makeVersion buildDependencySolution
 -- |Convert to a simple name and version record to interface with older
 -- code.
 
@@ -232,10 +233,10 @@ buildDecision cache target (Fingerprint {upstreamVersion =oldSrcVersion, buildDe
                   Arch ("Version " ++ maybe "Nothing" show (fmap prettyDebianVersion repoVersion) ++ " needs arch only build. (Missing: " ++ show missing ++ ")")
             _ | badDependencies /= [] && not allowBuildDependencyRegressions ->
                   Error ("Build dependency regression (allow with --allow-build-dependency-regressions): " ++ 
-                         concat (intersperse ", " (map (\ ver -> show (prettySimpleRelation (builtVersion ver)) ++ " -> " ++ show (prettySimpleRelation (Just ver))) badDependencies)))
+                         concat (intersperse ", " (List.map (\ ver -> show (prettySimpleRelation (builtVersion ver)) ++ " -> " ++ show (prettySimpleRelation (Just ver))) badDependencies)))
               | badDependencies /= [] ->
                   Auto ("Build dependency regression: " ++ 
-                        concat (intersperse ", " (map (\ ver -> show (prettySimpleRelation (builtVersion ver)) ++ " -> " ++ show (prettySimpleRelation (Just ver))) badDependencies)))
+                        concat (intersperse ", " (List.map (\ ver -> show (prettySimpleRelation (builtVersion ver)) ++ " -> " ++ show (prettySimpleRelation (Just ver))) badDependencies)))
               | autobuiltDependencies /= [] && isNothing oldSrcVersion ->
 		  -- If oldSrcVersion is Nothing, the autobuilder didn't make the previous build
                   -- so there are no recorded build dependencies.  In that case we don't really
@@ -256,15 +257,15 @@ buildDecision cache target (Fingerprint {upstreamVersion =oldSrcVersion, buildDe
                   No ("Version " ++ show (prettyDebianVersion sourceVersion) ++ " is already in release.")
             _ ->
                   error ("Unexpected releaseStatus: " ++ show releaseStatus)
-      notArchDep = all (== Just "all") . map (fieldValue "Architecture") . debianBinaryParagraphs
+      notArchDep = all (== Just "all") . List.map (fieldValue "Architecture") . debianBinaryParagraphs
       displayDependencyChanges dependencies =
           "  " ++ intercalate "\n  " changes
           where
-            changes = map (\ (built, new) -> show (prettySimpleRelation built) ++ " -> " ++ show (prettySimpleRelation (Just new))) (zip builtVersions dependencies)
-            builtVersions = map findDepByName dependencies
-            findDepByName new = find (\ old -> packageName new == packageName old) builtDependencies
+            changes = List.map (\ (built, new) -> show (prettySimpleRelation built) ++ " -> " ++ show (prettySimpleRelation (Just new))) (zip builtVersions dependencies)
+            builtVersions = List.map findDepByName dependencies
+            findDepByName new = listToMaybe $ Set.toList $ Set.filter (\ old -> packageName new == packageName old) builtDependencies
       -- The list of the revved and new dependencies which were built by the autobuilder.
-      autobuiltDependencies = filter isTagged (revvedDependencies ++ newDependencies)
+      autobuiltDependencies = List.filter isTagged (revvedDependencies ++ newDependencies)
       -- Versions we generated, with vendor and release tags
       isTagged :: PackageID BinPkgName -> Bool
       isTagged dep = isJust . snd . parseTag allTags . packageVersion $ dep
@@ -290,10 +291,10 @@ buildDecision cache target (Fingerprint {upstreamVersion =oldSrcVersion, buildDe
             (new, unchanged) = partition (isNothing . builtVersion) notChanged
 	    -- What version of this dependency was most recently used to build?
       builtVersion x = maybe Nothing (\ ver -> Just (PackageID (packageName x) ver)) (Map.findWithDefault Nothing (packageName x) builtDeps)
-      builtDeps = Map.fromList (map (\ p -> (packageName p, Just (packageVersion p))) builtDependencies)
+      builtDeps = Map.fromList (Set.toList (Set.map (\ p -> (packageName p, Just (packageVersion p))) builtDependencies))
       -- Remove any package not mentioned in the relaxed dependency list
       -- from the list of build dependencies which can trigger a rebuild.
-      sourceDependencies' = filter (\ x -> elem (packageName x) (packageNames (targetRelaxed (relaxDepends cache (tgt target)) target))) sourceDependencies
+      sourceDependencies' = toList $ Set.filter (\ x -> elem (packageName x) (packageNames (targetRelaxed (relaxDepends cache (tgt target)) target))) sourceDependencies
       -- All the package names mentioned in a dependency list
       packageNames :: G.DepInfo -> [BinPkgName]
-      packageNames info {-(_, deps, _)-} = nub (map (\ (Rel name _ _) -> name) (concat (G.relations info)))
+      packageNames info {-(_, deps, _)-} = nub (List.map (\ (Rel name _ _) -> name) (concat (G.relations info)))
