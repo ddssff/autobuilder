@@ -43,17 +43,19 @@ import Extra.Misc(columns)
 -- package, and the names and version numbers of the build
 -- dependencies against which it was or is about to be built.
 data Fingerprint
-    = Fingerprint P.RetrieveMethod
-                  -- The method which was used to retrieve the source code.
-                  (Maybe DebianVersion)
-                  -- The version number in the changelog of the freshly downloaded
-                  -- package, before any suffix is added by the autobuilder.
-                  [PackageID BinPkgName]
-                  -- The names and version numbers of the build dependencies which
-                  -- were present when the package was build.
-                  (Maybe DebianVersion)
-                  -- This will be the same as the version field plus
-                  -- the suffix that was added by the autobuilder.
+    = Fingerprint
+        { method :: P.RetrieveMethod
+          -- ^ The method which was used to retrieve the source code.
+        , upstreamVersion :: Maybe DebianVersion
+          -- ^ The version number in the changelog of the freshly downloaded
+          -- package, before any suffix is added by the autobuilder.
+        , buildDependencyVersions :: [PackageID BinPkgName]
+          -- ^ The names and version numbers of the build dependencies which
+          -- were present when the package was build.
+        , downstreamVersion :: Maybe DebianVersion
+          -- ^ This will be the same as the version field plus
+          -- the suffix that was added by the autobuilder.
+        }
     | NoFingerprint
     deriving Show
 
@@ -75,8 +77,17 @@ packageFingerprint (Just package) =
                       case words etc of
                         (sourceVersion : buildDeps)
                           | not (elem '=' sourceVersion) ->
-                              Fingerprint method'' (Just (parseDebianVersion sourceVersion)) (map readSimpleRelation buildDeps) (Just . packageVersion . sourcePackageID $ package)
-                        buildDeps -> Fingerprint method'' Nothing (map readSimpleRelation buildDeps) (Just . packageVersion . sourcePackageID $ package)
+                              Fingerprint
+                                { method = method''
+                                , upstreamVersion = Just (parseDebianVersion sourceVersion)
+                                , buildDependencyVersions = map readSimpleRelation buildDeps
+                                , downstreamVersion = Just . packageVersion . sourcePackageID $ package }
+                        buildDeps ->
+                            Fingerprint
+                              { method = method''
+                              , upstreamVersion = Nothing
+                              , buildDependencyVersions = map readSimpleRelation buildDeps
+                              , downstreamVersion = Just . packageVersion . sourcePackageID $ package }
             _ -> NoFingerprint
 
 modernizeMethod :: P.RetrieveMethod -> P.RetrieveMethod
@@ -87,17 +98,17 @@ modernizeMethod1 (P.Debianize p) = P.Debianize' p []
 modernizeMethod1 x = x
 
 showFingerprint :: Fingerprint -> S.Field
-showFingerprint (Fingerprint method (Just sourceVersion) versions _) =
+showFingerprint (Fingerprint {method = method, upstreamVersion = Just sourceVersion, buildDependencyVersions = versions}) =
     S.Field ("Fingerprint", " " ++ show (show method) ++ " " ++ show (prettyDebianVersion sourceVersion) ++ " " ++ intercalate " " (map showSimpleRelation versions))
 showFingerprint _ = error "missing fingerprint info"
 
 showDependencies :: Fingerprint -> [String]
-showDependencies (Fingerprint _ _ deps _) = map showSimpleRelation deps
+showDependencies (Fingerprint {buildDependencyVersions = deps}) = map showSimpleRelation deps
 showDependencies _ = []
 
 -- | Show the dependency list without the version numbers.
 showDependencies' :: Fingerprint -> [String]
-showDependencies' (Fingerprint _ _ deps _) = map (show . pretty . packageName) deps
+showDependencies' (Fingerprint {buildDependencyVersions = deps}) = map (show . pretty . packageName) deps
 showDependencies' _ = []
 
 dependencyChanges :: Fingerprint -> Fingerprint -> String
@@ -114,12 +125,15 @@ dependencyChanges old new =
             (oldDep : _) -> [" " ++ unBinPkgName (packageName newDep) ++ ": ", show (prettyDebianVersion (packageVersion oldDep)), " -> ", show (prettyDebianVersion (packageVersion newDep))]
       hasName name = ((== name) . packageName)
       prefix = "\n    "
-      deps (Fingerprint _ _ x _) = x
+      deps (Fingerprint {buildDependencyVersions = x}) = x
       deps NoFingerprint = []
 
 targetFingerprint :: Target -> [BinaryPackage] -> Fingerprint
 targetFingerprint target buildDependencySolution =
-    Fingerprint sourceRevision (Just sourceVersion) sourceDependencies Nothing
+    Fingerprint { method = sourceRevision
+                 , upstreamVersion = Just sourceVersion
+                 , buildDependencyVersions = sourceDependencies
+                 , downstreamVersion = Nothing }
     where
       -- Compute the Revision: string for the source tree.  This
       -- string will appear in the .dsc file for the package, and will
@@ -146,43 +160,43 @@ makeVersion package =
 -- encoded into the uploaded version's control file.
 buildDecision :: P.CacheRec
               -> Target
-              -> Fingerprint            -- The fingerprint of the most recent build
-              -> Fingerprint            -- The fingerprint of the source package
+              -> Fingerprint            -- ^ The fingerprint of the most recent build
+              -> Fingerprint            -- ^ The fingerprint of the source package
               -> SourcePackageStatus	-- ^ The status of the version in the repository with respect
                                         -- to the architecture we are building - either all binary packages
                                         -- are available, or none, or only the architecture independent.
               -> BuildDecision
 buildDecision cache target _ _ _ | elem (debianSourcePackageName (debianSourceTree (tgt target))) (P.forceBuild (P.params cache)) = Yes "--force-build option is set"
-buildDecision _ target _ (Fingerprint _ (Just sourceVersion) _ _) _
+buildDecision _ target _ (Fingerprint {upstreamVersion = Just sourceVersion}) _
     | any (== (show (prettyDebianVersion sourceVersion))) (mapMaybe skipVersion . P.flags . T.package . download . tgt $ target) =
         No ("Skipped version " ++ show (prettyDebianVersion sourceVersion))
     where
       skipVersion (P.SkipVersion s) = Just s
       skipVersion _ = Nothing
-buildDecision _ target _ (Fingerprint _ (Just sourceVersion) _ _) _
+buildDecision _ target _ (Fingerprint {upstreamVersion = Just sourceVersion}) _
     | any (== (show (prettyDebianVersion sourceVersion))) (mapMaybe failVersion . P.flags . T.package . download . tgt $ target) =
         No ("Failed version " ++ show (prettyDebianVersion sourceVersion))
     where
       failVersion (P.FailVersion s) = Just s
       failVersion _ = Nothing
-buildDecision _ target _ (Fingerprint _ (Just _sourceVersion) _ _) _
+buildDecision _ target _ (Fingerprint {upstreamVersion = Just _}) _
     | any isSkipPackage (P.flags . T.package . download . tgt $ target) =
         No "Skipped"
     where isSkipPackage P.SkipPackage = True
           isSkipPackage _ = False
-buildDecision _ target _ (Fingerprint _ (Just _sourceVersion) _ _) _
+buildDecision _ target _ (Fingerprint {upstreamVersion = Just _}) _
     | any isFailPackage (P.flags . T.package . download . tgt $ target) =
         Error "FailPackage specified"
     where isFailPackage P.FailPackage = True
           isFailPackage _ = False
-buildDecision _ _ NoFingerprint (Fingerprint _ (Just sourceVersion) _ _) _ =
+buildDecision _ _ NoFingerprint (Fingerprint {upstreamVersion = Just sourceVersion}) _ =
     Yes ("Initial build of version " ++ show (prettyDebianVersion sourceVersion))
-buildDecision _ _ (Fingerprint oldMethod _ _ _) (Fingerprint newMethod _ _ _) _
+buildDecision _ _ (Fingerprint {method = oldMethod}) (Fingerprint {method = newMethod}) _
     | oldMethod /= newMethod = Yes ("Retrieve method changed: " ++ show oldMethod ++ " -> " ++ show newMethod)
 buildDecision _ _ _ NoFingerprint _ = error "Missing source fingerprint"
-buildDecision _ _ _ (Fingerprint _ Nothing _ _) _ = error "Missing source version"
-buildDecision cache target (Fingerprint _ oldSrcVersion builtDependencies repoVersion) -- I suspect oldSrcVersion is always equal to repoVersion
-                           (Fingerprint _ (Just sourceVersion) sourceDependencies _)
+buildDecision _ _ _ (Fingerprint {upstreamVersion = Nothing}) _ = error "Missing source version"
+buildDecision cache target (Fingerprint {upstreamVersion =oldSrcVersion, buildDependencyVersions = builtDependencies, downstreamVersion = repoVersion}) -- I suspect oldSrcVersion is always equal to repoVersion
+                           (Fingerprint {upstreamVersion = Just sourceVersion, buildDependencyVersions = sourceDependencies})
                            releaseStatus =
     case isJust oldSrcVersion of
       True ->
