@@ -13,9 +13,9 @@ module Debian.AutoBuilder.Types.Fingerprint
 
 import Control.Applicative.Error (maybeRead)
 import Data.Generics (everywhere, mkT)
-import Data.List as List (intercalate, intersperse, filter, map, nub, partition)
+import Data.List as List (intercalate, intersperse, map, nub, partition)
 import qualified Data.Map as Map
-import Data.Maybe(fromJust, isJust, isNothing, listToMaybe, mapMaybe)
+import Data.Maybe(isNothing, listToMaybe, mapMaybe)
 import Data.Set as Set (Set, toList, toAscList, difference, empty, fromList, map, filter)
 import Data.Text (unpack)
 import Debian.AutoBuilder.Types.Buildable (Target(tgt, cleanSource), Buildable(download, debianSourceTree), targetRelaxed, relaxDepends)
@@ -34,7 +34,6 @@ import Debian.Repo.SourceTree (HasChangeLog(entry), SourcePackageStatus(..), Bui
 import Debian.Repo.PackageID (PackageID(PackageID, packageName, packageVersion))
 import Debian.Repo.PackageIndex (SourcePackage(sourceParagraph, sourcePackageID), BinaryPackage(packageID))
 import Debian.Version (DebianVersion, parseDebianVersion, prettyDebianVersion)
-import Debian.VersionPolicy(dropTag, parseTag)
 import Extra.Misc(columns)
 
 -- | This type represents a package's fingerprint, (formerly its
@@ -46,7 +45,7 @@ data Fingerprint
     = Fingerprint
         { method :: P.RetrieveMethod
           -- ^ The method which was used to retrieve the source code.
-        , upstreamVersion :: Maybe DebianVersion
+        , upstreamVersion :: DebianVersion
           -- ^ The version number in the changelog of the freshly downloaded
           -- package, before any suffix is added by the autobuilder.
         , buildDependencyVersions :: Set (PackageID BinPkgName)
@@ -77,15 +76,13 @@ packageFingerprint package =
                           | not (elem '=' sourceVersion) -> Just $
                               Fingerprint
                                 { method = method''
-                                , upstreamVersion = Just (parseDebianVersion sourceVersion)
+                                , upstreamVersion = parseDebianVersion sourceVersion
                                 , buildDependencyVersions = fromList (List.map readSimpleRelation buildDeps)
                                 , downstreamVersion = Just . packageVersion . sourcePackageID $ package }
-                        buildDeps -> Just $
-                            Fingerprint
-                              { method = method''
-                              , upstreamVersion = Nothing
-                              , buildDependencyVersions = fromList (List.map readSimpleRelation buildDeps)
-                              , downstreamVersion = Just . packageVersion . sourcePackageID $ package }
+                        -- Old style fingerprint field - no upstream
+                        -- version number after the method.  I think
+                        -- at this point we can ignore these.
+                        _ -> Nothing
             _ -> Nothing
 
 modernizeMethod :: P.RetrieveMethod -> P.RetrieveMethod
@@ -96,9 +93,8 @@ modernizeMethod1 (P.Debianize p) = P.Debianize' p []
 modernizeMethod1 x = x
 
 showFingerprint :: Fingerprint -> S.Field
-showFingerprint (Fingerprint {method = method, upstreamVersion = Just sourceVersion, buildDependencyVersions = versions}) =
+showFingerprint (Fingerprint {method = method, upstreamVersion = sourceVersion, buildDependencyVersions = versions}) =
     S.Field ("Fingerprint", " " ++ show (show method) ++ " " ++ show (prettyDebianVersion sourceVersion) ++ " " ++ intercalate " " (List.map showSimpleRelation (toAscList versions)))
-showFingerprint _ = error "missing fingerprint info"
 
 showDependencies :: Fingerprint -> [String]
 showDependencies (Fingerprint {buildDependencyVersions = deps}) = toAscList $ Set.map showSimpleRelation deps
@@ -125,7 +121,7 @@ dependencyChanges old new =
 targetFingerprint :: Target -> [BinaryPackage] -> Fingerprint
 targetFingerprint target buildDependencySolution =
     Fingerprint { method = sourceRevision
-                 , upstreamVersion = Just sourceVersion
+                 , upstreamVersion = sourceVersion
                  , buildDependencyVersions = sourceDependencies
                  , downstreamVersion = Nothing }
     where
@@ -161,53 +157,40 @@ buildDecision :: P.CacheRec
                                         -- are available, or none, or only the architecture independent.
               -> BuildDecision
 buildDecision cache target _ _ _ | elem (debianSourcePackageName (debianSourceTree (tgt target))) (P.forceBuild (P.params cache)) = Yes "--force-build option is set"
-buildDecision _ target _ (Fingerprint {upstreamVersion = Just sourceVersion}) _
+buildDecision _ target _ (Fingerprint {upstreamVersion = sourceVersion}) _
     | any (== (show (prettyDebianVersion sourceVersion))) (mapMaybe skipVersion . P.flags . T.package . download . tgt $ target) =
         No ("Skipped version " ++ show (prettyDebianVersion sourceVersion))
     where
       skipVersion (P.SkipVersion s) = Just s
       skipVersion _ = Nothing
-buildDecision _ target _ (Fingerprint {upstreamVersion = Just sourceVersion}) _
+buildDecision _ target _ (Fingerprint {upstreamVersion = sourceVersion}) _
     | any (== (show (prettyDebianVersion sourceVersion))) (mapMaybe failVersion . P.flags . T.package . download . tgt $ target) =
         No ("Failed version " ++ show (prettyDebianVersion sourceVersion))
     where
       failVersion (P.FailVersion s) = Just s
       failVersion _ = Nothing
-buildDecision _ target _ (Fingerprint {upstreamVersion = Just _}) _
+buildDecision _ target _ _ _
     | any isSkipPackage (P.flags . T.package . download . tgt $ target) =
         No "Skipped"
     where isSkipPackage P.SkipPackage = True
           isSkipPackage _ = False
-buildDecision _ target _ (Fingerprint {upstreamVersion = Just _}) _
+buildDecision _ target _ _ _
     | any isFailPackage (P.flags . T.package . download . tgt $ target) =
         Error "FailPackage specified"
     where isFailPackage P.FailPackage = True
           isFailPackage _ = False
-buildDecision _ _ Nothing (Fingerprint {upstreamVersion = Just sourceVersion}) _ =
+buildDecision _ _ Nothing (Fingerprint {upstreamVersion = sourceVersion}) _ =
     Yes ("Initial build of version " ++ show (prettyDebianVersion sourceVersion))
 buildDecision _ _ (Just (Fingerprint {method = oldMethod})) (Fingerprint {method = newMethod}) _
     | oldMethod /= newMethod = Yes ("Retrieve method changed: " ++ show oldMethod ++ " -> " ++ show newMethod)
-buildDecision _ _ _ (Fingerprint {upstreamVersion = Nothing}) _ = error "Missing source version"
 buildDecision cache target (Just (Fingerprint {upstreamVersion =oldSrcVersion, buildDependencyVersions = builtDependencies, downstreamVersion = repoVersion})) -- I suspect oldSrcVersion is always equal to repoVersion
-                           (Fingerprint {upstreamVersion = Just sourceVersion, buildDependencyVersions = sourceDependencies})
+                           (Fingerprint {upstreamVersion = sourceVersion, buildDependencyVersions = sourceDependencies})
                            releaseStatus =
-    case isJust oldSrcVersion of
-      True ->
-          case compare sourceVersion (fromJust oldSrcVersion) of
-            GT -> Yes ("Source version (" ++ show (prettyDebianVersion sourceVersion) ++ ") is newer than released source version (" ++ show (prettyDebianVersion (fromJust oldSrcVersion)) ++ ")")
-            LT -> No ("Source version (" ++ show (prettyDebianVersion sourceVersion) ++ ") is trumped by released source version (" ++ show (prettyDebianVersion (fromJust oldSrcVersion)) ++ ")")
-            EQ -> sameSourceTests
-      False ->
-          case compare (dropTag allTags sourceVersion) (dropTag allTags (fromJust repoVersion)) of
-            GT -> Yes ("Source version (" ++ show (prettyDebianVersion sourceVersion) ++ ") is newer than released source version (" ++ show (prettyDebianVersion (fromJust repoVersion)) ++ ")")
-            LT -> No ("Source version (" ++ show (prettyDebianVersion sourceVersion) ++ ") is trumped by released source version (" ++ show (prettyDebianVersion (fromJust repoVersion)) ++ ")")
-            EQ ->
-                case dropTag allTags sourceVersion == sourceVersion of
-                  False -> Yes ("Source version (" ++ show (prettyDebianVersion sourceVersion) ++ ") is tagged, and old source version was not recorded")
-                  True -> sameSourceTests
+    case compare sourceVersion oldSrcVersion of
+      GT -> Yes ("Source version (" ++ show (prettyDebianVersion sourceVersion) ++ ") is newer than released source version (" ++ show (prettyDebianVersion oldSrcVersion) ++ ")")
+      LT -> No ("Source version (" ++ show (prettyDebianVersion sourceVersion) ++ ") is trumped by released source version (" ++ show (prettyDebianVersion oldSrcVersion) ++ ")")
+      EQ -> sameSourceTests
     where
-      vendorTag = P.vendorTag (P.params cache)
-      oldVendorTags = P.oldVendorTags (P.params cache)
       -- discardTarget = Set.member (targetName target) (P.discard (P.params cache))
       allowBuildDependencyRegressions = P.allowBuildDependencyRegressions (P.params cache)
       -- Build decision tests for when the version number of the
@@ -229,14 +212,7 @@ buildDecision cache target (Just (Fingerprint {upstreamVersion =oldSrcVersion, b
               | badDependencies /= [] ->
                   Auto ("Build dependency regression: " ++ 
                         concat (intersperse ", " (List.map (\ ver -> show (prettySimpleRelation (builtVersion ver)) ++ " -> " ++ show (prettySimpleRelation (Just ver))) badDependencies)))
-              | autobuiltDependencies /= [] && isNothing oldSrcVersion ->
-		  -- If oldSrcVersion is Nothing, the autobuilder didn't make the previous build
-                  -- so there are no recorded build dependencies.  In that case we don't really
-                  -- know whether a build is required, so we could go either way.  The decision
-                  -- here is to only built if some of the build dependencies were built by the
-                  -- autobuilder (so their version numbers have been tagged by it.)
-                  Auto ("Build dependency status unknown:\n" ++ displayDependencyChanges autobuiltDependencies)
-              | (revvedDependencies ++ newDependencies) /= [] && isJust oldSrcVersion ->
+              | (revvedDependencies ++ newDependencies) /= [] ->
                   -- If the package *was* previously built by the autobuilder we rebuild when any
                   -- of its build dependencies are revved or new ones appear.
                   Auto ("Build dependencies changed:\n" ++ displayDependencyChanges (revvedDependencies ++ newDependencies))
@@ -256,13 +232,6 @@ buildDecision cache target (Just (Fingerprint {upstreamVersion =oldSrcVersion, b
             changes = List.map (\ (built, new) -> show (prettySimpleRelation built) ++ " -> " ++ show (prettySimpleRelation (Just new))) (zip builtVersions dependencies)
             builtVersions = List.map findDepByName dependencies
             findDepByName new = listToMaybe $ Set.toList $ Set.filter (\ old -> packageName new == packageName old) builtDependencies
-      -- The list of the revved and new dependencies which were built by the autobuilder.
-      autobuiltDependencies = List.filter isTagged (revvedDependencies ++ newDependencies)
-      -- Versions we generated, with vendor and release tags
-      isTagged :: PackageID BinPkgName -> Bool
-      isTagged dep = isJust . snd . parseTag allTags . packageVersion $ dep
-      allTags :: [String]
-      allTags = vendorTag : oldVendorTags
       -- If we are deciding whether to rebuild the same version of the source package,
       -- this function checks the status of the build dependencies.  If any are older
       -- now than when the package was built previously, it is a fatal error.  Probably
