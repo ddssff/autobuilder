@@ -101,7 +101,7 @@ decode = UTF8.toString . B.concat . L.toChunks
 -- revision info and build dependency versions in a human readable
 -- form.  FIXME: this should also include revision control log
 -- entries.
-changelogText :: Buildable -> Fingerprint -> Fingerprint -> String
+changelogText :: Buildable -> Maybe Fingerprint -> Fingerprint -> String
 changelogText buildable old new = ("  * " ++ T.logText (download buildable) ++ "\n" ++ dependencyChanges old new ++ "\n")
 
 -- |Generate the string of build dependency versions:
@@ -347,7 +347,7 @@ buildTarget cache dependOS buildOS repo !target = do
                -- along with its status, either Indep or All
                (releaseControlInfo, releaseStatus, _message) <- evalMonadOS (getReleaseControlInfo target) dependOS
                let repoVersion = fmap (packageVersion . sourcePackageID) releaseControlInfo
-                   oldFingerprint = packageFingerprint releaseControlInfo
+                   oldFingerprint = maybe Nothing packageFingerprint releaseControlInfo
                -- Get the changelog entry from the clean source
                let newFingerprint = targetFingerprint target packages
                -- qPutStrLn "Computing new version number of target package..."
@@ -372,7 +372,7 @@ buildTarget cache dependOS buildOS repo !target = do
 
 -- | Build a package and upload it to the local repository.
 buildPackage :: (MonadRepos m, MonadTop m, MonadMask m) =>
-                P.CacheRec -> EnvRoot -> EnvRoot -> Maybe DebianVersion -> Fingerprint -> Fingerprint -> Target -> BuildDecision -> LocalRepository -> m LocalRepository
+                P.CacheRec -> EnvRoot -> EnvRoot -> Maybe DebianVersion -> Maybe Fingerprint -> Fingerprint -> Target -> BuildDecision -> LocalRepository -> m LocalRepository
 buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !target decision repo = do
   checkDryRun
   source <- noisier 2 $ prepareBuildTree cache dependOS buildOS newFingerprint target
