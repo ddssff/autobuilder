@@ -14,6 +14,7 @@ module Debian.AutoBuilder.Types.Fingerprint
     ) where
 
 import Control.Applicative.Error (maybeRead)
+import Data.Char (isSpace)
 import Data.Generics (everywhere, mkT)
 import Data.List as List (intercalate, intersperse, map, nub, partition)
 import qualified Data.Map as Map
@@ -47,6 +48,10 @@ data Fingerprint
     = Fingerprint
         { method :: P.RetrieveMethod
           -- ^ The method which was used to retrieve the source code.
+        , retrievedAttributes :: Set P.RetrieveAttribute
+          -- ^ Identifying information about the result of the retrieve,
+          -- e.g. the debian version number, darcs repository tag, git
+          -- commit id.  Replaces upstreamVersion.
         , upstreamVersion :: DebianVersion
           -- ^ The version number in the changelog of the freshly downloaded
           -- package, before any suffix is added by the autobuilder.
@@ -70,24 +75,34 @@ readMethod s = maybeRead s
 
 packageFingerprint :: SourcePackage -> Maybe DownstreamFingerprint
 packageFingerprint package =
-    maybe Nothing (parseRevision . unpack) (S.fieldValue "Fingerprint" . sourceParagraph $ package)
+    maybe Nothing readDownstreamFingerprint (fmap (unpack . strip) . S.fieldValue "Fingerprint" . sourceParagraph $ package)
     where
-      parseRevision s =
+      readDownstreamFingerprint :: String -> Maybe DownstreamFingerprint
+      readDownstreamFingerprint s =
+          maybe Nothing
+                (\ f -> Just $ DownstreamFingerprint { upstreamFingerprint = f
+                                                     , downstreamVersion = packageVersion . sourcePackageID $ package })
+                (readUpstreamFingerprint s)
+
+readUpstreamFingerprint :: String -> Maybe Fingerprint
+readUpstreamFingerprint s =
           case reads s :: [(String, String)] of
             [(method, etc)] ->
                 case readMethod method of
                   Nothing -> Nothing
                   Just method' ->
                       let method'' = modernizeMethod method' in
-                      case words etc of
+                      -- See if there is a list of RetrieveAttribute - if not use the empty list
+                      let (attrs, etc') = case reads etc :: [([P.RetrieveAttribute], String)] of
+                                            [(x, etc')] -> (x, etc')
+                                            _ -> ([], etc) in
+                      case words etc' of
                         (sourceVersion : buildDeps)
-                          | not (elem '=' sourceVersion) -> Just $
-                              DownstreamFingerprint
-                              { upstreamFingerprint = Fingerprint
-                                                      { method = method''
-                                                      , upstreamVersion = parseDebianVersion sourceVersion
-                                                      , buildDependencyVersions = fromList (List.map readSimpleRelation buildDeps) }
-                              , downstreamVersion = packageVersion . sourcePackageID $ package }
+                          | not (elem '=' sourceVersion) ->
+                              Just $ Fingerprint { method = method''
+                                                 , upstreamVersion = parseDebianVersion sourceVersion
+                                                 , retrievedAttributes = Set.fromList attrs
+                                                 , buildDependencyVersions = fromList (List.map readSimpleRelation buildDeps) }
                         -- Old style fingerprint field - no upstream
                         -- version number after the method.  I think
                         -- at this point we can ignore these.
@@ -101,9 +116,12 @@ modernizeMethod1 :: P.RetrieveMethod -> P.RetrieveMethod
 modernizeMethod1 (P.Debianize p) = P.Debianize' p []
 modernizeMethod1 x = x
 
-showFingerprint :: Fingerprint -> S.Field
-showFingerprint (Fingerprint {method = method, upstreamVersion = sourceVersion, buildDependencyVersions = versions}) =
-    S.Field ("Fingerprint", " " ++ show (show method) ++ " " ++ show (prettyDebianVersion sourceVersion) ++ " " ++ intercalate " " (List.map showSimpleRelation (toAscList versions)))
+showFingerprint :: Fingerprint -> String
+showFingerprint (Fingerprint {method = method, upstreamVersion = sourceVersion, retrievedAttributes = attrs, buildDependencyVersions = versions}) =
+    intercalate " " [show (show method),
+                     "[" ++ intercalate ", " (List.map show (toAscList attrs)) ++ "]",
+                     show (prettyDebianVersion sourceVersion),
+                     intercalate " " (List.map showSimpleRelation (toAscList versions))]
 
 showDependencies :: Fingerprint -> [String]
 showDependencies (Fingerprint {buildDependencyVersions = deps}) = toAscList $ Set.map showSimpleRelation deps
@@ -130,8 +148,9 @@ dependencyChanges old new =
 targetFingerprint :: Target -> [BinaryPackage] -> Fingerprint
 targetFingerprint target buildDependencySolution =
     Fingerprint { method = sourceRevision
-                 , upstreamVersion = sourceVersion
-                 , buildDependencyVersions = sourceDependencies }
+                , upstreamVersion = sourceVersion
+                , retrievedAttributes = T.attrs $ download $ tgt target
+                , buildDependencyVersions = sourceDependencies }
     where
       -- Compute the Revision: string for the source tree.  This
       -- string will appear in the .dsc file for the package, and will

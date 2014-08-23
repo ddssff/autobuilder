@@ -9,6 +9,7 @@ module Debian.AutoBuilder.Types.Packages
     , filterPackages
     , packageCount
     , RetrieveMethod(..)
+    , RetrieveAttribute(..)
     , GitSpec(..)
     , DebSpec(..)
     , PackageFlag(..)
@@ -54,6 +55,7 @@ import Data.String (IsString(fromString))
 import qualified Debian.Debianize as CD
 import Debian.Relation (Relations, SrcPkgName)
 import Debian.Repo (DebianSourceTree, findDebianSourceTrees)
+import Debian.Version (DebianVersion)
 import System.FilePath ((</>))
 
 -- | A type for the group name of a Packages record, used to reference
@@ -165,6 +167,22 @@ data RetrieveMethod
     | Twice RetrieveMethod                   -- ^ Perform the build twice (should be a package flag)
     | Uri String String                      -- ^ Download a tarball from the URI.  The checksum is used to implement caching.
     deriving (Read, Show, Eq, Data, Typeable)
+
+-- | If there is some identifying characteristic of the source tree
+-- resulting from a retrieve, use a set of RetrieveResult values to
+-- identify it so that a build can be triggered if it changes.
+-- Examples include the latest Git commit identifier, or a darcs
+-- repository tag.  A darcs commit string is not a suitable identifier
+-- because darcs commits are not totally ordered, so it can't reliably
+-- be used to reconstruct the specific source tree.
+data RetrieveAttribute
+    = AptVersion DebianVersion
+    -- ^ The version number of a package retrieved by apt-get source
+    | GitCommit String
+    -- ^ The id of the most recent commit
+    | DarcsChangesId String
+    -- ^ The checksum of the output of darcs changes --xml-output
+    deriving (Read, Show, Eq, Ord, Data, Typeable)
 
 data GitSpec
     = Branch String

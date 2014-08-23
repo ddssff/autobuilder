@@ -9,10 +9,11 @@ module Debian.AutoBuilder.Types.Download
 import Control.Monad.Catch (MonadMask)
 import Control.Monad.Trans (MonadIO)
 import qualified Data.ByteString.Lazy as L (ByteString)
+import Data.Set as Set (Set)
 import Data.Time (NominalDiffTime)
 import Data.Version (Version)
 import Debian.AutoBuilder.Types.Packages (PackageFlag, Packages, RetrieveMethod(..))
-import qualified Debian.AutoBuilder.Types.Packages as P (Packages(flags, spec))
+import qualified Debian.AutoBuilder.Types.Packages as P (Packages(flags, spec), RetrieveAttribute(..))
 import Debian.Repo.MonadOS (MonadOS)
 import System.Process.Read.Chunks (Output)
 
@@ -35,6 +36,9 @@ data Download
       , buildWrapper :: forall m. (MonadOS m, MonadMask m, MonadIO m) => m NominalDiffTime -> m NominalDiffTime
       -- ^ Modify the build process in some way - currently only the
       -- proc target modifies this by mounting and then unmounting /proc.
+      , attrs :: Set P.RetrieveAttribute
+      -- ^ Attributes collected from performing the various retrieve
+      -- methods
       }
 
 -- | The method used to retrieve this target.

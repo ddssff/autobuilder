@@ -39,8 +39,7 @@ import qualified Debian.AutoBuilder.Types.Packages as P (foldPackages, packageCo
 import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec(autobuilderEmail, buildDepends, buildRelease, buildTrumped, discard, doNotChangeVersion, dryRun, extraReleaseTag, noClean, oldVendorTags, preferred, releaseAliases, setEnv, strictness, vendorTag), Strictness(Lax))
 import qualified Debian.AutoBuilder.Version as V (autoBuilderVersion)
 import Debian.Changes (ChangedFileSpec(changedFileSize, changedFileName, changedFileMD5sum, changedFileSHA1sum, changedFileSHA256sum), ChangeLogEntry(logWho, logVersion, logDists, logDate, logComments), ChangesFile(changeRelease, changeInfo, changeFiles, changeDir))
-import Debian.Control (Control'(Control), ControlFunctions(parseControlFromFile), Field'(Comment, Field), fieldValue, Paragraph'(..), raiseFields, HasDebianControl)
-import Debian.Control.Policy (debianSourcePackageName)
+import Debian.Control (Control'(Control), ControlFunctions(parseControlFromFile), Field'(Comment, Field), fieldValue, Paragraph'(..), raiseFields, HasDebianControl, debianSourcePackageName)
 import qualified Debian.GenBuildDeps as G (buildable, BuildableInfo(CycleInfo, readyTargets), ReadyTarget(..), buildDependencies, compareSource, DepInfo(binaryNames, relations, sourceName))
 import Debian.Pretty (Pretty(pretty), display)
 import Debian.Relation (BinPkgName(..), SrcPkgName(..))
@@ -810,7 +809,7 @@ setRevisionInfo fingerprint changes =
     where
       addField (Control (Paragraph sourceInfo : binaryInfo)) =
           Control (newSourceInfo : binaryInfo)
-          where newSourceInfo = raiseFields (/= "Files") (Paragraph (sourceInfo ++ [showFingerprint fingerprint]))
+          where newSourceInfo = raiseFields (/= "Files") (Paragraph (sourceInfo ++ [Field ("Fingerprint", " " ++ showFingerprint fingerprint)]))
       addField (Control []) = error "Invalid control file"
 
 -- | Run a checksum command on a file, return the resulting checksum as text.
