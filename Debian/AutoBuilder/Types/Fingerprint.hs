@@ -85,28 +85,28 @@ packageFingerprint package =
 
 readUpstreamFingerprint :: String -> Maybe Fingerprint
 readUpstreamFingerprint s =
-          case reads s :: [(String, String)] of
-            [(m, etc)] ->
-                case readMethod m of
-                  Nothing -> Nothing
-                  Just m' ->
-                      let m'' = modernizeMethod m' in
-                      -- See if there is a list of RetrieveAttribute - if not use the empty list
-                      let (attrs, etc') = case reads etc :: [([P.RetrieveAttribute], String)] of
-                                            [(x, etc'')] -> (x, etc'')
-                                            _ -> ([], etc) in
-                      case words etc' of
-                        (sourceVersion : buildDeps)
-                          | not (elem '=' sourceVersion) ->
-                              Just $ Fingerprint { method = m''
-                                                 , upstreamVersion = parseDebianVersion sourceVersion
-                                                 , retrievedAttributes = Set.fromList attrs
-                                                 , buildDependencyVersions = fromList (List.map readSimpleRelation buildDeps) }
-                        -- Old style fingerprint field - no upstream
-                        -- version number after the method.  I think
-                        -- at this point we can ignore these.
-                        _ -> Nothing
-            _ -> Nothing
+    case reads s :: [(String, String)] of
+      [(m, etc)] ->
+          case readMethod m of
+            Nothing -> Nothing
+            Just m' ->
+                let m'' = modernizeMethod m' in
+                -- See if there is a list of RetrieveAttribute - if not use the empty list
+                let (attrs, etc') = case reads etc :: [([P.RetrieveAttribute], String)] of
+                                      [(x, etc'')] -> (x, etc'')
+                                      _ -> ([], etc) in
+                case words etc' of
+                  (sourceVersion : buildDeps)
+                      | not (elem '=' sourceVersion) ->
+                          Just $ Fingerprint { method = m''
+                                             , upstreamVersion = parseDebianVersion sourceVersion
+                                             , retrievedAttributes = Set.fromList attrs
+                                             , buildDependencyVersions = fromList (List.map readSimpleRelation buildDeps) }
+                  -- Old style fingerprint field - no upstream
+                  -- version number after the method.  I think
+                  -- at this point we can ignore these.
+                  _ -> Nothing
+      _ -> Nothing
 
 modernizeMethod :: P.RetrieveMethod -> P.RetrieveMethod
 modernizeMethod = everywhere (mkT modernizeMethod1)
