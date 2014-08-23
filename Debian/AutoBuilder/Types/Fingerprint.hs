@@ -207,6 +207,8 @@ buildDecision _ target _ _ _
           isFailPackage _ = False
 buildDecision _ _ Nothing (Fingerprint {upstreamVersion = sourceVersion}) _ =
     Yes ("Initial build of version " ++ show (prettyDebianVersion sourceVersion))
+buildDecision _ _ (Just (DownstreamFingerprint {upstreamFingerprint = Fingerprint {retrievedAttributes = oldAttrs}})) (Fingerprint {retrievedAttributes = newAttrs}) _
+    | oldAttrs /= newAttrs = Yes ("Package attributes changed: " ++ show oldAttrs ++ " -> " ++ show newAttrs)
 buildDecision _ _ (Just (DownstreamFingerprint {upstreamFingerprint = Fingerprint {method = oldMethod}})) (Fingerprint {method = newMethod}) _
     | oldMethod /= newMethod = Yes ("Retrieve method changed: " ++ show oldMethod ++ " -> " ++ show newMethod)
 buildDecision cache target (Just (DownstreamFingerprint { upstreamFingerprint =
