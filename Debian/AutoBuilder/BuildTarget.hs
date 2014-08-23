@@ -35,7 +35,6 @@ import Debian.Repo.MonadOS (MonadOS, withProc)
 import Debian.Repo.SourceTree (SourceTree(dir'), copySourceTree, findSourceTree, topdir)
 import Debian.Repo.Internal.Repos (MonadRepos)
 import Debian.Repo.Top (MonadTop)
-import Distribution.Compiler (CompilerFlavor)
 import System.FilePath ((</>))
 
 -- | Given a RetrieveMethod, perform the retrieval and return the result.

@@ -9,7 +9,7 @@ module Debian.AutoBuilder.BuildEnv
 import Control.Applicative (Applicative)
 import Control.Monad (when)
 import Control.Monad.Catch (MonadMask)
-import Control.Monad.State (MonadIO(liftIO))
+import Control.Monad.State (MonadIO)
 import qualified Debian.AutoBuilder.LocalRepo as Local (prepare)
 import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec(archSet, buildRelease, cleanUp, components, excludePackages, flushDepends, flushPool, flushRoot, ifSourcesChanged, includePackages, optionalIncludePackages))
 import Debian.Debianize.Types.Atoms (EnvSet(..))
@@ -23,7 +23,6 @@ import Debian.Repo.State.OSImage (prepareOS)
 import Debian.Repo.State.Package (deleteGarbage, evalInstall)
 import Debian.Repo.Top (MonadTop, sub)
 import Prelude hiding (null)
-import System.Directory (doesDirectoryExist)
 import System.FilePath ((</>))
 
 envSet :: (MonadIO m, MonadTop m) => ReleaseName -> m EnvSet
@@ -52,8 +51,8 @@ prepareDependOS params rel =
        when (P.cleanUp params) (evalInstall deleteGarbage localRepo Nothing)
        eset <- envSet (P.buildRelease params)
        let dRoot = dependOS eset
-       exists <- liftIO $ doesDirectoryExist dRoot
-       (cOS, dOS) <- prepareOS eset rel localRepo (P.flushRoot params) (P.flushDepends params) (P.ifSourcesChanged params) (P.includePackages params) (P.optionalIncludePackages params) (P.excludePackages params) (P.components params)
+       -- exists <- liftIO $ doesDirectoryExist dRoot
+       (_cOS, dOS) <- prepareOS eset rel localRepo (P.flushRoot params) (P.flushDepends params) (P.ifSourcesChanged params) (P.includePackages params) (P.optionalIncludePackages params) (P.excludePackages params) (P.components params)
        evalMonadOS syncLocalPool (EnvRoot dRoot)
        return dOS
 

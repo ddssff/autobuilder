@@ -14,13 +14,12 @@ module Debian.AutoBuilder.Types.Fingerprint
     ) where
 
 import Control.Applicative.Error (maybeRead)
-import Data.Char (isSpace)
 import Data.Generics (everywhere, mkT)
 import Data.List as List (intercalate, intersperse, map, nub, partition)
 import qualified Data.Map as Map
 import Data.Maybe(isNothing, listToMaybe, mapMaybe)
 import Data.Set as Set (Set, toList, toAscList, difference, empty, fromList, map, filter)
-import Data.Text (unpack)
+import Data.Text (unpack, strip)
 import Debian.AutoBuilder.Types.Buildable (Target(tgt, cleanSource), Buildable(download, debianSourceTree), targetRelaxed, relaxDepends)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Download as T

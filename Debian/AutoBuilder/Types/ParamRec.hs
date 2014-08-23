@@ -11,13 +11,12 @@ module Debian.AutoBuilder.Types.ParamRec
     ) where
 
 import Control.Arrow (first)
-import Data.Char (toUpper)
 import Data.Generics (listify)
 import Data.List as List (map)
 import Data.Monoid (mempty, mappend)
 import Data.Set as Set (Set, insert, toList)
 import Debian.Arch (Arch)
-import Debian.AutoBuilder.Types.Packages (Packages(Packages, list, group, Package), GroupName(GroupName, NoName), foldPackages, foldPackages', RetrieveMethod)
+import Debian.AutoBuilder.Types.Packages (Packages(Packages, list, Package), GroupName(GroupName), foldPackages, foldPackages', RetrieveMethod)
 import Debian.Pretty (Pretty(pretty), vcat)
 import Debian.Relation (SrcPkgName(SrcPkgName))
 import Debian.Release (ReleaseName )
@@ -25,7 +24,6 @@ import Debian.Repo.Slice (SourcesChangedAction)
 import Debian.Sources (DebSource)
 import Debian.Version ( DebianVersion, prettyDebianVersion )
 import Debian.URI ( URI )
-import Distribution.Compiler (CompilerFlavor)
 import Prelude hiding (map)
 import System.Console.GetOpt
 import Text.Read (readMaybe)
