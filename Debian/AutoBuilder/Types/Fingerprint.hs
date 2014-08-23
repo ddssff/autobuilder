@@ -86,19 +86,19 @@ packageFingerprint package =
 readUpstreamFingerprint :: String -> Maybe Fingerprint
 readUpstreamFingerprint s =
           case reads s :: [(String, String)] of
-            [(method, etc)] ->
-                case readMethod method of
+            [(m, etc)] ->
+                case readMethod m of
                   Nothing -> Nothing
-                  Just method' ->
-                      let method'' = modernizeMethod method' in
+                  Just m' ->
+                      let m'' = modernizeMethod m' in
                       -- See if there is a list of RetrieveAttribute - if not use the empty list
                       let (attrs, etc') = case reads etc :: [([P.RetrieveAttribute], String)] of
-                                            [(x, etc')] -> (x, etc')
+                                            [(x, etc'')] -> (x, etc'')
                                             _ -> ([], etc) in
                       case words etc' of
                         (sourceVersion : buildDeps)
                           | not (elem '=' sourceVersion) ->
-                              Just $ Fingerprint { method = method''
+                              Just $ Fingerprint { method = m''
                                                  , upstreamVersion = parseDebianVersion sourceVersion
                                                  , retrievedAttributes = Set.fromList attrs
                                                  , buildDependencyVersions = fromList (List.map readSimpleRelation buildDeps) }
@@ -116,8 +116,8 @@ modernizeMethod1 (P.Debianize p) = P.Debianize' p []
 modernizeMethod1 x = x
 
 showFingerprint :: Fingerprint -> String
-showFingerprint (Fingerprint {method = method, upstreamVersion = sourceVersion, retrievedAttributes = attrs, buildDependencyVersions = versions}) =
-    intercalate " " [show (show method),
+showFingerprint (Fingerprint {method = m, upstreamVersion = sourceVersion, retrievedAttributes = attrs, buildDependencyVersions = versions}) =
+    intercalate " " [show (show m),
                      "[" ++ intercalate ", " (List.map show (toAscList attrs)) ++ "]",
                      show (prettyDebianVersion sourceVersion),
                      intercalate " " (List.map showSimpleRelation (toAscList versions))]

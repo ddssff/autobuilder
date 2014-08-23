@@ -76,16 +76,16 @@ instance HasDebianControl Buildable where
 -- top directory, then for debianizations in subdirectory.  This will throw an
 -- exception if we can't find any, or we find too many.
 asBuildable :: Download -> IO Buildable
-asBuildable download =
-    try (findSourceTree (getTop download)) >>=
+asBuildable x =
+    try (findSourceTree (getTop x)) >>=
             either (\ (_ :: SomeException) ->
-                        -- qPutStrLn ("No source tree found in " ++ getTop download ++ " (" ++ show e ++ ")") >>
-                        findDebianBuildTrees (getTop download) >>= \ trees ->
+                        -- qPutStrLn ("No source tree found in " ++ getTop x ++ " (" ++ show e ++ ")") >>
+                        findDebianBuildTrees (getTop x) >>= \ trees ->
                         case trees of
-                          [tree] -> return (Buildable { download = download, debianSourceTree = debTree' tree})
-                          [] -> error $ "No build trees found in " ++ getTop download
-                          _ -> error $ "Multiple build trees found in " ++ getTop download)
-                   (\ tree -> return (Buildable { download = download, debianSourceTree = tree}))
+                          [tree] -> return (Buildable { download = x, debianSourceTree = debTree' tree})
+                          [] -> error $ "No build trees found in " ++ getTop x
+                          _ -> error $ "Multiple build trees found in " ++ getTop x)
+                   (\ tree -> return (Buildable { download = x, debianSourceTree = tree}))
 
 -- | Prevent the appearance of a new binary package from
 -- triggering builds of its build dependencies.  Optionally, a
@@ -95,8 +95,8 @@ asBuildable download =
 -- is rebuilt, don't rebuild hscolour even though ghc6 is one of
 -- its build dependencies.\"
 relaxDepends :: C.CacheRec -> Buildable -> G.OldRelaxInfo
-relaxDepends cache@(C.CacheRec {C.params = p}) tgt =
-    let srcPkg = debianSourcePackageName tgt in
+relaxDepends cache@(C.CacheRec {C.params = p}) x =
+    let srcPkg = debianSourcePackageName x in
     G.RelaxInfo $ map (\ target -> (BinPkgName target, Nothing)) (globalRelaxInfo (C.params cache)) ++
                   foldPackages (\ _spec flags xs -> xs ++ map (\ binPkg -> (BinPkgName binPkg, Just srcPkg)) (P.relaxInfo flags)) (R.buildPackages p) []
 
@@ -105,10 +105,9 @@ _makeRelaxInfo (G.RelaxInfo xs) srcPkgName binPkgName =
     Set.member binPkgName global || maybe False (Set.member binPkgName) (Map.lookup srcPkgName mp)
     where
       (global :: Set.Set BinPkgName, mp :: Map.Map SrcPkgName (Set.Set BinPkgName)) =
-          foldr (\ entry (global', mp') ->
-                     case entry of
-                       (b, Just s) -> (global', Map.insertWith Set.union s (Set.singleton b) mp')
-                       (b, Nothing) -> (Set.insert b global', mp')) (Set.empty, Map.empty) xs
+          foldr f (Set.empty, Map.empty) xs
+      f (b, Just s) (global', mp') = (global', Map.insertWith Set.union s (Set.singleton b) mp')
+      f (b, Nothing) (global', mp') = (Set.insert b global', mp')
 
 -- | Information collected from the build tree for a Tgt.
 data Target
