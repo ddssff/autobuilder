@@ -15,6 +15,7 @@ tests =
     [ TestCase $ assertEqual "Fingerprint show test 1" "\"Dir \\\"/tmp/foo\\\"\" [] 1.0 ghc=7.8.20140710-2+seereason1~precise1" (showFingerprint fingerprint0a)
     , TestCase $ assertEqual "Fingerprint show test 1" "\"Dir \\\"/tmp/foo\\\"\" [GitCommit \"520591876ee57dbecba1b2de602dc79f4f67ecce\", GitCommit \"907be0999fb8801d9560f90f39fb2ef6f8ef7c6b\"] 1.0 ghc=7.8.20140710-2+seereason1~precise1" (showFingerprint fingerprint0b)
     , TestCase $ assertEqual "Fingerprint round trip test 1" (Just fingerprint0a) (readUpstreamFingerprint (showFingerprint fingerprint0a))
+    , TestCase $ assertEqual "Read old style fingerprint" (Just fingerprint0a) (readUpstreamFingerprint "\"Dir \\\"/tmp/foo\\\"\" 1.0 ghc=7.8.20140710-2+seereason1~precise1")
     , let method = "\"Proc (DebDir (Cd \\\"Cabal\\\" (Git \\\"https://github.com/ghcjs/cabal\\\" [Branch \\\"ghcjs\\\"])) (Git \\\"https://github.com/ddssff/cabal-ghcjs-debian\\\" []))\""
           attrs = "[]"
           version = "1.21.0.0-2"
