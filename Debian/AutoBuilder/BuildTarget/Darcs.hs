@@ -8,6 +8,7 @@ import Control.Monad (when)
 import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as B
 import Data.Digest.Pure.MD5 (md5)
+import Data.Set (singleton)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
@@ -17,8 +18,9 @@ import Network.URI (URI(..), URIAuth(..), uriToString, parseURI)
 import System.Directory
 import System.Exit (ExitCode(..))
 import System.FilePath
-import System.Process (shell)
+import System.Process (shell, proc, CreateProcess(cwd))
 import System.Process.Progress (keepResult, timeTask)
+import System.Process.Read (readCreateProcess)
 import System.Unix.Directory
 
 documentation :: [String]
@@ -46,6 +48,7 @@ prepare cache package theUri =
       liftIO $ when (P.flushSource (P.params cache)) (removeRecursiveSafely dir)
       exists <- liftIO $ doesDirectoryExist dir
       tree <- liftIO $ if exists then verifySource dir else createSource dir
+      attr <- liftIO $ readCreateProcess ((proc "darcs" ["changes", "--xml-output"]) {cwd = Just dir}) "" >>= return . show . md5
       _output <- liftIO $ fixLink base
       return $ T.Download { T.package = package
                           , T.getTop = topdir tree
@@ -58,6 +61,7 @@ prepare cache package theUri =
                                                   timeTask (runProc (shell cmd))
                                          True -> return ([], 0)
                           , T.buildWrapper = id
+                          , T.attrs = singleton (P.DarcsChangesId attr)
                           }
     where
       verifySource :: FilePath -> IO SourceTree

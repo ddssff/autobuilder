@@ -2,6 +2,7 @@
 -- |Modify a target so we cd to a subdirectory before building
 module Debian.AutoBuilder.BuildTarget.Cd where
 
+import Data.Set (empty)
 import Debian.AutoBuilder.Types.Download (Download(..))
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
@@ -22,4 +23,5 @@ prepare _cache package subdir target =
                         , origTarball = Nothing
                         , cleanTarget = cleanTarget target
                         , buildWrapper = id
+                        , attrs = empty
                         }

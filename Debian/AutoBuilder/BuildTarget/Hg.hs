@@ -5,6 +5,7 @@ module Debian.AutoBuilder.BuildTarget.Hg where
 import Control.Exception (SomeException, try)
 import Control.Monad
 import Control.Monad.Trans
+import Data.Set (empty)
 --import Data.ByteString.Lazy.Char8 (empty)
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.CacheRec as P
@@ -39,6 +40,7 @@ prepare cache package archive =
                                                    timeTask (runProc (shell cmd))
                                           _ -> return ([], 0)
                           , T.buildWrapper = id
+                          , T.attrs = empty
                           }
     where
       verifySource dir =

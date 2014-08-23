@@ -15,6 +15,7 @@ import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as B (readFile)
 import Data.Digest.Pure.MD5 (md5)
 import Data.List (isPrefixOf)
+import Data.Set (empty)
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
@@ -49,7 +50,8 @@ prepare c package u s =
                            , T.mVersion = Nothing
                            , T.origTarball = Just tar
                            , T.cleanTarget = \ _ -> return ([], 0)
-                           , T.buildWrapper = id }
+                           , T.buildWrapper = id
+                           , T.attrs = empty }
     where
       checkTarget :: (MonadRepos m, MonadTop m) => m Bool
       checkTarget =

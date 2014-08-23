@@ -7,6 +7,7 @@ module Debian.AutoBuilder.BuildTarget.DebDir
 import Control.Monad.Trans (liftIO)
 import Data.ByteString.Lazy.Char8 (pack)
 import Data.Digest.Pure.MD5 (md5)
+import Data.Set (union)
 import Data.Version (showVersion)
 import Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
@@ -36,6 +37,7 @@ prepare package upstream debian =
               , T.origTarball = T.origTarball upstream
               , T.cleanTarget = \ _ -> return ([], 0)
               , T.buildWrapper = id
+              , T.attrs = union (T.attrs upstream) (T.attrs debian)
               } in
     -- The upstream and downstream versions must match after the epoch and revision is stripped.
     case T.mVersion upstream of

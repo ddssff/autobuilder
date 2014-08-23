@@ -3,6 +3,7 @@ module Debian.AutoBuilder.BuildTarget.Apt where
 
 import Control.Monad (when)
 import Control.Monad.Trans (MonadIO(liftIO))
+import Data.Set (empty)
 import qualified Debian.AutoBuilder.Types.CacheRec as P (CacheRec(allSources, params))
 import Debian.AutoBuilder.Types.Download (Download(..))
 import qualified Debian.AutoBuilder.Types.Packages as P (PackageFlag(AptPin), Packages(spec), testPackageFlag)
@@ -35,7 +36,8 @@ prepare cache target dist package =
                  , mVersion = Nothing
                  , origTarball = Nothing
                  , cleanTarget = \ _ -> return ([], 0)
-                 , buildWrapper = id }
+                 , buildWrapper = id
+                 , attrs = empty }
     where
       distro = maybe (error $ "Invalid dist: " ++ relName dist') id (findRelease (P.allSources cache) dist')
       dist' = ReleaseName dist

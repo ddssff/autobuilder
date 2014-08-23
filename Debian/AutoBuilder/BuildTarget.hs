@@ -7,6 +7,7 @@ module Debian.AutoBuilder.BuildTarget
 import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans (liftIO)
 import Data.List (intersperse)
+import Data.Set (empty)
 import qualified Debian.AutoBuilder.BuildTarget.Apt as Apt
 import qualified Debian.AutoBuilder.BuildTarget.Cd as Cd
 import qualified Debian.AutoBuilder.BuildTarget.Darcs as Darcs
@@ -54,6 +55,7 @@ retrieve defaultAtoms cache target =
                             , T.origTarball = Nothing
                             , T.cleanTarget = cleanTarget target'
                             , T.buildWrapper = id
+                            , T.attrs = T.attrs target'
                             }
 
       P.Darcs uri -> Darcs.prepare cache target uri
@@ -90,6 +92,7 @@ retrieve defaultAtoms cache target =
                                  , T.origTarball = Nothing
                                  , T.cleanTarget = \ _ -> return ([], 0)
                                  , T.buildWrapper = id
+                                 , T.attrs = empty
                                  }
 
       P.Git uri specs -> Git.prepare cache target uri specs
@@ -109,6 +112,7 @@ retrieve defaultAtoms cache target =
                      , T.origTarball = Nothing
                      , T.cleanTarget = T.cleanTarget base
                      , T.buildWrapper = withProc
+                     , T.attrs = T.attrs base
                      }
       P.Quilt base patches ->
           do base' <- retrieve defaultAtoms cache (target {P.spec = base})

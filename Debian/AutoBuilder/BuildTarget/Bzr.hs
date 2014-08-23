@@ -8,6 +8,7 @@ import Control.Monad.Trans
 import qualified Data.ByteString.Lazy.Char8 as L
 import Data.Digest.Pure.MD5 (md5)
 import Data.List
+import Data.Set (empty)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import Debian.AutoBuilder.Types.Download (Download(..))
 import qualified Debian.AutoBuilder.Types.ParamRec as P
@@ -43,7 +44,8 @@ prepare cache package version =
                         False -> let cmd = "find '" ++ top ++ "' -name '.bzr' -prune | xargs rm -rf" in
                                  timeTask (runProc (shell cmd))
                         True -> return ([], 0)
-               , buildWrapper = id }
+               , buildWrapper = id
+               , attrs = empty }
     where
         -- Tries to update a pre-existant bazaar source tree
         updateSource dir =

@@ -64,6 +64,7 @@ prepare package patch base =
                         , T.origTarball = Nothing
                         , T.cleanTarget = T.cleanTarget base
                         , T.buildWrapper = id
+                        , T.attrs = T.attrs base
                         }
     where
       cmd = "/usr/bin/patch"

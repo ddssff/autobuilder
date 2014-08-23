@@ -6,6 +6,7 @@ module Debian.AutoBuilder.BuildTarget.SourceDeb where
 import Control.Monad.Trans
 --import qualified Data.ByteString.Lazy.Char8 as L
 import Data.List
+import Data.Set (empty)
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
@@ -53,6 +54,7 @@ prepare _cache package base =
                            , T.origTarball = Nothing
                            , T.cleanTarget = \ _ -> return ([], 0)
                            , T.buildWrapper = id
+                           , T.attrs = T.attrs base
                            }
             _ -> error $ "Invalid .dsc file: " ++ dscName
       unpack top dscName = "cd " ++ top ++ " && dpkg-source -x " ++ dscName

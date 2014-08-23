@@ -14,6 +14,7 @@ import Data.Digest.Pure.MD5 (md5)
 import Data.Either (partitionEithers)
 import Data.List (intercalate, sortBy)
 import Data.Maybe
+import Data.Set (union)
 import Data.Time
 import Data.Time.LocalTime ()
 import Debian.AutoBuilder.Target (decode)
@@ -134,6 +135,7 @@ prepare package base patch = do
                                                        , T.origTarball = Nothing
                                                        , T.cleanTarget = \ top -> T.cleanTarget base top
                                                        , T.buildWrapper = id
+                                                       , T.attrs = union (T.attrs base) (T.attrs patch)
                                                        }
                                      _ -> fail $ target ++ " - Failure removing quilt directory: " ++ cmd3
                (ExitFailure _ : _, _, err, _) -> fail $ target ++ " - Unexpected output from quilt applied: " ++ decode err

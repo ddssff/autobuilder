@@ -14,6 +14,7 @@ import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as B
 import Data.List (isPrefixOf, tails, intercalate)
 import Data.Maybe (fromMaybe)
+import Data.Set (empty)
 import Data.Version (Version, showVersion, parseVersion)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Download as T
@@ -52,7 +53,8 @@ prepare cache package name =
                            , T.mVersion = Just version'
                            , T.origTarball = Just tar
                            , T.cleanTarget = \ _ -> return ([], 0)
-                           , T.buildWrapper = id }
+                           , T.buildWrapper = id
+                           , T.attrs = empty }
     where
       versionString = case P.testPackageFlag (\ x -> case x of P.CabalPin s -> Just s; _ -> Nothing) package of
                         [] -> Nothing

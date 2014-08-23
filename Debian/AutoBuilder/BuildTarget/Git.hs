@@ -7,6 +7,7 @@ import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as B
 import Data.Digest.Pure.MD5 (md5)
 import Data.Maybe (mapMaybe)
+import Data.Set (singleton)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
@@ -18,6 +19,7 @@ import System.Exit (ExitCode(..))
 import System.FilePath
 import System.Process (proc, shell, CmdSpec(..), CreateProcess(cwd, cmdspec), showCommandForUser)
 import System.Process.Progress (keepStdout, keepResult, timeTask)
+import System.Process.Read (readCreateProcess)
 import System.Unix.Directory
 import Text.Regex
 
@@ -49,6 +51,7 @@ prepare cache package theUri gitspecs =
       exists <- doesDirectoryExist dir
       tree <- if exists then verifySource dir else createSource dir
       _output <- fixLink base
+      commit <- readCreateProcess ((proc "git" ["log", "-n", "1", "--pretty=%H"]) {cwd = Just dir}) "" >>= return . head . lines
       return $ T.Download { T.package = package
                           , T.getTop = topdir tree
                           , T.logText =  "git revision: " ++ show (P.spec package)
@@ -59,6 +62,7 @@ prepare cache package theUri gitspecs =
                                          False -> let cmd = "find " ++ top ++ " -name '.git' -maxdepth 1 -prune | xargs rm -rf" in timeTask (runProc (shell cmd))
                                          True -> return ([], 0)
                           , T.buildWrapper = id
+                          , T.attrs = singleton (P.GitCommit commit)
                           }
     where
       verifySource :: FilePath -> IO SourceTree

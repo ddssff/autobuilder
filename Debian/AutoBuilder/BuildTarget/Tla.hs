@@ -5,6 +5,7 @@ import Control.Exception (SomeException, try)
 import Control.Monad
 import Control.Monad.Trans
 --import qualified Data.ByteString.Lazy.Char8 as L
+import Data.Set (empty)
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
@@ -39,6 +40,7 @@ prepare cache package version =
                                              timeTask (runProc (shell cmd))
                                     True -> return ([], 0)
                           , T.buildWrapper = id
+                          , T.attrs = empty
                           }
     where
       verifySource dir =
