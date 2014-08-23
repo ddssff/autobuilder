@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Debian.AutoBuilder.Types.Fingerprint
-    ( Fingerprint
+    ( Fingerprint(..)
+    , readUpstreamFingerprint
     , DownstreamFingerprint
     , packageFingerprint
     , modernizeMethod
@@ -53,7 +54,7 @@ data Fingerprint
           -- ^ The names and version numbers of the build dependencies which
           -- were present when the package was build.
         }
-    deriving Show
+    deriving (Show, Eq)
 
 data DownstreamFingerprint
     = DownstreamFingerprint
