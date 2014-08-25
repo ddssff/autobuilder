@@ -6,6 +6,8 @@ import Data.List (intercalate)
 import Data.Set (fromList)
 import Debian.AutoBuilder.Types.Fingerprint
 import Debian.Relation
+import Debian.Repo.Fingerprint (Fingerprint(..), RetrieveMethod(..), RetrieveAttribute(..), GitSpec(..),
+                                showFingerprint, readUpstreamFingerprint)
 import Debian.Repo.PackageID (PackageID(..))
 import Debian.Version
 import Distribution.Package ()
