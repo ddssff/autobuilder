@@ -127,9 +127,9 @@ foldPackages f x@(Named {}) r = foldPackages f (packages x) r
 
 filterPackages :: (Packages -> Bool) -> Packages -> Packages
 filterPackages p xs =
-    foldPackages (\ spec flags xs' ->
-                      if p (Package spec flags)
-                      then mappend (Package spec flags) xs'
+    foldPackages (\ spec' flags' xs' ->
+                      if p (Package spec' flags')
+                      then mappend (Package spec' flags') xs'
                       else xs')
                  xs
                  mempty
@@ -214,8 +214,8 @@ data PackageFlag
     deriving (Show, Data, Typeable)
 
 relaxInfo :: [PackageFlag] -> [String]
-relaxInfo flags =
-    foldr f [] flags
+relaxInfo flags' =
+    foldr f [] flags'
     where f (RelaxDep s) ss = s : ss
           f _ ss = ss
 

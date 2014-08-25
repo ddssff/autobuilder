@@ -480,10 +480,10 @@ usage header =
     unlines (header:table)
     where table = map fmtLine xs
           fmtLine (Text s) = "    " ++ s
-          fmtLine (Opt {long = ls, short = ss}) =
+          fmtLine (Opt {long = lopts, short = sopts}) =
               "  " ++
-              flushLeft lsl ls ++ "  " ++
-              flushLeft ssl ss
+              flushLeft lsl lopts ++ "  " ++
+              flushLeft ssl sopts
           xs = legend ++ concatMap fmtOpt optSpecs
           ssl = foldl max 0 (map ss xs)
           lsl = foldl max 0 (map ls xs)

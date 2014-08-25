@@ -9,13 +9,10 @@ import Control.Applicative ((<$>))
 import Control.Monad.State (State, evalState, get, put)
 import Data.Char (isSpace)
 #endif
-import Control.Applicative.Error (maybeRead)
-import Data.Generics (everywhere, mkT)
 import Data.List as List (intercalate, intersperse, map, nub, partition)
 import qualified Data.Map as Map
 import Data.Maybe(isNothing, listToMaybe, mapMaybe)
-import Data.Set as Set (Set, toList, toAscList, difference, empty, fromList, map, filter)
-import Data.Text (unpack, strip)
+import Data.Set as Set (toList, fromList, map, filter)
 import Debian.AutoBuilder.Types.Buildable (Target(tgt, cleanSource), Buildable(download, debianSourceTree), targetRelaxed, relaxDepends)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Download as T
@@ -23,17 +20,14 @@ import qualified Debian.AutoBuilder.Types.ParamRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Changes (logVersion)
 import Debian.Control (fieldValue, debianSourcePackageName, debianBinaryParagraphs)
-import qualified Debian.Control.String as S
 import qualified Debian.GenBuildDeps as G
-import Debian.Pretty (pretty)
 import Debian.Relation (Relation(Rel), BinPkgName(..))
-import Debian.Repo.Dependencies (prettySimpleRelation, readSimpleRelation, showSimpleRelation)
+import Debian.Repo.Dependencies (prettySimpleRelation)
 import Debian.Repo.Fingerprint as P
 import Debian.Repo.SourceTree (HasChangeLog(entry), SourcePackageStatus(..), BuildDecision(..))
 import Debian.Repo.PackageID (PackageID(PackageID, packageName, packageVersion))
-import Debian.Repo.PackageIndex (SourcePackage(sourceParagraph, sourcePackageID), BinaryPackage(packageID))
-import Debian.Version (DebianVersion, parseDebianVersion, prettyDebianVersion)
-import Extra.Misc(columns)
+import Debian.Repo.PackageIndex (BinaryPackage(packageID))
+import Debian.Version (prettyDebianVersion)
 
 targetFingerprint :: Target -> [BinaryPackage] -> Fingerprint
 targetFingerprint target buildDependencySolution =
