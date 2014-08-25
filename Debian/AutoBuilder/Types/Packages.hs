@@ -8,10 +8,6 @@ module Debian.AutoBuilder.Types.Packages
     , foldPackages'
     , filterPackages
     , packageCount
-    , RetrieveMethod(..)
-    , RetrieveAttribute(..)
-    , GitSpec(..)
-    , DebSpec(..)
     , PackageFlag(..)
     , relaxInfo
     , hackage
@@ -53,9 +49,9 @@ import Data.Maybe (catMaybes)
 import Data.Monoid (Monoid(mempty, mappend))
 import Data.String (IsString(fromString))
 import qualified Debian.Debianize as CD
-import Debian.Relation (Relations, SrcPkgName)
+import Debian.Relation (Relations)
 import Debian.Repo (DebianSourceTree, findDebianSourceTrees)
-import Debian.Version (DebianVersion)
+import Debian.Repo.Fingerprint (RetrieveMethod(..), GitSpec(..))
 import System.FilePath ((</>))
 
 -- | A type for the group name of a Packages record, used to reference
@@ -140,58 +136,6 @@ filterPackages p xs =
 
 packageCount :: Packages -> Int
 packageCount ps = foldPackages (\ _ _ n -> n + 1) ps 0
-
--- | The methods we know for obtaining source code.
-data RetrieveMethod
-    = Apt String String                      -- ^ Apt dist name - download using apt-get (FIXME: Apt String SrcPkgName would be better, but that breaks read/show)
-    | Bzr String                             -- ^ Download from a Bazaar repository
-    | Cd FilePath RetrieveMethod             -- ^ Get the source code from a subdirectory of another download
-    | Darcs String                           -- ^ Download from a Darcs repository
-    | DataFiles RetrieveMethod RetrieveMethod FilePath
-                                             -- ^ The first tree is a cabal package, copy the files in the second tree into
-                                             -- the first at the location specified by FilePath.  Typically you would then patch
-                                             -- the cabal file to add entries to the Data-Files list.
-    | DebDir RetrieveMethod RetrieveMethod   -- ^ Combine the upstream download with a download for a debian directory
-    | Debianize RetrieveMethod               -- ^ Retrieve a cabal package from Hackage and use cabal-debian to debianize it
-    | Debianize' RetrieveMethod [DebSpec]    -- ^ Retrieve a cabal package from Hackage and use cabal-debian to debianize it
-    | Dir FilePath                           -- ^ Retrieve the source code from a directory on a local machine
-    | Git String [GitSpec]                   -- ^ Download from a Git repository, optional commit hashes and/or branch names
-    | Hackage String                         -- ^ Download a cabal package from hackage
-    | Hg String                              -- ^ Download from a Mercurial repository
-    | Patch RetrieveMethod ByteString        -- ^ Apply the patch given in the string text to the target
-    | Proc RetrieveMethod                    -- ^ Mount proc during the build (this should be a PackageFlag.)
-    | Quilt RetrieveMethod RetrieveMethod    -- ^ Combine a download with a download of a patch directory to be applied by quilt
-    | SourceDeb RetrieveMethod               -- ^ Download and unpack a source deb - a .dsc, a .tar.gz, and a .diff.gz file.
-    | Svn String                             -- ^ Download from a Subversion repository
-    | Tla String                             -- ^ Download from a TLA repository
-    | Twice RetrieveMethod                   -- ^ Perform the build twice (should be a package flag)
-    | Uri String String                      -- ^ Download a tarball from the URI.  The checksum is used to implement caching.
-    deriving (Read, Show, Eq, Data, Typeable)
-
--- | If there is some identifying characteristic of the source tree
--- resulting from a retrieve, use a set of RetrieveResult values to
--- identify it so that a build can be triggered if it changes.
--- Examples include the latest Git commit identifier, or a darcs
--- repository tag.  A darcs commit string is not a suitable identifier
--- because darcs commits are not totally ordered, so it can't reliably
--- be used to reconstruct the specific source tree.
-data RetrieveAttribute
-    = AptVersion DebianVersion
-    -- ^ The version number of a package retrieved by apt-get source
-    | GitCommit String
-    -- ^ The id of the most recent commit
-    | DarcsChangesId String
-    -- ^ The checksum of the output of darcs changes --xml-output
-    deriving (Read, Show, Eq, Ord, Data, Typeable)
-
-data GitSpec
-    = Branch String
-    | Commit String
-    deriving (Read, Show, Eq, Data, Typeable)
-
-data DebSpec
-    = SrcDeb SrcPkgName
-    deriving (Read, Show, Eq, Data, Typeable)
 
 -- | Flags that are applicable to any debianized package, which means
 -- any package because this autobuilder only builds debs.

@@ -33,6 +33,7 @@ import Debian.Pretty (pretty)
 import Debian.Relation (BinPkgName(unBinPkgName), SrcPkgName(unSrcPkgName))
 import Debian.Release (ReleaseName(ReleaseName, relName), releaseName')
 import Debian.Repo.EnvPath (EnvRoot)
+import qualified Debian.Repo.Fingerprint as P
 import Debian.Repo.Internal.Repos (MonadRepos, runReposCachedT, MonadReposCached)
 import Debian.Repo.LocalRepository(uploadRemote, verifyUploadURI)
 import Debian.Repo.MonadOS (MonadOS(getOS), evalMonadOS)

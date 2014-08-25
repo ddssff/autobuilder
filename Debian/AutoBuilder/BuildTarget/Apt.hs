@@ -6,11 +6,12 @@ import Control.Monad.Trans (MonadIO(liftIO))
 import Data.Set (empty, singleton)
 import qualified Debian.AutoBuilder.Types.CacheRec as P (CacheRec(allSources, params))
 import Debian.AutoBuilder.Types.Download (Download(..))
-import qualified Debian.AutoBuilder.Types.Packages as P (PackageFlag(AptPin), Packages(spec), testPackageFlag, RetrieveAttribute(AptVersion))
+import qualified Debian.AutoBuilder.Types.Packages as P (PackageFlag(AptPin), Packages(spec), testPackageFlag)
 import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec(flushSource, ifSourcesChanged))
 import Debian.Relation (SrcPkgName)
 import Debian.Release (ReleaseName(ReleaseName, relName))
 import Debian.Repo.AptImage (aptDir)
+import Debian.Repo.Fingerprint (RetrieveAttribute(AptVersion))
 import Debian.Repo.Slice (NamedSliceList(sliceListName))
 import Debian.Repo.SourceTree (topdir)
 import Debian.Repo.Internal.Repos (MonadRepos)
@@ -37,7 +38,7 @@ prepare cache target dist package =
                  , origTarball = Nothing
                  , cleanTarget = \ _ -> return ([], 0)
                  , buildWrapper = id
-                 , attrs = maybe empty (singleton . P.AptVersion) version' }
+                 , attrs = maybe empty (singleton . AptVersion) version' }
     where
       distro = maybe (error $ "Invalid dist: " ++ relName dist') id (findRelease (P.allSources cache) dist')
       dist' = ReleaseName dist

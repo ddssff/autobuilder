@@ -12,8 +12,9 @@ import qualified Data.ByteString.Lazy as L (ByteString)
 import Data.Set as Set (Set)
 import Data.Time (NominalDiffTime)
 import Data.Version (Version)
-import Debian.AutoBuilder.Types.Packages (PackageFlag, Packages, RetrieveMethod(..))
-import qualified Debian.AutoBuilder.Types.Packages as P (Packages(flags, spec), RetrieveAttribute(..))
+import Debian.AutoBuilder.Types.Packages (PackageFlag, Packages)
+import qualified Debian.AutoBuilder.Types.Packages as P (Packages(flags, spec))
+import Debian.Repo.Fingerprint (RetrieveMethod(..), RetrieveAttribute(..))
 import Debian.Repo.MonadOS (MonadOS)
 import System.Process.Read.Chunks (Output)
 
@@ -36,7 +37,7 @@ data Download
       , buildWrapper :: forall m. (MonadOS m, MonadMask m, MonadIO m) => m NominalDiffTime -> m NominalDiffTime
       -- ^ Modify the build process in some way - currently only the
       -- proc target modifies this by mounting and then unmounting /proc.
-      , attrs :: Set P.RetrieveAttribute
+      , attrs :: Set RetrieveAttribute
       -- ^ Attributes collected from performing the various retrieve
       -- methods
       }

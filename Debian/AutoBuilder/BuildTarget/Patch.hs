@@ -12,6 +12,7 @@ import Data.Digest.Pure.MD5 (md5)
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Repo (findSourceTree, copySourceTree, SourceTree(dir'), DebianSourceTree, findDebianSourceTrees, sub, MonadRepos, MonadTop)
+import Debian.Repo.Fingerprint (RetrieveMethod(Apt, Patch))
 import System.Directory (createDirectoryIfMissing)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure))
 import System.FilePath ((</>))
@@ -74,8 +75,8 @@ indent :: String -> String
 indent = unlines . map (" > " ++) . lines
 
 -- | For the Apt target, the real source tree is in a subdirctory.
-findSource :: P.RetrieveMethod -> FilePath -> IO FilePath
-findSource (P.Patch (P.Apt _dist _name) _) copyDir =
+findSource :: RetrieveMethod -> FilePath -> IO FilePath
+findSource (Patch (Apt _dist _name) _) copyDir =
   try (findDebianSourceTrees (D.trace ("findDebianSourceTree " ++ show copyDir) copyDir)) >>=
   return . either (\ (e :: SomeException) -> D.trace (" -> " ++ show e) copyDir)
            (\ (ts :: [(FilePath, DebianSourceTree)]) ->

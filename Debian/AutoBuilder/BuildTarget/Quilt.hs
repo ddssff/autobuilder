@@ -23,6 +23,7 @@ import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Changes (ChangeLogEntry(..), parseEntries, parseEntry)
 import Debian.Pretty (pretty)
 import Debian.Repo (HasDebDir(debdir), HasTopDir(topdir), SourceTree, DebianBuildTree, findSourceTree, findOneDebianBuildTree, copySourceTree, sub, MonadRepos, MonadTop, runProc, readProc)
+import Debian.Repo.Fingerprint (RetrieveMethod)
 import Debian.Version
 import Extra.Files (replaceFile)
 import "Extra" Extra.List ()
@@ -50,7 +51,7 @@ getEntry (Patch x) = x
 
 quiltPatchesDir = "quilt-patches"
 
-makeQuiltTree :: (MonadRepos m, MonadTop m) => P.RetrieveMethod -> T.Download -> T.Download -> m (SourceTree, FilePath)
+makeQuiltTree :: (MonadRepos m, MonadTop m) => RetrieveMethod -> T.Download -> T.Download -> m (SourceTree, FilePath)
 makeQuiltTree m base patch =
     do qPutStrLn $ "Quilt base: " ++ T.getTop base
        qPutStrLn $ "Quilt patch: " ++ T.getTop patch

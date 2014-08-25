@@ -31,6 +31,7 @@ import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Debianize (DebT)
 import Debian.Relation (SrcPkgName(..))
+import qualified Debian.Repo.Fingerprint as P
 import Debian.Repo.MonadOS (MonadOS, withProc)
 import Debian.Repo.SourceTree (SourceTree(dir'), copySourceTree, findSourceTree, topdir)
 import Debian.Repo.Internal.Repos (MonadRepos)

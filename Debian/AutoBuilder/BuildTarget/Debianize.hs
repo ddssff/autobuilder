@@ -20,6 +20,7 @@ import qualified Debian.AutoBuilder.Types.ParamRec as P
 import Debian.Debianize as Cabal hiding (verbosity, withCurrentDirectory)
 import Debian.Pretty (pretty)
 import Debian.Relation (SrcPkgName(..))
+import qualified Debian.Repo.Fingerprint as P
 import Debian.Repo.Prelude (rsync)
 import Debian.Repo.Internal.Repos (MonadRepos)
 import Debian.Repo.Top (MonadTop, sub, runTopT)
