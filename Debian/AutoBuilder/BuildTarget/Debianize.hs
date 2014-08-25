@@ -32,7 +32,7 @@ import System.Directory (getDirectoryContents, createDirectoryIfMissing, getCurr
 import System.Environment (withArgs)
 import System.FilePath ((</>), takeFileName, takeDirectory)
 import System.Process (showCommandForUser)
-import System.Process.Progress (verbosity, qPutStrLn)
+import System.Process.Read.Verbosity (verbosity, qPutStrLn)
 
 documentation :: [String]
 documentation = [ "hackage:<name> or hackage:<name>=<version> - a target of this form"

@@ -40,7 +40,7 @@ import System.Directory(renameDirectory)
 import System.FilePath (takeExtension, (</>))
 import System.IO.Error (isAlreadyExistsError)
 import System.Posix.Files (createLink, removeLink)
-import System.Process.Progress (quieter, qPutStrLn {-, ePutStrLn-})
+import System.Process.Read.Verbosity (quieter, qPutStrLn)
 
 -- | Case analysis for the 'Failing' type.
 -- If the value is @'Failure'@, apply the first function to @[ErrorMsg]@;

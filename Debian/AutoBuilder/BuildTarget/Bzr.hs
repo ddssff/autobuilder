@@ -18,7 +18,8 @@ import Debian.URI
 import System.FilePath (splitFileName, (</>))
 import System.Unix.Directory
 import System.Process (shell)
-import System.Process.Progress (keepOutput, timeTask, qPutStrLn)
+import System.Process.Progress (keepOutput, timeTask)
+import System.Process.Read.Verbosity (qPutStrLn)
 import System.Directory
 
 documentation :: [String]

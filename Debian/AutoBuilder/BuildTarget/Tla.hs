@@ -14,7 +14,8 @@ import Debian.Repo
 import System.FilePath (splitFileName, (</>))
 import System.Unix.Directory
 import System.Process (shell)
-import System.Process.Progress (timeTask, qPutStrLn)
+import System.Process.Progress (timeTask)
+import System.Process.Read.Verbosity (qPutStrLn)
 import System.Directory
 
 documentation :: [String]

@@ -60,7 +60,8 @@ import System.Exit(ExitCode(..), exitWith)
 import System.FilePath ((</>))
 import System.IO as IO
 import System.Process (proc)
-import System.Process.Progress (Output, timeTask, defaultVerbosity, withModifiedVerbosity, withModifiedVerbosity, qPutStrLn, qPutStr, ePutStrLn, ePutStr)
+import System.Process.Progress (Output, timeTask, ePutStrLn, ePutStr)
+import System.Process.Read.Verbosity (defaultVerbosity, withModifiedVerbosity, withModifiedVerbosity, qPutStrLn, qPutStr)
 import System.Unix.Directory(removeRecursiveSafely)
 import Text.Printf ( printf )
 

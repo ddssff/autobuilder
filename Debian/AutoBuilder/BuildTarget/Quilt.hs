@@ -31,7 +31,8 @@ import System.Directory (doesFileExist, createDirectoryIfMissing, doesDirectoryE
 import System.Exit (ExitCode(ExitSuccess, ExitFailure))
 import System.FilePath ((</>))
 import System.Process (shell)
-import System.Process.Progress (collectOutputs, mergeToStderr, qPutStrLn)
+import System.Process.Progress (collectOutputs, mergeToStderr)
+import System.Process.Read.Verbosity (qPutStrLn)
 import Text.Regex
 
 qMessage s x = qPutStrLn s >> return x

@@ -22,7 +22,7 @@ import Debian.Repo.State.Slice (repoSources, verifySourcesList)
 import Debian.Repo.Top (MonadTop(askTop), sub)
 import System.Directory (createDirectoryIfMissing, getPermissions, writable)
 import System.Environment (getEnv)
-import System.Process.Progress (qPutStrLn)
+import System.Process.Read.Verbosity (qPutStrLn)
 
 -- |Create a Cache object from a parameter set.
 buildCache :: (MonadRepos m, MonadTop m) => ParamRec -> m CacheRec
