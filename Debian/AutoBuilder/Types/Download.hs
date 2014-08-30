@@ -16,7 +16,7 @@ import Debian.AutoBuilder.Types.Packages (PackageFlag, Packages)
 import qualified Debian.AutoBuilder.Types.Packages as P (Packages(flags, spec))
 import Debian.Repo.Fingerprint (RetrieveMethod(..), RetrieveAttribute(..))
 import Debian.Repo.MonadOS (MonadOS)
-import System.Process.Read.Chunks (Output)
+import System.Process.ListLike (Output)
 
 data Download
     = Download

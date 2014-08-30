@@ -79,7 +79,7 @@ Library
       , old-time
       , parsec
       , process
-      , process-listlike >= 0.6
+      , process-listlike >= 0.8
       , process-progress >= 0.6
       , process-verbosity
       , pureMD5

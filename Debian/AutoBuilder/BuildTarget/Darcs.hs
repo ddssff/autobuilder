@@ -20,8 +20,8 @@ import System.Directory
 import System.Exit (ExitCode(..))
 import System.FilePath
 import System.Process (shell, proc, CreateProcess(cwd))
+import System.Process.ListLike (readCreateProcess)
 import System.Process.Progress (keepResult, timeTask)
-import System.Process.Read (readCreateProcess)
 import System.Unix.Directory
 
 documentation :: [String]

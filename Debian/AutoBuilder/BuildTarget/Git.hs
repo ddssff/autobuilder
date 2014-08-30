@@ -20,7 +20,7 @@ import System.Exit (ExitCode(..))
 import System.FilePath
 import System.Process (proc, shell, CmdSpec(..), CreateProcess(cwd, cmdspec), showCommandForUser)
 import System.Process.Progress (keepStdout, keepResult, timeTask)
-import System.Process.Read (readCreateProcess)
+import System.Process.ListLike (readCreateProcess)
 import System.Unix.Directory
 import Text.Regex
 

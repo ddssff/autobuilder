@@ -60,7 +60,7 @@ import System.Exit(ExitCode(..), exitWith)
 import System.FilePath ((</>))
 import System.IO as IO
 import System.Process (proc)
-import System.Process.Read.Chunks (Output)
+import System.Process.ListLike (Output)
 import System.Process.Read.Compat (timeTask)
 import System.Process.Read.Convenience (ePutStrLn, ePutStr)
 import System.Process.Read.Verbosity (defaultVerbosity, withModifiedVerbosity, withModifiedVerbosity, qPutStrLn, qPutStr)

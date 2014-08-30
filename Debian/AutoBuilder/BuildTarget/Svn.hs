@@ -20,7 +20,7 @@ import System.Directory
 import System.Exit
 import System.FilePath (splitFileName, (</>))
 import System.Process (shell, proc)
-import System.Process.Read.Chunks (Output)
+import System.Process.ListLike (Output)
 import System.Process.Read.Compat (timeTask)
 import System.Process.Read.Convenience (keepStdout, keepStderr, keepResult)
 import System.Unix.Directory
