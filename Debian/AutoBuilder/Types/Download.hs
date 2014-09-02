@@ -16,7 +16,7 @@ import Debian.AutoBuilder.Types.Packages (PackageFlag, Packages)
 import qualified Debian.AutoBuilder.Types.Packages as P (Packages(flags, spec))
 import Debian.Repo.Fingerprint (RetrieveMethod(..), RetrieveAttribute(..))
 import Debian.Repo.MonadOS (MonadOS)
-import System.Process.ListLike (Output)
+import System.Process.Chunks (Chunk)
 
 data Download
     = Download
@@ -31,7 +31,7 @@ data Download
       -- ^ If we have access to an original tarball, this returns its path.
       , logText :: String
       -- ^ Text to include in changelog entry.
-      , cleanTarget :: FilePath -> IO ([Output L.ByteString], NominalDiffTime)
+      , cleanTarget :: FilePath -> IO ([Chunk L.ByteString], NominalDiffTime)
       -- ^ Clean version control info out of a target after it has
       -- been moved to the given location.
       , buildWrapper :: forall m. (MonadOS m, MonadMask m, MonadIO m) => m NominalDiffTime -> m NominalDiffTime

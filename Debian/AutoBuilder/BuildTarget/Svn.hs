@@ -20,7 +20,7 @@ import System.Directory
 import System.Exit
 import System.FilePath (splitFileName, (</>))
 import System.Process (shell, proc)
-import System.Process.ListLike (Output)
+import System.Process.Chunks (Chunk)
 import System.Process.Read.Compat (timeTask)
 import System.Process.Read.Convenience (keepStdout, keepStderr, keepResult)
 import System.Unix.Directory
@@ -29,7 +29,7 @@ documentation :: [String]
 documentation = [ "svn:<uri> - A target of this form retrieves the source code from"
                 , "a subversion repository." ]
 
-svn :: [String] -> IO [Output L.ByteString]
+svn :: [String] -> IO [Chunk L.ByteString]
 svn args = runProc (proc "svn" args)
 
 username userInfo =
@@ -87,7 +87,7 @@ prepare cache package uri =
           liftIO (createDirectoryIfMissing True parent) >>
           checkout dir >>
           findSourceTree dir :: IO SourceTree
-      checkout :: FilePath -> IO (Either String [Output L.ByteString])
+      checkout :: FilePath -> IO (Either String [Chunk L.ByteString])
       --checkout = svn createStyle args 
       checkout dir = readProc (proc "svn" args) >>= return . finish
           where

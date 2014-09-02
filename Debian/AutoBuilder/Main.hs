@@ -60,7 +60,7 @@ import System.Exit(ExitCode(..), exitWith)
 import System.FilePath ((</>))
 import System.IO as IO
 import System.Process (proc)
-import System.Process.ListLike (Output)
+import System.Process.Chunks (Chunk)
 import System.Process.Read.Compat (timeTask)
 import System.Process.Read.Convenience (ePutStrLn, ePutStr)
 import System.Process.Read.Verbosity (defaultVerbosity, withModifiedVerbosity, withModifiedVerbosity, qPutStrLn, qPutStr)
@@ -106,7 +106,7 @@ main init myParams =
 
 -- |Process one set of parameters.  Usually there is only one, but there
 -- can be several which are run sequentially.  Stop on first failure.
-doParameterSet :: (MonadReposCached m, MonadMask m) => DebT IO () -> [Failing ([Output L.ByteString], NominalDiffTime)] -> P.ParamRec -> m [Failing ([Output L.ByteString], NominalDiffTime)]
+doParameterSet :: (MonadReposCached m, MonadMask m) => DebT IO () -> [Failing ([Chunk L.ByteString], NominalDiffTime)] -> P.ParamRec -> m [Failing ([Chunk L.ByteString], NominalDiffTime)]
 doParameterSet init results params =
 #if 0
     let -- Set of bogus target names in the forceBuild list
@@ -151,7 +151,7 @@ getLocalSources = do
     Nothing -> error $ "Invalid local repo root: " ++ show root
     Just uri -> repoSources (Just (envRoot root)) uri
 
-runParameterSet :: (MonadReposCached m, MonadMask m) => DebT IO () -> C.CacheRec -> m (Failing ([Output L.ByteString], NominalDiffTime))
+runParameterSet :: (MonadReposCached m, MonadMask m) => DebT IO () -> C.CacheRec -> m (Failing ([Chunk L.ByteString], NominalDiffTime))
 runParameterSet init cache =
     do
       top <- askTop
@@ -234,7 +234,7 @@ runParameterSet init cache =
                True -> return ()
                False -> do qPutStr "You must be superuser to run the autobuilder (to use chroot environments.)"
                            liftIO $ exitWith (ExitFailure 1)
-      upload :: MonadRepos m => (LocalRepository, [Target]) -> m [Failing ([Output L.ByteString], NominalDiffTime)]
+      upload :: MonadRepos m => (LocalRepository, [Target]) -> m [Failing ([Chunk L.ByteString], NominalDiffTime)]
       upload (repo, [])
           | P.doUpload params =
               case P.uploadURI params of
@@ -248,7 +248,7 @@ runParameterSet init cache =
                True -> qPutStrLn "Skipping upload."
                False -> return ()
              error msg
-      newDist :: [Failing ([Output L.ByteString], NominalDiffTime)] -> IO (Failing ([Output L.ByteString], NominalDiffTime))
+      newDist :: [Failing ([Chunk L.ByteString], NominalDiffTime)] -> IO (Failing ([Chunk L.ByteString], NominalDiffTime))
       newDist _results
           | P.doNewDist params =
               case P.uploadURI params of
