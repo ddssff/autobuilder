@@ -92,14 +92,18 @@ trimInfix i s = take (length (takeWhile (not . isPrefixOf i) (tails s))) s
 -- | Check for file in cache and validate, on failure download and validate.
 downloadCached :: forall m. (MonadCatch m, MonadIO m, MonadTop m) => String -> String -> Version -> m FilePath
 downloadCached server name version = do
+  -- Look for the cached version, if that fails try unpacking the tarball, if that fails try downloading.
   cache >>= maybe (download >>= either throw return) return
     where
       cache :: m (Maybe FilePath)
       cache = do
         tar <- tarball name version
         dir <- unpacked name version
-        text <- liftIO $ B.readFile tar
-        (count :: Either SomeException Int) <- liftIO $ try (evaluate $ validate text)
+        (text' :: Either SomeException B.ByteString) <- liftIO $ try $ B.readFile tar
+        (count :: Either SomeException Int) <-
+            case text' of
+              Left e -> return $ Left e
+              Right text -> liftIO $ try (evaluate $ validate text)
         case count of
           Right _ -> return (Just dir)
           Left (_ :: SomeException) -> return Nothing
