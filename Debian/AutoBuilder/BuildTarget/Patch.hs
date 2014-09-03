@@ -71,7 +71,7 @@ prepare package patch base =
                         }
     where
       cmd = "/usr/bin/patch"
-      args = ["-p1"]
+      args = ["-p1", "-n"]
 
 indent :: String -> String
 indent = unlines . map (" > " ++) . lines
