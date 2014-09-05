@@ -11,7 +11,7 @@ import Control.Exception (SomeException, throw, evaluate)
 import Control.Monad (when)
 import Control.Monad.Catch (MonadCatch, try)
 import Control.Monad.Trans (MonadIO, liftIO)
-import qualified Data.ByteString.Lazy.Char8 as B
+import qualified Data.ByteString.Lazy.Char8 as L
 import Data.List (isPrefixOf, tails, intercalate)
 import Data.Maybe (fromMaybe)
 import Data.Set (empty)
@@ -99,7 +99,7 @@ downloadCached server name version = do
       cache = do
         tar <- tarball name version
         dir <- unpacked name version
-        (text' :: Either SomeException B.ByteString) <- liftIO $ try $ B.readFile tar
+        (text' :: Either SomeException L.ByteString) <- liftIO $ try $ L.readFile tar
         (count :: Either SomeException Int) <-
             case text' of
               Left e -> return $ Left e
@@ -112,10 +112,10 @@ downloadCached server name version = do
         tar <- tarball name version
         dir <- unpacked name version
         liftIO $ removeRecursiveSafely dir
-        (res, out, _err) <- liftIO (readCreateProcessWithExitCode downloadCommand B.empty)
+        (res, out, _err) <- liftIO (readCreateProcessWithExitCode downloadCommand L.empty)
         case res of
           ExitSuccess ->
-              do liftIO $ B.writeFile tar out
+              do liftIO $ L.writeFile tar out
                  untar out
                  return (Right dir)
           ExitFailure r ->
@@ -126,23 +126,23 @@ downloadCached server name version = do
       downloadCommand :: CreateProcess
       downloadCommand = proc "curl" ["-s", versionURL server name version]
 
-      validate :: B.ByteString -> Int
+      validate :: L.ByteString -> Int
       validate text = Tar.foldEntries (\ _ n -> n + 1) 0 throw (Tar.read (Z.decompress text))
 
       -- Unpack and save the files of a tarball.
-      untar :: (MonadIO m, MonadTop m) => B.ByteString -> m ()
+      untar :: (MonadIO m, MonadTop m) => L.ByteString -> m ()
       untar text = tmpDir >>= \ tmp -> liftIO $ Tar.unpack tmp (Tar.read (Z.decompress text))
 
 -- |Given a package name, get the newest version in hackage of the hackage package with that name:
 -- > getVersion \"binary\" -> \"0.5.0.2\"
 getVersion :: String -> String -> IO Version
 getVersion server name =
-    do result@(code, out, _) <- readProcessWithExitCode cmd args B.empty
+    do result@(code, out, _) <- readProcessWithExitCode cmd args L.empty
        case code of
          -- This is bad it assumes the first occurrence of <strong>
          -- encloses the newest package version number.  I should go
          -- back to the html parser method
-         ExitSuccess -> return $ scrapeVersion $ {- findVersion name $ (htmlParse (showCommandForUser cmd args) -} (B.unpack out)
+         ExitSuccess -> return $ scrapeVersion $ {- findVersion name $ (htmlParse (showCommandForUser cmd args) -} (L.unpack out)
          _ -> error ("Could not get version for " ++ name ++ "\n " ++ showCommandForUser cmd args ++ " -> " ++ show result)
     where
       cmd = "curl"
