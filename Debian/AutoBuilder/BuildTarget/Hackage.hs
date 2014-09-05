@@ -11,10 +11,11 @@ import Control.Exception (SomeException, throw, evaluate)
 import Control.Monad (when)
 import Control.Monad.Catch (MonadCatch, try)
 import Control.Monad.Trans (MonadIO, liftIO)
+import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as L
 import Data.List (isPrefixOf, tails, intercalate)
-import Data.Maybe (fromMaybe)
 import Data.Set (empty)
+--import Data.Text as T (empty, unpack)
 import Data.Version (Version, showVersion, parseVersion)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Download as T
@@ -24,11 +25,12 @@ import Debian.Repo as DP
 import GHC.IO.Exception (IOErrorType(OtherError))
 import System.Exit
 import System.FilePath ((</>))
-import System.IO (hPutStrLn, stderr)
+import System.IO (hPutStrLn, hPutStr, stderr)
 import System.IO.Error (mkIOError)
 import System.Process (CreateProcess, proc, showCommandForUser, cmdspec)
-import System.Process.ListLike (showCmdSpecForUser)
-import System.Process.ByteString.Lazy (readCreateProcessWithExitCode, readProcessWithExitCode)
+import System.Process.ListLike (showCmdSpecForUser, readCreateProcessWithExitCode, readProcessWithExitCode)
+import System.Process.ByteString.Lazy ()
+import System.Process.ByteString ()
 import System.Unix.Directory (removeRecursiveSafely)
 import Text.ParserCombinators.ReadP (readP_to_S)
 
@@ -40,7 +42,7 @@ documentation = [ "debianize:<name> or debianize:<name>=<version> - a target of 
 prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> P.Packages -> String -> m T.Download
 prepare cache package name =
     do let server = P.hackageServer (P.params cache) -- typically "hackage.haskell.org"
-       version <- liftIO $ maybe (getVersion server name) (return . readVersion) versionString
+       version <- liftIO $ maybe (getVersion' server name) (return . readVersion) versionString
        tar <- tarball name version
        liftIO $ when (P.flushSource (P.params cache)) (removeRecursiveSafely tar)
        unp <- downloadCached server name version
@@ -52,7 +54,7 @@ prepare cache package name =
                            , T.origTarball = Just tar
                            , T.cleanTarget = \ _ -> return ([], 0)
                            , T.buildWrapper = id
-                           , T.attrs = empty }
+                           , T.attrs = Data.Set.empty }
     where
       versionString = case P.testPackageFlag (\ x -> case x of P.CabalPin s -> Just s; _ -> Nothing) package of
                         [] -> Nothing
@@ -67,13 +69,19 @@ readVersion text =
     readP_to_S parseVersion $
     text
 
-scrapeVersion :: String -> Version
+scrapeVersion :: String -> Either String Version
 scrapeVersion text =
+#if 1
+    case dropInfix "<strong>" text of
+      Nothing -> Left $ "Debian.AutoBuilder.BuildTarget.Hackage.readVersion 1 " ++ show text
+      Just x -> Right $ readVersion $ trimInfix "</strong>" $ x
+#else
     readVersion .
     trimInfix "</strong>" .
     fromMaybe (error $ "Debian.AutoBuilder.BuildTarget.Hackage.readVersion 1 " ++ show text) .
     dropInfix "<strong>" $
     text
+#endif
 
 head' (x : _xs) = x
 head' [] = error "Debian.AutoBuilder.BuildTarget.Hackage.readVersion 2"
@@ -133,17 +141,38 @@ downloadCached server name version = do
       untar :: (MonadIO m, MonadTop m) => L.ByteString -> m ()
       untar text = tmpDir >>= \ tmp -> liftIO $ Tar.unpack tmp (Tar.read (Z.decompress text))
 
+tryNTimes :: Int -> IO a -> IO (Either String a) -> IO a
+tryNTimes n failed action =
+    hPutStr stderr " ." >> action >>= nTimes n
+    where
+      nTimes 0 _ = failed
+      nTimes n r = either (\ _ -> hPutStr stderr "." >> action) (return . Right) r >>= nTimes (n - 1)
+
+getVersion' :: String -> String -> IO Version
+getVersion' server name =
+#if 0
+    tryNTimes 7 (error "Hackage getVersion failed") (getVersion server name)
+#else
+    hPutStr stderr " ." >> getVersion server name >>=
+    either (\ _ -> hPutStr stderr "." >> getVersion server name) (return . Right) >>=
+    either (\ _ -> hPutStr stderr "." >> getVersion server name) (return . Right) >>=
+    either (\ _ -> hPutStr stderr "." >> getVersion server name) (return . Right) >>=
+    either (\ _ -> hPutStr stderr "." >> getVersion server name) (return . Right) >>=
+    either (\ _ -> hPutStr stderr "." >> getVersion server name) (return . Right) >>=
+    either (\ s -> hPutStr stderr "Hackage getVersion failed." >> error s) return
+#endif
+
 -- |Given a package name, get the newest version in hackage of the hackage package with that name:
 -- > getVersion \"binary\" -> \"0.5.0.2\"
-getVersion :: String -> String -> IO Version
+getVersion :: String -> String -> IO (Either String Version)
 getVersion server name =
-    do result@(code, out, _) <- readProcessWithExitCode cmd args L.empty
+    do result@(code, out, _) <- readProcessWithExitCode cmd args B.empty
        case code of
          -- This is bad it assumes the first occurrence of <strong>
          -- encloses the newest package version number.  I should go
          -- back to the html parser method
-         ExitSuccess -> return $ scrapeVersion $ {- findVersion name $ (htmlParse (showCommandForUser cmd args) -} (L.unpack out)
-         _ -> error ("Could not get version for " ++ name ++ "\n " ++ showCommandForUser cmd args ++ " -> " ++ show result)
+         ExitSuccess -> return $ scrapeVersion $ B.unpack out
+         _ -> return $ Left $ "Could not get version for " ++ name ++ "\n " ++ showCommandForUser cmd args ++ " -> " ++ show result
     where
       cmd = "curl"
       args = ["-s", url]
