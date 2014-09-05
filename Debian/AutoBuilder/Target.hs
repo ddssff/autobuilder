@@ -712,8 +712,10 @@ updateChangesFile elapsed changes = do
       cpuInfo <- parseProcCpuinfo
       memInfo <- parseProcMeminfo
       machine <- runProc (shell "uname -m") >>= return . listToMaybe . lines . L.unpack . L.concat . keepStdout
+      date <- getCurrentLocalRFC822Time
       let buildInfo = ["Autobuilder-Version: " ++ V.autoBuilderVersion] ++
                       ["Time: " ++ show elapsed] ++
+                      ["Date: " ++ show date] ++
                       maybeField "Memory: " (lookup "MemTotal" memInfo) ++
                       maybeField "CPU: " (lookup "model name" cpuInfo) ++
                       ["CPU count: " ++ (show . length . lookupAll "processor" $ cpuInfo)] ++
