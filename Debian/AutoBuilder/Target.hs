@@ -338,12 +338,12 @@ buildTarget cache dependOS buildOS repo !target = do
   -- Get the control file from the clean source and compute the
   -- build dependencies
   arch <- evalMonadOS buildArchOfOS dependOS
-  quieter 1 $ qPutStrLn "Looking for build dependency solutions..."
+  quieter 2 $ qPutStrLn "Looking for build dependency solutions..."
   soln <- evalMonadOS (buildDepSolution arch (map BinPkgName (P.preferred (P.params cache))) target) dependOS
   case soln of
         Failure excuses -> qError $ intercalate "\n  " ("Couldn't satisfy build dependencies" : excuses)
         Success packages ->
-            do quieter 2 $ qPutStrLn ("Build dependency solution: " ++ show (map prettyBinaryPackage packages))
+            do quieter 3 $ qPutStrLn ("Build dependency solution: " ++ show (map prettyBinaryPackage packages))
                -- Get the newest available version of a source package,
                -- along with its status, either Indep or All
                (releaseControlInfo, releaseStatus, _message) <- evalMonadOS (getReleaseControlInfo target) dependOS
