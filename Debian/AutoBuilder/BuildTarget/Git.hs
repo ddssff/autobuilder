@@ -15,14 +15,13 @@ import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import Debian.Repo
 import qualified Debian.Repo.Fingerprint as P
+import Debian.Repo.Prelude.Verbosity (timeTask)
 import Network.URI (URI(..), URIAuth(..), uriToString, parseURI)
 import System.Directory
 import System.Exit (ExitCode(..))
 import System.FilePath
-import System.Process (proc, shell, CmdSpec(..), CreateProcess(cwd, cmdspec), showCommandForUser)
-import Debian.Repo.Prelude.Verbosity (timeTask)
-import System.Process.Chunks (collectProcessTriple, collectProcessOutput')
-import System.Process.ListLike (readCreateProcess)
+import System.Process (proc, shell, CreateProcess(cwd, cmdspec))
+import System.Process.String (readCreateProcessWithExitCode, collectProcessTriple, collectProcessOutput', showCmdSpecForUser, displayCreateProcess)
 import System.Unix.Directory
 import Text.Regex
 
@@ -36,14 +35,13 @@ darcsRev :: SourceTree -> P.RetrieveMethod -> IO (Either SomeException String)
 darcsRev tree m =
     try (readProc (cmd {cwd = Just path}) mempty >>= collectProcessOutput' cmd >>=
          return . matchRegex (mkRegex "hash='([^']*)'") . B.unpack) >>=
-    return . either Left (maybe (fail $ "could not find hash field in output of '" ++ showCmd (cmdspec cmd) ++ "'")
+    return . either Left (maybe (fail $ "could not find hash field in output of '" ++ showCmdSpecForUser (cmdspec cmd) ++ "'")
                                 (\ rev -> Right (show m ++ "=" ++ head rev)))
     where
       cmd = proc "darcs" ["changes", "--xml-output"]
       path = topdir tree
 
-showCmd (RawCommand cmd args) = showCommandForUser cmd args
-showCmd (ShellCommand cmd) = cmd
+showCmd = showCmdSpecForUser
 
 prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> P.Packages -> String -> [P.GitSpec] -> m T.Download
 prepare cache package theUri gitspecs =
@@ -54,7 +52,11 @@ prepare cache package theUri gitspecs =
       exists <- doesDirectoryExist dir
       tree <- if exists then verifySource dir else createSource dir
       _output <- fixLink base
-      commit <- readCreateProcess ((proc "git" ["log", "-n", "1", "--pretty=%H"]) {cwd = Just dir}) "" >>= return . head . lines
+      let p = (proc "git" ["log", "-n", "1", "--pretty=%H"]) {cwd = Just dir}
+      (code, out, _) <- readCreateProcessWithExitCode p ""
+      commit <- case code of
+                  ExitSuccess -> return . head . lines $ out
+                  _ -> error $ displayCreateProcess p ++ " -> " ++ show code
       return $ T.Download { T.package = package
                           , T.getTop = topdir tree
                           , T.logText =  "git revision: " ++ show (P.spec package)
@@ -93,11 +95,13 @@ prepare cache package theUri gitspecs =
       createSource dir =
           let (parent, _) = splitFileName dir in
           do createDirectoryIfMissing True parent
-             _ <- readProc (proc "git" (["clone", renderForGit theUri'] ++ concat (map (\ x -> case x of (P.Branch s) -> ["--branch", s]; _ -> []) gitspecs) ++ [dir])) ""
-             _ <- case mapMaybe (\ x -> case x of (P.Commit s) -> Just s; _ -> Nothing) gitspecs of
-                    [] -> return []
-                    [commit] -> readProc ((proc "git" ["reset", "--hard", commit]) {cwd = Just dir}) ""
-                    commits -> error $ "Git target specifies multiple commits: " ++ show commits
+             let p = proc "git" (["clone", renderForGit theUri'] ++ concat (map (\ x -> case x of (P.Branch s) -> ["--branch", s]; _ -> []) gitspecs) ++ [dir])
+             (code, _, _) <- readProc p "" >>= return . collectProcessTriple
+             _ <- case (code, mapMaybe (\ x -> case x of (P.Commit s) -> Just s; _ -> Nothing) gitspecs) of
+                    (ExitFailure _, _) -> error $ "Git clone failed: " ++ displayCreateProcess p ++ " -> " ++ show code
+                    (_, []) -> return []
+                    (_, [commit]) -> readProc ((proc "git" ["reset", "--hard", commit]) {cwd = Just dir}) ""
+                    (_, commits) -> error $ "Git target specifies multiple commits: " ++ show commits
              findSourceTree dir
 
       -- CB  git reset --hard    will remove all edits back to the most recent commit

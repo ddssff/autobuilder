@@ -77,8 +77,7 @@ import System.IO (hPutStrLn, stderr)
 import System.Posix.Files (fileSize, getFileStatus)
 import System.Process (CreateProcess(cwd), proc, readProcessWithExitCode, shell, showCommandForUser)
 import Debian.Repo.Prelude.Verbosity (ePutStrLn, noisier, qPutStrLn, quieter, ePutStr)
-import System.Process.Chunks (collectProcessTriple, collectProcessOutput', collectOutputAndError')
-import System.Process.ListLike (readCreateProcess)
+import System.Process.ListLike (readCreateProcess, collectProcessTriple, collectProcessOutput', collectOutputAndError')
 import System.Unix.Chroot (useEnv)
 import Text.Printf (printf)
 import Text.Regex (matchRegex, mkRegex)
@@ -114,7 +113,7 @@ _formatVersions buildDeps =
     "\n"
     where prefix = "\n    "
 
-prepareTargets :: (MonadOS m, MonadRepos m) => P.CacheRec -> Relations -> [Buildable] -> m [Target]
+prepareTargets :: (MonadOS m, MonadRepos m, MonadMask m) => P.CacheRec -> Relations -> [Buildable] -> m [Target]
 prepareTargets cache globalBuildDeps targetSpecs =
     do results <- mapM (prepare (length targetSpecs)) (zip [1..] targetSpecs)
        let (failures, targets) = partitionEithers results
@@ -124,7 +123,7 @@ prepareTargets cache globalBuildDeps targetSpecs =
          True -> return targets
          False -> ePutStr msg >> error msg
     where
-      prepare :: (MonadOS m, MonadRepos m) => Int -> (Int, Buildable) -> m (Either SomeException Target)
+      prepare :: (MonadOS m, MonadRepos m, MonadMask m) => Int -> (Int, Buildable) -> m (Either SomeException Target)
       prepare count (index, tgt) =
           do qPutStrLn (printf "[%2d of %2d] %s in %s" index count (display . debianSourcePackageName $ tgt) (T.getTop $ download $ tgt))
              try (prepareTarget cache globalBuildDeps tgt) >>=

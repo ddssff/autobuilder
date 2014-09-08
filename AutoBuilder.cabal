@@ -79,7 +79,7 @@ Library
       , old-time
       , parsec
       , process
-      , process-listlike >= 0.9
+      , process-listlike >= 1
       , pureMD5
       , regex-compat
       , regex-posix

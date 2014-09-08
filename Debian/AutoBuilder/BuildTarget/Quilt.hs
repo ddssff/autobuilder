@@ -31,7 +31,7 @@ import System.Directory (doesFileExist, createDirectoryIfMissing, doesDirectoryE
 import System.Exit (ExitCode(ExitSuccess, ExitFailure))
 import System.FilePath ((</>))
 import System.Process (shell)
-import System.Process.Chunks (collectProcessTriple)
+import System.Process.ListLike (collectProcessTriple)
 import Debian.Repo.Prelude.Verbosity (qPutStrLn)
 import Text.Regex
 

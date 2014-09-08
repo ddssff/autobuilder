@@ -60,7 +60,7 @@ import System.Exit(ExitCode(..), exitWith)
 import System.FilePath ((</>))
 import System.IO as IO
 import System.Process (proc)
-import System.Process.Chunks (Chunk)
+import System.Process.ListLike (Chunk)
 import Debian.Repo.Prelude.Verbosity (timeTask, ePutStrLn, ePutStr, qPutStrLn, qPutStr, withModifiedVerbosity, defaultVerbosity)
 -- import System.Process.Read.Verbosity (defaultVerbosity, withModifiedVerbosity, withModifiedVerbosity)
 import System.Unix.Directory(removeRecursiveSafely)

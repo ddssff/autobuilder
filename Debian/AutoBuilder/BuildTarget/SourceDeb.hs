@@ -17,7 +17,7 @@ import qualified Debian.Version as V
 import System.Directory
 import System.Exit (ExitCode(..))
 import System.Process (shell)
-import System.Process.Chunks (collectProcessTriple)
+import System.Process.ListLike (collectProcessTriple)
 --import System.Unix.Progress.Outputs (exitCodeOnly)
 
 documentation = [ "sourcedeb:<target> - A target of this form unpacks the source deb"

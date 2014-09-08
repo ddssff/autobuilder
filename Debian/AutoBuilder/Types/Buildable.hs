@@ -13,7 +13,8 @@ module Debian.AutoBuilder.Types.Buildable
 import Control.Applicative ((<$>))
 import Control.Applicative.Error (Failing(Success, Failure), ErrorMsg)
 import Control.Exception as E (SomeException, try, catch, throw)
-import Control.Monad(when)
+import Control.Monad (when)
+import Control.Monad.Catch (MonadMask)
 import Control.Monad.Trans (MonadIO, liftIO)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
@@ -125,7 +126,7 @@ instance Eq Target where
 -- |Prepare a target for building in the given environment.  At this
 -- point, the target needs to be a DebianSourceTree or a
 -- DebianBuildTree.
-prepareTarget :: (MonadOS m, MonadIO m) => C.CacheRec -> Relations -> Buildable -> m Target
+prepareTarget :: (MonadOS m, MonadIO m, MonadMask m) => C.CacheRec -> Relations -> Buildable -> m Target
 prepareTarget cache globalBuildDeps source =
     prepareBuild cache (download source) >>= \ tree ->
     liftIO (getTargetDependencyInfo globalBuildDeps tree) >>= \ deps ->
@@ -137,7 +138,7 @@ prepareTarget cache globalBuildDeps source =
 -- revision control files.  This ensures that the tarball and\/or the
 -- .diff.gz file in the deb don't contain extra junk.  It also makes
 -- sure that debian\/rules is executable.
-prepareBuild :: (MonadOS m, MonadIO m) => C.CacheRec -> T.Download -> m DebianBuildTree
+prepareBuild :: (MonadOS m, MonadIO m, MonadMask m) => C.CacheRec -> T.Download -> m DebianBuildTree
 prepareBuild _cache target =
     liftIO (try (findSourceTree (T.getTop target))) >>=
     either (\ (_ :: SomeException) ->

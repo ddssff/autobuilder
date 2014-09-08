@@ -21,8 +21,7 @@ import System.Directory
 import System.Exit (ExitCode(..))
 import System.FilePath
 import System.Process (shell, proc, CreateProcess(cwd))
-import System.Process.Chunks (collectProcessTriple)
-import System.Process.ListLike (readCreateProcess)
+import System.Process.ListLike (readCreateProcess, collectProcessTriple)
 import Debian.Repo.Prelude.Verbosity (timeTask)
 import System.Unix.Directory
 

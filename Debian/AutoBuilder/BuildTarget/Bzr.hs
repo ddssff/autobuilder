@@ -20,7 +20,7 @@ import System.Unix.Directory
 import System.Process (shell)
 import Debian.Repo.Prelude.Verbosity (timeTask, qPutStrLn)
 import System.Directory
-import System.Process.Chunks (collectProcessTriple)
+import System.Process.ListLike (collectProcessTriple)
 
 documentation :: [String]
 documentation = [ "bzr:<revision> - A target of this form retrieves the a Bazaar archive with the"
