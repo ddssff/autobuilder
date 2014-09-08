@@ -32,7 +32,7 @@ import System.Directory (getDirectoryContents, createDirectoryIfMissing, getCurr
 import System.Environment (withArgs)
 import System.FilePath ((</>), takeFileName, takeDirectory)
 import System.Process (showCommandForUser)
-import System.Process.Read.Verbosity (verbosity, qPutStrLn)
+import Debian.Repo.Prelude.Verbosity (qPutStrLn)
 
 documentation :: [String]
 documentation = [ "hackage:<name> or hackage:<name>=<version> - a target of this form"
@@ -83,7 +83,7 @@ autobuilderDebianize cache pflags currentDirectory =
 -- for a good reason?)
 collectPackageFlags :: P.CacheRec -> [P.PackageFlag] -> IO [String]
 collectPackageFlags _cache pflags =
-    do v <- verbosity
+    do v <- return 0 -- verbosity
        return $ ["--verbose=" ++ show v] ++
                 concatMap asCabalFlags pflags
 

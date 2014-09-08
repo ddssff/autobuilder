@@ -19,7 +19,7 @@ import Control.Exception (AsyncException(UserInterrupt), evaluate, fromException
 import Control.Monad.Catch (MonadCatch, catch, try, MonadMask)
 import Control.Monad.RWS (liftIO, MonadIO, when)
 import qualified Data.ByteString.Char8 as B (concat)
-import qualified Data.ByteString.Lazy.Char8 as L (ByteString, concat, empty, toChunks, unpack)
+import qualified Data.ByteString.Lazy.Char8 as L (ByteString, empty, toChunks, unpack)
 import qualified Data.ByteString.UTF8 as UTF8 (toString)
 import Data.Either (partitionEithers)
 import Data.Function (on)
@@ -57,7 +57,7 @@ import Debian.Repo.LocalRepository (LocalRepository, uploadLocal)
 import Debian.Repo.Package (binaryPackageSourceVersion, sourcePackageBinaryNames)
 import Debian.Repo.PackageID (PackageID(packageVersion))
 import Debian.Repo.PackageIndex (BinaryPackage(packageInfo), prettyBinaryPackage, SourcePackage(sourceParagraph, sourcePackageID), sortBinaryPackages, sortSourcePackages)
-import Debian.Repo.Prelude (symbol, runProc, readProc)
+import Debian.Repo.Prelude (symbol, readProc)
 import Debian.Repo.SourceTree (addLogEntry, buildDebs, copySourceTree, DebianBuildTree, findChanges, findOneDebianBuildTree, SourcePackageStatus(..), BuildDecision(..), HasChangeLog(entry), HasDebDir(debdir), HasTopDir(topdir))
 import Debian.Repo.State.AptImage (aptSourcePackages)
 import Debian.Repo.State.OSImage (osSourcePackages, osBinaryPackages, updateOS, buildArchOfOS)
@@ -76,8 +76,8 @@ import System.FilePath ((</>))
 import System.IO (hPutStrLn, stderr)
 import System.Posix.Files (fileSize, getFileStatus)
 import System.Process (CreateProcess(cwd), proc, readProcessWithExitCode, shell, showCommandForUser)
-import System.Process.Progress (collectOutputs, ePutStr, ePutStrLn, keepResult, keepResult, keepStdout, mergeToStdout)
-import System.Process.Read.Verbosity (noisier, qPutStrLn, quieter)
+import Debian.Repo.Prelude.Verbosity (ePutStrLn, noisier, qPutStrLn, quieter, ePutStr)
+import System.Process.Chunks (collectProcessTriple, collectProcessOutput', collectOutputAndError')
 import System.Process.ListLike (readCreateProcess)
 import System.Unix.Chroot (useEnv)
 import Text.Printf (printf)
@@ -409,9 +409,10 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
                  doDpkgSource' = setEnv "EDITOR" "/bin/true" >> readCreateProcess ((proc "dpkg-source" ["--commit", ".", "autobuilder.diff"]) {cwd = Just path'}) L.empty
              _ <- liftIO $ useEnv' root (\ _ -> return ())
                              (-- Get the version number of dpkg-dev in the build environment
-                              runProc (shell ("dpkg -s dpkg-dev | sed -n 's/^Version: //p'")) >>= return . head . words . L.unpack . L.concat . keepStdout >>= \ installed ->
+                              let p = shell ("dpkg -s dpkg-dev | sed -n 's/^Version: //p'") in
+                              readProc p "" >>= collectProcessOutput' p >>= return . head . words . L.unpack >>= \ installed ->
                               -- If it is >= 1.16.1 we may need to run dpkg-source --commit.
-                              readProc (shell ("dpkg --compare-versions '" ++ installed ++ "' ge 1.16.1")) >>= return . (== [ExitSuccess]) . keepResult >>= \ newer ->
+                              readProc (shell ("dpkg --compare-versions '" ++ installed ++ "' ge 1.16.1")) "" >>= return . collectProcessTriple >>= \ (result, _, _) -> return (result == ExitSuccess) >>= \ newer ->
                               when newer (doesDirectoryExist (path' </> "debian/patches") >>= doDpkgSource)
                               {- when newer (do createDirectoryIfMissing True (path' </> "debian/patches")
                                              -- Create the patch if there are any changes
@@ -708,10 +709,10 @@ updateChangesFile elapsed changes = do
 {-    autobuilderVersion <- processOutput "dpkg -s autobuilder | sed -n 's/^Version: //p'" >>=
                             return . either (const Nothing) Just >>=
                             return . maybe Nothing (listToMaybe . lines) -}
-      hostname <- runProc (shell "hostname") >>= return . listToMaybe . lines . L.unpack . L.concat . keepStdout
+      hostname <- let p = shell "hostname" in readProc p "" >>= collectProcessOutput' p >>= return . listToMaybe . lines . L.unpack
       cpuInfo <- parseProcCpuinfo
       memInfo <- parseProcMeminfo
-      machine <- runProc (shell "uname -m") >>= return . listToMaybe . lines . L.unpack . L.concat . keepStdout
+      machine <- let p = shell "uname -m" in readProc p "" >>= collectProcessOutput' p >>= return . listToMaybe . lines . L.unpack
       date <- getCurrentLocalRFC822Time
       let buildInfo = ["Autobuilder-Version: " ++ V.autoBuilderVersion] ++
                       ["Time: " ++ show elapsed] ++
@@ -749,11 +750,8 @@ downloadDependencies source extra sourceFingerprint =
        -- qPutStrLn "Downloading build dependencies"
        qPutStrLn $ "Dependency packages:\n " ++ intercalate "\n  " (showDependencies' sourceFingerprint)
        qPutStrLn ("Downloading build dependencies into " ++ root)
-       (code, out, _, _) <- liftIO (useEnv' root forceList (readProc (shell command)) >>= return . collectOutputs . mergeToStdout)
-       let out' = decode out
-       case code of
-         [ExitSuccess] -> return out'
-         code -> error ("FAILURE: " ++ command ++ " -> " ++ show code ++ "\nOutput:\n" ++ out')
+       out <- let p = shell command in liftIO (useEnv' root forceList (readProc p "") >>= collectOutputAndError' p)
+       return $ decode out
 
 pathBelow :: FilePath -> FilePath -> FilePath
 pathBelow root path =
@@ -769,14 +767,8 @@ installDependencies source extra sourceFingerprint =
            aptGetCommand = "apt-get --yes --force-yes install -o APT::Install-Recommends=True " ++ intercalate " " (showDependencies' sourceFingerprint ++ extra)
            command = ("export DEBIAN_FRONTEND=noninteractive; " ++ (if True then aptGetCommand else pbuilderCommand))
        qPutStrLn $ "Installing build dependencies into " ++ root
-       (code, out, _, _) <- withProc (liftIO $ useEnv' root forceList $ noisier 2 $ readProc (shell command)) >>=
-                            return . collectOutputs . mergeToStdout
-       case code of
-         [ExitSuccess] -> return out
-         code ->
-             let message = "FAILURE: " ++ command ++ " -> " ++ show code ++ " (in " ++ show root ++ ")" in
-             ePutStrLn (message ++ "\n stdout: " ++ show (decode out)) >>
-                 error message
+       let p = shell command
+       withProc (liftIO (useEnv' root forceList (noisier 2 (readProc p "")) >>= collectOutputAndError' p))
 
 -- | This should probably be what the real useEnv does.
 useEnv' :: FilePath -> (a -> IO a) -> IO a -> IO a

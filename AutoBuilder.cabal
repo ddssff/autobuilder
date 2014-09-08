@@ -80,8 +80,6 @@ Library
       , parsec
       , process
       , process-listlike >= 0.9
-      , process-progress >= 0.14
-      , process-verbosity
       , pureMD5
       , regex-compat
       , regex-posix

@@ -7,6 +7,7 @@ import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as B
 import Data.Digest.Pure.MD5 (md5)
 import Data.Maybe (mapMaybe)
+import Data.Monoid (mempty)
 import Data.Set (singleton)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Download as T
@@ -19,7 +20,8 @@ import System.Directory
 import System.Exit (ExitCode(..))
 import System.FilePath
 import System.Process (proc, shell, CmdSpec(..), CreateProcess(cwd, cmdspec), showCommandForUser)
-import System.Process.Progress (keepStdout, keepResult, timeTask)
+import Debian.Repo.Prelude.Verbosity (timeTask)
+import System.Process.Chunks (collectProcessTriple, collectProcessOutput')
 import System.Process.ListLike (readCreateProcess)
 import System.Unix.Directory
 import Text.Regex
@@ -32,8 +34,8 @@ documentation = [ "darcs:<string> - a target of this form obtains the source cod
 
 darcsRev :: SourceTree -> P.RetrieveMethod -> IO (Either SomeException String)
 darcsRev tree m =
-    try (readProc (cmd {cwd = Just path}) >>=
-         return . matchRegex (mkRegex "hash='([^']*)'") . B.unpack . B.concat . keepStdout) >>= 
+    try (readProc (cmd {cwd = Just path}) mempty >>= collectProcessOutput' cmd >>=
+         return . matchRegex (mkRegex "hash='([^']*)'") . B.unpack) >>=
     return . either Left (maybe (fail $ "could not find hash field in output of '" ++ showCmd (cmdspec cmd) ++ "'")
                                 (\ rev -> Right (show m ++ "=" ++ head rev)))
     where
@@ -60,7 +62,7 @@ prepare cache package theUri gitspecs =
                           , T.origTarball = Nothing
                           , T.cleanTarget =
                               \ top -> case P.keepRCS package  of
-                                         False -> let cmd = "find " ++ top ++ " -name '.git' -maxdepth 1 -prune | xargs rm -rf" in timeTask (runProc (shell cmd))
+                                         False -> let cmd = "find " ++ top ++ " -name '.git' -maxdepth 1 -prune | xargs rm -rf" in timeTask (readProc (shell cmd) "")
                                          True -> return ([], 0)
                           , T.buildWrapper = id
                           , T.attrs = singleton (P.GitCommit commit)
@@ -69,21 +71,21 @@ prepare cache package theUri gitspecs =
       verifySource :: FilePath -> IO SourceTree
       verifySource dir =
           -- Note that this logic is the opposite of 'tla changes'
-          do result <- readProc ((proc "git" ["status", "--porcelain"]) {cwd = Just dir}) >>= return . keepResult
+          do (result, _, _) <- readProc ((proc "git" ["status", "--porcelain"]) {cwd = Just dir}) mempty >>= return . collectProcessTriple
 
       -- CB  No output lines means no changes
       -- CB  git reset --hard    will remove all edits back to the most recent commit
 
       -- The status code does not reflect whether changes were made
              case result of
-               (ExitSuccess : _) -> removeSource dir >> createSource dir		-- Yes changes
+               ExitSuccess -> removeSource dir >> createSource dir		-- Yes changes
                _ -> updateSource dir				-- No Changes!
       removeSource :: FilePath -> IO ()
       removeSource dir = removeRecursiveSafely dir
 
       updateSource :: FilePath -> IO SourceTree
       updateSource dir =
-          runProc ((proc "git" ["pull", "--all", "--commit", renderForGit theUri']) {cwd = Just dir}) >>
+          readProc ((proc "git" ["pull", "--all", "--commit", renderForGit theUri']) {cwd = Just dir}) "" >>
           -- runTaskAndTest (updateStyle (commandTask ("cd " ++ dir ++ " && darcs pull --all " ++ renderForDarcs theUri))) >>
           findSourceTree dir
 
@@ -91,18 +93,18 @@ prepare cache package theUri gitspecs =
       createSource dir =
           let (parent, _) = splitFileName dir in
           do createDirectoryIfMissing True parent
-             _ <- runProc (proc "git" (["clone", renderForGit theUri'] ++ concat (map (\ x -> case x of (P.Branch s) -> ["--branch", s]; _ -> []) gitspecs) ++ [dir]))
+             _ <- readProc (proc "git" (["clone", renderForGit theUri'] ++ concat (map (\ x -> case x of (P.Branch s) -> ["--branch", s]; _ -> []) gitspecs) ++ [dir])) ""
              _ <- case mapMaybe (\ x -> case x of (P.Commit s) -> Just s; _ -> Nothing) gitspecs of
                     [] -> return []
-                    [commit] -> runProc ((proc "git" ["reset", "--hard", commit]) {cwd = Just dir})
+                    [commit] -> readProc ((proc "git" ["reset", "--hard", commit]) {cwd = Just dir}) ""
                     commits -> error $ "Git target specifies multiple commits: " ++ show commits
              findSourceTree dir
 
       -- CB  git reset --hard    will remove all edits back to the most recent commit
       fixLink base =
           let link = base </> name in
-          runProc (proc "rm" ["-rf", link]) >>
-          runProc (proc "ln" ["-s", sum, link])
+          readProc (proc "rm" ["-rf", link]) "" >>
+          readProc (proc "ln" ["-s", sum, link]) ""
       name = snd . splitFileName $ (uriPath theUri')
       sum = show (md5 (B.pack uriAndBranch))
       -- Maybe we should include the "git:" in the string we checksum?  -- DSF

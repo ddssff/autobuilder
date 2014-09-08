@@ -28,7 +28,7 @@ import Magic
 import System.FilePath (splitFileName, (</>))
 import System.Directory
 import System.Process (shell)
-import System.Process.Progress (timeTask)
+import Debian.Repo.Prelude.Verbosity (timeTask)
 import System.Unix.Directory
 
 documentation :: [String]
@@ -77,7 +77,7 @@ prepare c package u s =
              _output <-
                  case exists of
                    True -> return []
-                   False -> R.runProc (shell ("curl -s '" ++ uriToString' (mustParseURI u) ++ "' > '" ++ tar ++ "'"))
+                   False -> R.readProc (shell ("curl -s '" ++ uriToString' (mustParseURI u) ++ "' > '" ++ tar ++ "'")) ""
              -- We should do something with the output
              return ()
       -- Make sure what we just downloaded has the correct checksum
@@ -103,13 +103,13 @@ prepare c package u s =
                    fileInfo <- liftIO $ magicFile magic tar
                    case () of
                      _ | isPrefixOf "Zip archive data" fileInfo ->
-                           liftIO $ timeTask $ R.runProc (shell ("unzip " ++ tar ++ " -d " ++ src))
+                           liftIO $ timeTask $ R.readProc (shell ("unzip " ++ tar ++ " -d " ++ src)) ""
                        | isPrefixOf "gzip" fileInfo ->
-                           liftIO $ timeTask $ R.runProc (shell ("tar xfz " ++ tar ++ " -C " ++ src))
+                           liftIO $ timeTask $ R.readProc (shell ("tar xfz " ++ tar ++ " -C " ++ src)) ""
                        | isPrefixOf "bzip2" fileInfo ->
-                           liftIO $ timeTask $ R.runProc (shell ("tar xfj " ++ tar ++ " -C " ++ src))
+                           liftIO $ timeTask $ R.readProc (shell ("tar xfj " ++ tar ++ " -C " ++ src)) ""
                        | True ->
-                           liftIO $ timeTask $ R.runProc (shell ("cp " ++ tar ++ " " ++ src ++ "/"))
+                           liftIO $ timeTask $ R.readProc (shell ("cp " ++ tar ++ " " ++ src ++ "/")) ""
             read (_output, _elapsed) = sourceDir s >>= \ src -> liftIO (getDir src)
             getDir dir = getDirectoryContents dir >>= return . filter (not . flip elem [".", ".."])
             search files = checkContents (filter (not . flip elem [".", ".."]) files)

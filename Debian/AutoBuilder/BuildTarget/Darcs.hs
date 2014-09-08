@@ -8,6 +8,7 @@ import Control.Monad (when)
 import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as B
 import Data.Digest.Pure.MD5 (md5)
+import Data.Monoid (mempty)
 import Data.Set (singleton)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Download as T
@@ -20,8 +21,9 @@ import System.Directory
 import System.Exit (ExitCode(..))
 import System.FilePath
 import System.Process (shell, proc, CreateProcess(cwd))
+import System.Process.Chunks (collectProcessTriple)
 import System.Process.ListLike (readCreateProcess)
-import System.Process.Progress (keepResult, timeTask)
+import Debian.Repo.Prelude.Verbosity (timeTask)
 import System.Unix.Directory
 
 documentation :: [String]
@@ -59,7 +61,7 @@ prepare cache package theUri =
                           , T.cleanTarget =
                               \ top -> case P.keepRCS package of
                                          False -> let cmd = "find " ++ top ++ " -name '_darcs' -maxdepth 1 -prune | xargs rm -rf" in
-                                                  timeTask (runProc (shell cmd))
+                                                  timeTask (readProc (shell cmd) "")
                                          True -> return ([], 0)
                           , T.buildWrapper = id
                           , T.attrs = singleton (P.DarcsChangesId attr)
@@ -68,16 +70,16 @@ prepare cache package theUri =
       verifySource :: FilePath -> IO SourceTree
       verifySource dir =
           -- Note that this logic is the opposite of 'tla changes'
-          do result <- readProc (shell ("cd " ++ dir ++ " && darcs whatsnew")) >>= return . keepResult
+          do (result, _, _) <- readProc (shell ("cd " ++ dir ++ " && darcs whatsnew")) mempty >>= return . collectProcessTriple
              case result of
-               (ExitSuccess : _) -> removeSource dir >> createSource dir		-- Yes changes
+               ExitSuccess -> removeSource dir >> createSource dir		-- Yes changes
                _ -> updateSource dir				-- No Changes!
       removeSource :: FilePath -> IO ()
       removeSource dir = removeRecursiveSafely dir
 
       updateSource :: FilePath -> IO SourceTree
       updateSource dir =
-          runProc (shell ("cd " ++ dir ++ " && darcs pull --all " ++ renderForDarcs theUri')) >>
+          readProc (shell ("cd " ++ dir ++ " && darcs pull --all " ++ renderForDarcs theUri')) "" >>
           -- runTaskAndTest (updateStyle (commandTask ("cd " ++ dir ++ " && darcs pull --all " ++ renderForDarcs theUri))) >>
           findSourceTree dir
 
@@ -85,7 +87,7 @@ prepare cache package theUri =
       createSource dir =
           let (parent, _) = splitFileName dir in
           do createDirectoryIfMissing True parent
-             _output <- runProc (shell cmd)
+             _output <- readProc (shell cmd) ""
              findSourceTree dir
           where
             cmd = unwords $ ["darcs", "get", renderForDarcs theUri'] ++ maybe [] (\ tag -> [" --tag", "'" ++ tag ++ "'"]) theTag ++ [dir]
@@ -93,7 +95,7 @@ prepare cache package theUri =
       fixLink base =
           let link = base ++ "/" ++ name
               cmd = "rm -rf " ++ link ++ " && ln -s " ++ sum ++ " " ++ link in
-          runProc (shell cmd)
+          readProc (shell cmd) ""
       name = snd . splitFileName $ (uriPath theUri')
       sum = show (md5 (B.pack uriAndTag))
       uriAndTag = uriToString id theUri' "" ++ maybe "" (\ tag -> "=" ++ tag) theTag

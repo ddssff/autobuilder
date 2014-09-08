@@ -6,6 +6,7 @@ module Debian.AutoBuilder.BuildTarget.SourceDeb where
 import Control.Monad.Trans
 --import qualified Data.ByteString.Lazy.Char8 as L
 import Data.List
+import Data.Monoid (mempty)
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
@@ -16,7 +17,7 @@ import qualified Debian.Version as V
 import System.Directory
 import System.Exit (ExitCode(..))
 import System.Process (shell)
-import System.Process.Progress (keepResult)
+import System.Process.Chunks (collectProcessTriple)
 --import System.Unix.Progress.Outputs (exitCodeOnly)
 
 documentation = [ "sourcedeb:<target> - A target of this form unpacks the source deb"
@@ -34,9 +35,9 @@ prepare _cache package base =
        case sortBy compareVersions (zip dscFiles dscInfo) of
          [] -> return $  error ("Invalid sourcedeb base: no .dsc file in " ++ show (T.method base))
          (dscName, Right (S.Control (dscInfo : _))) : _ ->
-             do out <- liftIO (readProc (shell (unpack top dscName)))
-                case keepResult out of
-                  [ExitSuccess] -> liftIO $ makeTarget dscInfo dscName
+             do out <- liftIO (readProc (shell (unpack top dscName)) mempty)
+                case collectProcessTriple out of
+                  (ExitSuccess, _, _) -> liftIO $ makeTarget dscInfo dscName
                   _ -> error ("*** FAILURE: " ++ unpack top dscName)
          (dscName, _) : _ -> error ("Invalid .dsc file: " ++ dscName)
     where
