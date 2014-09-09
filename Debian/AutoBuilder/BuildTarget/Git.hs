@@ -73,37 +73,40 @@ prepare cache package theUri gitspecs =
       verifySource :: FilePath -> IO SourceTree
       verifySource dir =
           -- Note that this logic is the opposite of 'tla changes'
-          do (result, _, _) <- readProc ((proc "git" ["status", "--porcelain"]) {cwd = Just dir}) mempty >>= return . collectProcessTriple
+          do (result, out, _) <- readProc ((proc "git" ["status", "--porcelain"]) {cwd = Just dir}) mempty >>= return . collectProcessTriple
 
       -- CB  No output lines means no changes
       -- CB  git reset --hard    will remove all edits back to the most recent commit
 
       -- The status code does not reflect whether changes were made
-             case result of
-               ExitSuccess -> removeSource dir >> createSource dir		-- Yes changes
-               _ -> updateSource dir				-- No Changes!
+             case (result, B.null out) of
+               (ExitSuccess, False) -> removeSource dir >> createSource dir		-- Yes changes
+               (ExitSuccess, True) -> updateSource dir					-- No Changes!
+               _ -> error $ "git failure"
       removeSource :: FilePath -> IO ()
       removeSource dir = removeRecursiveSafely dir
 
       updateSource :: FilePath -> IO SourceTree
       updateSource dir =
-          readProc ((proc "git" ["pull", "--all", "--commit", renderForGit theUri']) {cwd = Just dir}) "" >>
+          readProc ((proc "git" ["pull", "--all"]) {cwd = Just dir}) "" >>
           -- runTaskAndTest (updateStyle (commandTask ("cd " ++ dir ++ " && darcs pull --all " ++ renderForDarcs theUri))) >>
           findSourceTree dir
 
       createSource :: FilePath -> IO SourceTree
       createSource dir =
-          do exists <- doesDirectoryExist dir
-             let (parent, _) = splitFileName dir
+          do let (parent, _) = splitFileName dir
              createDirectoryIfMissing True parent
-             let p = case exists of
-                       True -> (proc "git" ["pull"]) {cwd = Just dir}
-                       False -> proc "git" (["clone", renderForGit theUri'] ++ concat (map (\ x -> case x of (P.Branch s) -> ["--branch", s]; _ -> []) gitspecs) ++ [dir])
+             removeRecursiveSafely dir
+             let p = proc "git" (["clone", renderForGit theUri'] ++ concat (map (\ x -> case x of (P.Branch s) -> ["--branch", s]; _ -> []) gitspecs) ++ [dir])
              (code, _, _) <- readProc p "" >>= return . collectProcessTriple
              case (code, mapMaybe (\ x -> case x of (P.Commit s) -> Just s; _ -> Nothing) gitspecs) of
                     (ExitFailure _, _) -> error $ "Git failed: " ++ displayCreateProcess p ++ " -> " ++ show code
-                    (_, []) -> return []
-                    (_, [commit]) -> readProc ((proc "git" ["reset", "--hard", commit]) {cwd = Just dir}) ""
+                    (_, []) -> return ()
+                    (_, [commit]) -> do
+                      (code2, _, _) <- readProc ((proc "git" ["reset", "--hard", commit]) {cwd = Just dir}) "" >>= return . collectProcessTriple
+                      case code2 of
+                        ExitFailure _ -> error "git reset failed"
+                        ExitSuccess -> return ()
                     (_, commits) -> error $ "Git target specifies multiple commits: " ++ show commits
              findSourceTree dir
 
