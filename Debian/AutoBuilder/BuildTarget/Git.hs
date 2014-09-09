@@ -93,12 +93,15 @@ prepare cache package theUri gitspecs =
 
       createSource :: FilePath -> IO SourceTree
       createSource dir =
-          let (parent, _) = splitFileName dir in
-          do createDirectoryIfMissing True parent
-             let p = proc "git" (["clone", renderForGit theUri'] ++ concat (map (\ x -> case x of (P.Branch s) -> ["--branch", s]; _ -> []) gitspecs) ++ [dir])
+          do exists <- doesDirectoryExist dir
+             let (parent, _) = splitFileName dir
+             createDirectoryIfMissing True parent
+             let p = case exists of
+                       True -> (proc "git" ["pull"]) {cwd = Just dir}
+                       False -> proc "git" (["clone", renderForGit theUri'] ++ concat (map (\ x -> case x of (P.Branch s) -> ["--branch", s]; _ -> []) gitspecs) ++ [dir])
              (code, _, _) <- readProc p "" >>= return . collectProcessTriple
-             _ <- case (code, mapMaybe (\ x -> case x of (P.Commit s) -> Just s; _ -> Nothing) gitspecs) of
-                    (ExitFailure _, _) -> error $ "Git clone failed: " ++ displayCreateProcess p ++ " -> " ++ show code
+             case (code, mapMaybe (\ x -> case x of (P.Commit s) -> Just s; _ -> Nothing) gitspecs) of
+                    (ExitFailure _, _) -> error $ "Git failed: " ++ displayCreateProcess p ++ " -> " ++ show code
                     (_, []) -> return []
                     (_, [commit]) -> readProc ((proc "git" ["reset", "--hard", commit]) {cwd = Just dir}) ""
                     (_, commits) -> error $ "Git target specifies multiple commits: " ++ show commits
@@ -127,4 +130,4 @@ renderForGit uri =
       (_, _) -> show uri
 
 mustParseURI :: String -> URI
-mustParseURI s = maybe (error ("Darcs - failed to parse URI: " ++ show s)) id (parseURI s)
+mustParseURI s = maybe (error ("Git - failed to parse URI: " ++ show s)) id (parseURI s)
