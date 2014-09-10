@@ -48,7 +48,7 @@ import Debian.Repo.State.Slice (repoSources, updateCacheSources)
 import Debian.Repo.Top (MonadTop(askTop))
 import Debian.Repo.EnvPath (EnvPath(..))
 import Debian.Repo.LocalRepository (LocalRepository, repoRoot)
-import Debian.Repo.Prelude (readProc)
+import Debian.Repo.Prelude (readProcFailing)
 import Debian.URI(URI(uriPath, uriAuthority), URIAuth(uriUserInfo, uriRegName, uriPort), parseURI)
 import Debian.Version(DebianVersion, parseDebianVersion, prettyDebianVersion)
 import Extra.Lock(withLock)
@@ -259,12 +259,12 @@ runParameterSet init cache =
                                          "--sign", "--root", uriPath uri] ++
                                         (concat . map (\ rel -> ["--create", rel]) . P.createRelease $ params) in
                              qPutStrLn "Running newdist on remote repository" >>
-                             try (timeTask (readProc (proc cmd args) "")) >>= return . either (\ (e :: SomeException) -> Failure [show e]) Success
+                             try (timeTask (readProcFailing (proc cmd args) "")) >>= return . either (\ (e :: SomeException) -> Failure [show e]) Success
                          Nothing ->
                              let cmd = P.newDistProgram params
                                  args = ["--sign", "--root", uriPath uri] in
                              qPutStr "Running newdist on a local repository" >>
-                             try (timeTask (readProc (proc cmd args) "")) >>= return . either (\ (e :: SomeException) -> Failure [show e]) Success
+                             try (timeTask (readProcFailing (proc cmd args) "")) >>= return . either (\ (e :: SomeException) -> Failure [show e]) Success
                 _ -> error "Missing Upload-URI parameter"
           | True = return (Success ([], (fromInteger 0)))
 

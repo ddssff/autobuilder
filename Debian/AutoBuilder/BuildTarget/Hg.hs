@@ -37,25 +37,25 @@ prepare cache package archive =
                           , T.cleanTarget =
                               \ path -> case P.keepRCS package of
                                           False -> let cmd = "rm -rf " ++ path ++ "/.hg" in
-                                                   timeTask (readProc (shell cmd) "")
+                                                   timeTask (readProcFailing (shell cmd) "")
                                           _ -> return ([], 0)
                           , T.buildWrapper = id
                           , T.attrs = empty
                           }
     where
       verifySource dir =
-          try (readProc (shell ("cd " ++ dir ++ " && hg status | grep -q .")) "") >>=
+          try (readProcFailing (shell ("cd " ++ dir ++ " && hg status | grep -q .")) "") >>=
           either (\ (_ :: SomeException) -> updateSource dir)	-- failure means there were no changes
                  (\ _ -> removeSource dir >> createSource dir)	-- success means there was a change
 
       removeSource dir = liftIO $ removeRecursiveSafely dir
 
       updateSource dir =
-          readProc (shell ("cd " ++ dir ++ " && hg pull -u")) "" >>
+          readProcFailing (shell ("cd " ++ dir ++ " && hg pull -u")) "" >>
           findSourceTree dir :: IO SourceTree
 
       createSource dir =
           let (parent, _) = splitFileName dir in
           liftIO (createDirectoryIfMissing True parent) >>
-          readProc (shell ("hg clone " ++ archive ++ " " ++ dir)) "" >>
+          readProcFailing (shell ("hg clone " ++ archive ++ " " ++ dir)) "" >>
           findSourceTree dir :: IO SourceTree

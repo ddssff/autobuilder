@@ -15,7 +15,7 @@ import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import Debian.Repo (SourceTree, topdir, MonadRepos, MonadTop, sub, findSourceTree)
 import qualified Debian.Repo.Fingerprint as P
-import Debian.Repo.Prelude.Verbosity (readProc, readProcFailing, timeTask)
+import Debian.Repo.Prelude.Verbosity (readProcFailing, timeTask)
 import Network.URI (URI(..), URIAuth(..), uriToString, parseURI)
 import System.Directory
 import System.Exit (ExitCode(..))
@@ -33,7 +33,7 @@ documentation = [ "darcs:<string> - a target of this form obtains the source cod
 
 darcsRev :: SourceTree -> P.RetrieveMethod -> IO (Either SomeException String)
 darcsRev tree m =
-    try (readProc (cmd {cwd = Just path}) mempty >>= collectProcessOutput' cmd >>=
+    try (readProcFailing (cmd {cwd = Just path}) mempty >>= collectProcessOutput' cmd >>=
          return . matchRegex (mkRegex "hash='([^']*)'") . B.unpack) >>=
     return . either Left (maybe (fail $ "could not find hash field in output of '" ++ showCmdSpecForUser (cmdspec cmd) ++ "'")
                                 (\ rev -> Right (show m ++ "=" ++ head rev)))
@@ -64,7 +64,7 @@ prepare cache package theUri gitspecs =
                           , T.origTarball = Nothing
                           , T.cleanTarget =
                               \ top -> case P.keepRCS package  of
-                                         False -> let cmd = "find " ++ top ++ " -name '.git' -maxdepth 1 -prune | xargs rm -rf" in timeTask (readProc (shell cmd) "")
+                                         False -> let cmd = "find " ++ top ++ " -name '.git' -maxdepth 1 -prune | xargs rm -rf" in timeTask (readProcFailing (shell cmd) "")
                                          True -> return ([], 0)
                           , T.buildWrapper = id
                           , T.attrs = singleton (P.GitCommit commit)
@@ -73,7 +73,7 @@ prepare cache package theUri gitspecs =
       verifySource :: FilePath -> IO SourceTree
       verifySource dir =
           -- Note that this logic is the opposite of 'tla changes'
-          do (result, out, _) <- readProc ((proc "git" ["status", "--porcelain"]) {cwd = Just dir}) mempty >>= return . collectProcessTriple
+          do (result, out, _) <- readProcFailing ((proc "git" ["status", "--porcelain"]) {cwd = Just dir}) mempty >>= return . collectProcessTriple
 
       -- CB  No output lines means no changes
       -- CB  git reset --hard    will remove all edits back to the most recent commit
@@ -99,12 +99,12 @@ prepare cache package theUri gitspecs =
              createDirectoryIfMissing True parent
              removeRecursiveSafely dir
              let p = proc "git" (["clone", renderForGit theUri'] ++ concat (map (\ x -> case x of (P.Branch s) -> ["--branch", s]; _ -> []) gitspecs) ++ [dir])
-             (code, _, _) <- readProc p "" >>= return . collectProcessTriple
+             (code, _, _) <- readProcFailing p "" >>= return . collectProcessTriple
              case (code, mapMaybe (\ x -> case x of (P.Commit s) -> Just s; _ -> Nothing) gitspecs) of
                     (ExitFailure _, _) -> error $ "Git failed: " ++ displayCreateProcess p ++ " -> " ++ show code
                     (_, []) -> return ()
                     (_, [commit]) -> do
-                      (code2, _, _) <- readProc ((proc "git" ["reset", "--hard", commit]) {cwd = Just dir}) "" >>= return . collectProcessTriple
+                      (code2, _, _) <- readProcFailing ((proc "git" ["reset", "--hard", commit]) {cwd = Just dir}) "" >>= return . collectProcessTriple
                       case code2 of
                         ExitFailure _ -> error "git reset failed"
                         ExitSuccess -> return ()
@@ -114,8 +114,8 @@ prepare cache package theUri gitspecs =
       -- CB  git reset --hard    will remove all edits back to the most recent commit
       fixLink base =
           let link = base </> name in
-          readProc (proc "rm" ["-rf", link]) "" >>
-          readProc (proc "ln" ["-s", sum, link]) ""
+          readProcFailing (proc "rm" ["-rf", link]) "" >>
+          readProcFailing (proc "ln" ["-s", sum, link]) ""
       name = snd . splitFileName $ (uriPath theUri')
       sum = show (md5 (B.pack uriAndBranch))
       -- Maybe we should include the "git:" in the string we checksum?  -- DSF

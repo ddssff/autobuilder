@@ -22,7 +22,7 @@ import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Changes (ChangeLogEntry(..), parseEntries, parseEntry)
 import Debian.Pretty (pretty)
-import Debian.Repo (HasDebDir(debdir), HasTopDir(topdir), SourceTree, DebianBuildTree, findSourceTree, findOneDebianBuildTree, copySourceTree, sub, MonadRepos, MonadTop, readProc)
+import Debian.Repo (HasDebDir(debdir), HasTopDir(topdir), SourceTree, DebianBuildTree, findSourceTree, findOneDebianBuildTree, copySourceTree, sub, MonadRepos, MonadTop, readProcFailing)
 import Debian.Repo.Fingerprint (RetrieveMethod)
 import Debian.Version
 import Extra.Files (replaceFile)
@@ -76,7 +76,7 @@ makeQuiltTree m base patch =
        let cmd1 = ("set -x && cd '" ++ quiltDir ++ "' && rm -f '" ++ quiltPatchesDir ++
                    "' && ln -s '" ++ patchDir ++ "' '" ++ quiltPatchesDir ++ "'")
        -- runTaskAndTest (linkStyle (commandTask cmd1))
-       _output <- readProc (shell cmd1) ""
+       _output <- readProcFailing (shell cmd1) ""
        -- Now we need to have created a DebianSourceTree so
        -- that there is a changelog for us to reconstruct.
        return (copyTree, quiltDir)
@@ -95,21 +95,21 @@ prepare package base patch = do
                 unhide x = doesDirectoryExist pch >>= (flip when) (rmrf pc >> renameDirectory pch pc) >> return x
                 pc = (quiltDir ++ "/.pc")
                 pch = (quiltDir ++ "/.pc.hide")
-                rmrf d = readProc (shell ("rm -rf '"  ++ d ++ "'")) ""
+                rmrf d = readProcFailing (shell ("rm -rf '"  ++ d ++ "'")) ""
       make :: (SourceTree, FilePath) -> IO T.Download
       make (quiltTree, quiltDir) =
-          do applied <- readProc (shell cmd1a) "" >>= qMessage "Checking for applied patches" >>= return . collectProcessTriple
+          do applied <- readProcFailing (shell cmd1a) "" >>= qMessage "Checking for applied patches" >>= return . collectProcessTriple
              case applied of
                (ExitFailure 1, _, err)
                    | decode err == "No patches applied\n" ->
                           findUnapplied >>= apply >> buildLog >> cleanSource
                           where
-                            findUnapplied = do unapplied <- liftIO (readProc (shell cmd1b) "") >>= qMessage "Checking for unapplied patches" . collectProcessTriple
+                            findUnapplied = do unapplied <- liftIO (readProcFailing (shell cmd1b) "") >>= qMessage "Checking for unapplied patches" . collectProcessTriple
                                                case unapplied of
                                                  (ExitSuccess, text, _) -> return (lines (decode text))
                                                  _ -> fail $ target ++ " - No patches to apply"
                             apply patches =
-                                do result2 <- liftIO (readProc (shell (cmd2 patches)) "") >>= qMessage "Patching Quilt target" . collectProcessTriple
+                                do result2 <- liftIO (readProcFailing (shell (cmd2 patches)) "") >>= qMessage "Patching Quilt target" . collectProcessTriple
                                    case result2 of
                                      (ExitSuccess, _, _) -> return ()
                                      (_, _, err) -> fail $ target ++ " - Failed to apply quilt patches: " ++ decode err
@@ -124,7 +124,7 @@ prepare package base patch = do
                                      False -> fail (target ++ "- Missing changelog file: " ++ show (quiltDir ++ "/" ++ quiltPatchesDir ++ "/changelog"))
                                      True -> mergeChangelogs' (quiltDir ++ "/debian/changelog") (quiltDir ++ "/" ++ quiltPatchesDir ++ "/changelog")
                             cleanSource =
-                                do result3 <- liftIO (readProc (shell cmd3) "") >>= qMessage "Cleaning Quilt target" . collectProcessTriple
+                                do result3 <- liftIO (readProcFailing (shell cmd3) "") >>= qMessage "Cleaning Quilt target" . collectProcessTriple
                                    case result3 of
                                      (ExitSuccess, _, _) ->
                                          do tree <- findSourceTree (topdir quiltTree) :: IO SourceTree

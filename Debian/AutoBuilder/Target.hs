@@ -57,7 +57,7 @@ import Debian.Repo.LocalRepository (LocalRepository, uploadLocal)
 import Debian.Repo.Package (binaryPackageSourceVersion, sourcePackageBinaryNames)
 import Debian.Repo.PackageID (PackageID(packageVersion))
 import Debian.Repo.PackageIndex (BinaryPackage(packageInfo), prettyBinaryPackage, SourcePackage(sourceParagraph, sourcePackageID), sortBinaryPackages, sortSourcePackages)
-import Debian.Repo.Prelude (symbol, readProc)
+import Debian.Repo.Prelude (symbol)
 import Debian.Repo.SourceTree (addLogEntry, buildDebs, copySourceTree, DebianBuildTree, findChanges, findOneDebianBuildTree, SourcePackageStatus(..), BuildDecision(..), HasChangeLog(entry), HasDebDir(debdir), HasTopDir(topdir))
 import Debian.Repo.State.AptImage (aptSourcePackages)
 import Debian.Repo.State.OSImage (osSourcePackages, osBinaryPackages, updateOS, buildArchOfOS)
@@ -77,6 +77,7 @@ import System.Posix.Files (fileSize, getFileStatus)
 import System.Process (CreateProcess(cwd, env), proc, readProcessWithExitCode, shell, showCommandForUser)
 import Debian.Repo.Prelude.Verbosity (ePutStrLn, noisier, qPutStrLn, quieter, ePutStr, readProcFailing)
 import System.Process.ListLike (collectProcessTriple, collectProcessOutput', collectOutputAndError')
+import System.Process.ByteString (readProcessChunks)
 import System.Unix.Chroot (useEnv)
 import Text.Printf (printf)
 import Text.Regex (matchRegex, mkRegex)
@@ -410,9 +411,9 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
              _ <- liftIO $ useEnv' root (\ _ -> return ())
                              (-- Get the version number of dpkg-dev in the build environment
                               let p = shell ("dpkg -s dpkg-dev | sed -n 's/^Version: //p'") in
-                              readProc p "" >>= collectProcessOutput' p >>= return . head . words . L.unpack >>= \ installed ->
+                              readProcFailing p "" >>= collectProcessOutput' p >>= return . head . words . L.unpack >>= \ installed ->
                               -- If it is >= 1.16.1 we may need to run dpkg-source --commit.
-                              readProc (shell ("dpkg --compare-versions '" ++ installed ++ "' ge 1.16.1")) "" >>= return . collectProcessTriple >>= \ (result, _, _) -> return (result == ExitSuccess) >>= \ newer ->
+                              readProcessChunks (shell ("dpkg --compare-versions '" ++ installed ++ "' ge 1.16.1")) "" >>= return . collectProcessTriple >>= \ (result, _, _) -> return (result == ExitSuccess) >>= \ newer ->
                               when newer (doesDirectoryExist (path' </> "debian/patches") >>= doDpkgSource)
                               {- when newer (do createDirectoryIfMissing True (path' </> "debian/patches")
                                              -- Create the patch if there are any changes
@@ -710,10 +711,10 @@ updateChangesFile elapsed changes = do
 {-    autobuilderVersion <- processOutput "dpkg -s autobuilder | sed -n 's/^Version: //p'" >>=
                             return . either (const Nothing) Just >>=
                             return . maybe Nothing (listToMaybe . lines) -}
-      hostname <- let p = shell "hostname" in readProc p "" >>= collectProcessOutput' p >>= return . listToMaybe . lines . L.unpack
+      hostname <- let p = shell "hostname" in readProcFailing p "" >>= collectProcessOutput' p >>= return . listToMaybe . lines . L.unpack
       cpuInfo <- parseProcCpuinfo
       memInfo <- parseProcMeminfo
-      machine <- let p = shell "uname -m" in readProc p "" >>= collectProcessOutput' p >>= return . listToMaybe . lines . L.unpack
+      machine <- let p = shell "uname -m" in readProcFailing p "" >>= collectProcessOutput' p >>= return . listToMaybe . lines . L.unpack
       date <- getCurrentLocalRFC822Time
       let buildInfo = ["Autobuilder-Version: " ++ V.autoBuilderVersion] ++
                       ["Time: " ++ show elapsed] ++

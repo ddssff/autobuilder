@@ -60,7 +60,7 @@ prepare cache package theUri =
                           , T.cleanTarget =
                               \ top -> case P.keepRCS package of
                                          False -> let cmd = "find " ++ top ++ " -name '_darcs' -maxdepth 1 -prune | xargs rm -rf" in
-                                                  timeTask (readProc (shell cmd) "")
+                                                  timeTask (readProcFailing (shell cmd) "")
                                          True -> return ([], 0)
                           , T.buildWrapper = id
                           , T.attrs = singleton (P.DarcsChangesId attr)
@@ -69,7 +69,7 @@ prepare cache package theUri =
       verifySource :: FilePath -> IO SourceTree
       verifySource dir =
           -- Note that this logic is the opposite of 'tla changes'
-          do (result, _, _) <- readProc (shell ("cd " ++ dir ++ " && darcs whatsnew")) mempty >>= return . collectProcessTriple
+          do (result, _, _) <- readProcFailing (shell ("cd " ++ dir ++ " && darcs whatsnew")) mempty >>= return . collectProcessTriple
              case result of
                ExitSuccess -> removeSource dir >> createSource dir		-- Yes changes
                _ -> updateSource dir				-- No Changes!
@@ -78,7 +78,7 @@ prepare cache package theUri =
 
       updateSource :: FilePath -> IO SourceTree
       updateSource dir =
-          readProc (shell ("cd " ++ dir ++ " && darcs pull --all " ++ renderForDarcs theUri')) "" >>
+          readProcFailing (shell ("cd " ++ dir ++ " && darcs pull --all " ++ renderForDarcs theUri')) "" >>
           -- runTaskAndTest (updateStyle (commandTask ("cd " ++ dir ++ " && darcs pull --all " ++ renderForDarcs theUri))) >>
           findSourceTree dir
 
@@ -86,7 +86,7 @@ prepare cache package theUri =
       createSource dir =
           let (parent, _) = splitFileName dir in
           do createDirectoryIfMissing True parent
-             _output <- readProc (shell cmd) ""
+             _output <- readProcFailing (shell cmd) ""
              findSourceTree dir
           where
             cmd = unwords $ ["darcs", "get", renderForDarcs theUri'] ++ maybe [] (\ tag -> [" --tag", "'" ++ tag ++ "'"]) theTag ++ [dir]
@@ -94,7 +94,7 @@ prepare cache package theUri =
       fixLink base =
           let link = base ++ "/" ++ name
               cmd = "rm -rf " ++ link ++ " && ln -s " ++ sum ++ " " ++ link in
-          readProc (shell cmd) ""
+          readProcFailing (shell cmd) ""
       name = snd . splitFileName $ (uriPath theUri')
       sum = show (md5 (B.pack uriAndTag))
       uriAndTag = uriToString id theUri' "" ++ maybe "" (\ tag -> "=" ++ tag) theTag

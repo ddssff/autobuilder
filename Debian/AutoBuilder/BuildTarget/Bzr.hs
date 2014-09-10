@@ -18,7 +18,7 @@ import Debian.URI
 import System.FilePath (splitFileName, (</>))
 import System.Unix.Directory
 import System.Process (shell)
-import Debian.Repo.Prelude.Verbosity (timeTask, qPutStrLn)
+import Debian.Repo.Prelude.Verbosity (timeTask, qPutStrLn, readProcFailing)
 import System.Directory
 import System.Process.ListLike (collectProcessTriple)
 
@@ -43,7 +43,7 @@ prepare cache package version =
                    do qPutStrLn ("Clean Bazaar target in " ++ top)
                       case P.keepRCS package of
                         False -> let cmd = "find '" ++ top ++ "' -name '.bzr' -prune | xargs rm -rf" in
-                                 timeTask (readProc (shell cmd) "")
+                                 timeTask (readProcFailing (shell cmd) "")
                         True -> return ([], 0)
                , buildWrapper = id
                , attrs = empty }
@@ -51,7 +51,7 @@ prepare cache package version =
         -- Tries to update a pre-existant bazaar source tree
         updateSource dir =
             qPutStrLn ("Verifying Bazaar source archive '" ++ dir ++ "'") >>
-            (readProc (shell cmd) "" >>= \ _ ->
+            (readProcFailing (shell cmd) "" >>= \ _ ->
              -- If we succeed then we try to merge with the parent tree
              mergeSource dir)
               -- if we fail then the source tree is corrupted, so get a new one
@@ -61,7 +61,7 @@ prepare cache package version =
 
         -- computes a diff between this archive and some other parent archive and tries to merge the changes
         mergeSource dir =
-            readProc (shell cmd) "" >>= return . collectProcessTriple >>= \ (_, out, _) ->
+            readProcFailing (shell cmd) "" >>= return . collectProcessTriple >>= \ (_, out, _) ->
             if isInfixOf "Nothing to do." (L.unpack out)
             then findSourceTree dir :: IO SourceTree
             else commitSource dir
@@ -73,7 +73,7 @@ prepare cache package version =
         -- Bazaar is a distributed revision control system so you must commit to the local source
         -- tree after you merge from some other source tree
         commitSource dir =
-            readProc (shell cmd) "" >> findSourceTree dir
+            readProcFailing (shell cmd) "" >> findSourceTree dir
             where
                 cmd   = "cd " ++ dir ++ " && bzr commit -m 'Merged Upstream'"
                 -- style = (setStart (Just ("Commiting merge to local Bazaar source archive '" ++ dir ++ "'")) .
@@ -85,7 +85,7 @@ prepare cache package version =
             -- Create parent dir and let bzr create dir
             let (parent, _) = splitFileName dir
             createDirectoryIfMissing True parent
-            _output <- readProc (shell cmd) ""
+            _output <- readProcFailing (shell cmd) ""
             findSourceTree dir :: IO SourceTree
             where
                 cmd   = "bzr branch " ++ version ++ " " ++ dir

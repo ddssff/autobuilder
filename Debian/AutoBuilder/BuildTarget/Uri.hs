@@ -20,7 +20,7 @@ import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
-import qualified Debian.Repo as R
+import qualified Debian.Repo as R (readProcFailing, topdir, SourceTree, findSourceTree)
 import Debian.Repo.Internal.Repos (MonadRepos)
 import Debian.Repo.Top (MonadTop, sub)
 import Debian.URI
@@ -77,7 +77,7 @@ prepare c package u s =
              _output <-
                  case exists of
                    True -> return []
-                   False -> R.readProc (shell ("curl -s '" ++ uriToString' (mustParseURI u) ++ "' > '" ++ tar ++ "'")) ""
+                   False -> R.readProcFailing (shell ("curl -s '" ++ uriToString' (mustParseURI u) ++ "' > '" ++ tar ++ "'")) ""
              -- We should do something with the output
              return ()
       -- Make sure what we just downloaded has the correct checksum
@@ -103,13 +103,13 @@ prepare c package u s =
                    fileInfo <- liftIO $ magicFile magic tar
                    case () of
                      _ | isPrefixOf "Zip archive data" fileInfo ->
-                           liftIO $ timeTask $ R.readProc (shell ("unzip " ++ tar ++ " -d " ++ src)) ""
+                           liftIO $ timeTask $ R.readProcFailing (shell ("unzip " ++ tar ++ " -d " ++ src)) ""
                        | isPrefixOf "gzip" fileInfo ->
-                           liftIO $ timeTask $ R.readProc (shell ("tar xfz " ++ tar ++ " -C " ++ src)) ""
+                           liftIO $ timeTask $ R.readProcFailing (shell ("tar xfz " ++ tar ++ " -C " ++ src)) ""
                        | isPrefixOf "bzip2" fileInfo ->
-                           liftIO $ timeTask $ R.readProc (shell ("tar xfj " ++ tar ++ " -C " ++ src)) ""
+                           liftIO $ timeTask $ R.readProcFailing (shell ("tar xfj " ++ tar ++ " -C " ++ src)) ""
                        | True ->
-                           liftIO $ timeTask $ R.readProc (shell ("cp " ++ tar ++ " " ++ src ++ "/")) ""
+                           liftIO $ timeTask $ R.readProcFailing (shell ("cp " ++ tar ++ " " ++ src ++ "/")) ""
             read (_output, _elapsed) = sourceDir s >>= \ src -> liftIO (getDir src)
             getDir dir = getDirectoryContents dir >>= return . filter (not . flip elem [".", ".."])
             search files = checkContents (filter (not . flip elem [".", ".."]) files)

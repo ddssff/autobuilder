@@ -30,7 +30,7 @@ documentation = [ "svn:<uri> - A target of this form retrieves the source code f
                 , "a subversion repository." ]
 
 svn :: [String] -> IO [Chunk L.ByteString]
-svn args = readProc (proc "svn" args) ""
+svn args = readProcFailing (proc "svn" args) ""
 
 username userInfo =
     let un = takeWhile (/= ':') userInfo in
@@ -59,7 +59,7 @@ prepare cache package uri =
                                \ path ->
                                    case P.keepRCS package of
                                      False -> let cmd = "find " ++ path ++ " -name .svn -type d -print0 | xargs -0 -r -n1 rm -rf" in
-                                              timeTask (readProc (shell cmd) "")
+                                              timeTask (readProcFailing (shell cmd) "")
                                      True -> return ([], 0)
                            , T.buildWrapper = id
                            , T.attrs = empty
@@ -89,7 +89,7 @@ prepare cache package uri =
           findSourceTree dir :: IO SourceTree
       checkout :: FilePath -> IO (Either String [Chunk L.ByteString])
       --checkout = svn createStyle args
-      checkout dir = readProc (proc "svn" args) "" >>= return . finish
+      checkout dir = readProcFailing (proc "svn" args) "" >>= return . finish
           where
             args = ([ "co","--no-auth-cache","--non-interactive"] ++
                     (username userInfo) ++ (password userInfo) ++

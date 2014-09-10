@@ -37,14 +37,14 @@ prepare cache package version =
                               \ path ->
                                   case P.keepRCS package of
                                     False -> let cmd = "find '" ++ path ++ "' -name '.arch-ids' -o -name '{arch}' -prune | xargs rm -rf" in
-                                             timeTask (readProc (shell cmd) "")
+                                             timeTask (readProcFailing (shell cmd) "")
                                     True -> return ([], 0)
                           , T.buildWrapper = id
                           , T.attrs = empty
                           }
     where
       verifySource dir =
-          do result <- try (readProc (shell ("cd " ++ dir ++ " && tla changes")) "")
+          do result <- try (readProcFailing (shell ("cd " ++ dir ++ " && tla changes")) "")
              case result of
                Left (e :: SomeException) -> qPutStrLn (show e) >> removeSource dir >> createSource dir -- Failure means there is corruption
                Right _output -> updateSource dir						         -- Success means no changes
@@ -52,7 +52,7 @@ prepare cache package version =
       removeSource dir = liftIO $ removeRecursiveSafely dir
 
       updateSource dir =
-          readProc (shell ("cd " ++ dir ++ " && tla update " ++ version)) "" >>
+          readProcFailing (shell ("cd " ++ dir ++ " && tla update " ++ version)) "" >>
              -- At one point we did a tla undo here.  However, we are
              -- going to assume that the "clean" copies in the cache
              -- directory are clean, since some of the other target
@@ -64,5 +64,5 @@ prepare cache package version =
             -- Create parent dir and let tla create dir
             let (parent, _) = splitFileName dir
             liftIO $ createDirectoryIfMissing True parent
-            _output <- readProc (shell ("tla get " ++ version ++ " " ++ dir)) ""
+            _output <- readProcFailing (shell ("tla get " ++ version ++ " " ++ dir)) ""
             findSourceTree dir
