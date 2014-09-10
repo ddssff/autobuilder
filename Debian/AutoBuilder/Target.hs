@@ -74,8 +74,8 @@ import System.Exit (ExitCode(ExitSuccess, ExitFailure), exitWith)
 import System.FilePath ((</>))
 import System.IO (hPutStrLn, stderr)
 import System.Posix.Files (fileSize, getFileStatus)
-import System.Process (CreateProcess(cwd, env), proc, readProcessWithExitCode, shell, showCommandForUser)
-import Debian.Repo.Prelude.Verbosity (ePutStrLn, noisier, qPutStrLn, quieter, ePutStr, readProcFailing)
+import System.Process (CreateProcess(cwd), proc, readProcessWithExitCode, shell, showCommandForUser)
+import Debian.Repo.Prelude.Verbosity (ePutStrLn, noisier, qPutStrLn, quieter, ePutStr, readProcFailing, modifyProcessEnv)
 import System.Process.ListLike (collectProcessTriple, collectProcessOutput', collectOutputAndError')
 import System.Process.ByteString (readProcessChunks)
 import System.Unix.Chroot (useEnv)
@@ -400,8 +400,8 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
              root <- rootPath . osRoot <$> getOS
              let path = debdir buildTree
                  path' = fromJust (dropPrefix root path)
-                 dpkgSource = (proc "dpkg-source" ["--commit", ".", "autobuilder.diff"]) {cwd = Just path', env = Just [("EDITOR", "/bin/true")]}
-                 doDpkgSource False = do
+             dpkgSource <- liftIO $ modifyProcessEnv [("EDITOR", Just "/bin/true")] ((proc "dpkg-source" ["--commit", ".", "autobuilder.diff"]) {cwd = Just path'})
+             let doDpkgSource False = do
                    createDirectoryIfMissing True (path' </> "debian/patches")
                    readProcFailing dpkgSource L.empty
                    exists <- doesFileExist (path' </> "debian/patches/autobuilder.diff")
@@ -765,7 +765,7 @@ buildDependencies downloadOnly source extra sourceFingerprint =
                                            (if downloadOnly then ["--download-only"] else []) ++
                                            showDependencies' sourceFingerprint ++ extra)
            -- command = ("export DEBIAN_FRONTEND=noninteractive; " ++ (if True then aptGetCommand else pbuilderCommand))
-           command = (if True then aptGetCommand else pbuilderCommand) {env = Just [("DEBIAN_FRONTEND", "noninteractive")]}
+       command <- liftIO $ modifyProcessEnv [("DEBIAN_FRONTEND", Just "noninteractive")] (if True then aptGetCommand else pbuilderCommand)
        if downloadOnly then (qPutStrLn $ "Dependency packages:\n " ++ intercalate "\n  " (showDependencies' sourceFingerprint)) else return ()
        qPutStrLn $ (if downloadOnly then "Downloading" else "Installing") ++ " build dependencies into " ++ root
        out <- withProc (liftIO (useEnv' root forceList (noisier 2 (readProcFailing command "")) >>=
