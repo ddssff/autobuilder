@@ -8,7 +8,6 @@ import Control.Monad (when)
 import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as B
 import Data.Digest.Pure.MD5 (md5)
-import Data.Monoid (mempty)
 import Data.Set (singleton)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Download as T
@@ -22,6 +21,7 @@ import System.Exit (ExitCode(..))
 import System.FilePath
 import System.Process (shell, proc, CreateProcess(cwd))
 import System.Process.ListLike (readCreateProcess, collectProcessTriple)
+import System.Process.String (readProcessChunks)
 import Debian.Repo.Prelude.Verbosity (timeTask)
 import System.Unix.Directory
 
@@ -69,7 +69,7 @@ prepare cache package theUri =
       verifySource :: FilePath -> IO SourceTree
       verifySource dir =
           -- Note that this logic is the opposite of 'tla changes'
-          do (result, _, _) <- readProcFailing (shell ("cd " ++ dir ++ " && darcs whatsnew")) mempty >>= return . collectProcessTriple
+          do (result, _, _) <- readProcessChunks ((proc "darcs" ["whatsnew"]) {cwd = Just dir}) "" >>= return . collectProcessTriple
              case result of
                ExitSuccess -> removeSource dir >> createSource dir		-- Yes changes
                _ -> updateSource dir				-- No Changes!
