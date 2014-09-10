@@ -330,7 +330,7 @@ buildTarget ::
     P.CacheRec ->			-- configuration info
     EnvRoot ->
     EnvRoot ->
-    LocalRepository ->			-- The local repository the packages will be uploaded to
+    LocalRepository ->			-- ^ The local repository the packages will be uploaded to, this also may already contain packages.
     Target ->
     m (Maybe LocalRepository)	-- The local repository after the upload (if it changed)
 buildTarget cache dependOS buildOS repo !target = do
@@ -601,14 +601,14 @@ computeNewVersion cache target releaseControlInfo _releaseStatus = do
                 currentVersion
   case P.doNotChangeVersion (P.params cache) of
       True -> return (Success sourceVersion)
-      False ->
-          let vendor = P.vendorTag (P.params cache)
-              oldVendors = P.oldVendorTags (P.params cache)
-              release = if (P.isDevelopmentRelease (P.params cache)) then
-                            Nothing else
-                            (Just (relName (P.baseRelease (P.params cache))))
-              extra = P.extraReleaseTag (P.params cache)
-              aliases = \ x -> maybe x id (lookup x (P.releaseAliases (P.params cache))) in
+      False -> do
+        let vendor = P.vendorTag (P.params cache)
+            oldVendors = P.oldVendorTags (P.params cache)
+            release = if (P.isDevelopmentRelease (P.params cache)) then
+                          Nothing else
+                          (Just (relName (P.baseRelease (P.params cache))))
+            extra = P.extraReleaseTag (P.params cache)
+            aliases = \ x -> maybe x id (lookup x (P.releaseAliases (P.params cache)))
           {-
               aliases = f
                   where
@@ -616,17 +616,21 @@ computeNewVersion cache target releaseControlInfo _releaseStatus = do
                             Nothing -> x
                             Just x' -> if x == x' then x else f x' in
            -}
-          -- All the versions that exist in the pool in any dist,
-          -- the new version number must not equal any of these.
-          sortSourcePackages [G.sourceName (targetDepends target)] <$> aptSourcePackages >>= \ available ->
-          case parseTag (vendor : oldVendors) sourceVersion of
-            (_, Just tag) -> return $
+        -- All the versions that exist in the pool in any dist,
+        -- the new version number must not equal any of these.
+        available <- sortSourcePackages [G.sourceName (targetDepends target)] <$> aptSourcePackages
+        qPutStrLn ("available versions: " ++ show available)
+        case parseTag (vendor : oldVendors) sourceVersion of
+          (_, Just tag) -> return $
                              Failure ["Error: the version string in the changelog has a vendor tag (" ++ show tag ++
                                       ".)  This is prohibited because the autobuilder needs to fully control suffixes" ++
                                       " of this form.  This makes it difficult for the author to know what version" ++
                                       " needs to go into debian/changelog to trigger a build by the autobuilder," ++
                                       " particularly since each distribution may have different auto-generated versions."]
-            (_, Nothing) -> return $ setTag aliases vendor oldVendors release extra currentVersion (catMaybes . map getVersion $ available) sourceVersion >>= checkVersion
+          (_, Nothing) -> do
+              let newVersion = setTag aliases vendor oldVendors release extra currentVersion (catMaybes . map getVersion $ available) sourceVersion
+              qPutStrLn ("new version: " ++ show newVersion)
+              return $ newVersion >>= checkVersion
     where
       -- Version number in the changelog entry of the checked-out
       -- source code.  The new version must also be newer than this.
@@ -634,9 +638,6 @@ computeNewVersion cache target releaseControlInfo _releaseStatus = do
       sourceLog = entry . cleanSource $ target
       getVersion paragraph =
           maybe Nothing (Just . parseDebianVersion . T.unpack) (fieldValue "Version" . sourceParagraph $ paragraph)
-      -- The control file paragraph for the currently uploaded
-      -- version in this dist.  The new version must be newer
-      -- than this.
       buildTrumped = elem (debianSourcePackageName target) (P.buildTrumped (P.params cache))
 
 -- | Return the first build dependency solution if it can be computed.
