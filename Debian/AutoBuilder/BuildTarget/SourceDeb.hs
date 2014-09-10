@@ -11,14 +11,11 @@ import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.Control.String as S
-import Debian.Repo.Prelude (readProc)
 import Debian.Repo.Internal.Repos (MonadRepos)
+import Debian.Repo.Prelude.Verbosity (readProcFailing)
 import qualified Debian.Version as V
 import System.Directory
-import System.Exit (ExitCode(..))
-import System.Process (shell)
-import System.Process.ListLike (collectProcessTriple)
---import System.Unix.Progress.Outputs (exitCodeOnly)
+import System.Process (CreateProcess(cwd), proc)
 
 documentation = [ "sourcedeb:<target> - A target of this form unpacks the source deb"
                 , "retrieved by the original target and presents an unpacked source"
@@ -35,10 +32,9 @@ prepare _cache package base =
        case sortBy compareVersions (zip dscFiles dscInfo) of
          [] -> return $  error ("Invalid sourcedeb base: no .dsc file in " ++ show (T.method base))
          (dscName, Right (S.Control (dscInfo : _))) : _ ->
-             do out <- liftIO (readProc (shell (unpack top dscName)) mempty)
-                case collectProcessTriple out of
-                  (ExitSuccess, _, _) -> liftIO $ makeTarget dscInfo dscName
-                  _ -> error ("*** FAILURE: " ++ unpack top dscName)
+             let p = unpack top dscName in
+             liftIO (readProcFailing p mempty >>
+                     makeTarget dscInfo dscName)
          (dscName, _) : _ -> error ("Invalid .dsc file: " ++ dscName)
     where
       top = T.getTop base
@@ -57,7 +53,8 @@ prepare _cache package base =
                            , T.attrs = T.attrs base
                            }
             _ -> error $ "Invalid .dsc file: " ++ dscName
-      unpack top dscName = "cd " ++ top ++ " && dpkg-source -x " ++ dscName
+      -- unpack top dscName = "cd " ++ top ++ " && dpkg-source -x " ++ dscName
+      unpack top dscName = (proc "dpkg-source" ["-x", dscName]) {cwd = Just top}
       compareVersions (name2, info2) (name1, info1) =
           case (info1, info2) of
             (Right (S.Control (para1 : _)), Right (S.Control (para2 : _))) ->

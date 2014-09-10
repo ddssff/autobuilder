@@ -70,14 +70,13 @@ import Extra.Files (replaceFile)
 import "Extra" Extra.List (dropPrefix)
 import Extra.Misc (columns)
 import System.Directory (createDirectoryIfMissing, doesDirectoryExist, doesFileExist, removeDirectory)
-import System.Environment (setEnv)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure), exitWith)
 import System.FilePath ((</>))
 import System.IO (hPutStrLn, stderr)
 import System.Posix.Files (fileSize, getFileStatus)
-import System.Process (CreateProcess(cwd), proc, readProcessWithExitCode, shell, showCommandForUser)
-import Debian.Repo.Prelude.Verbosity (ePutStrLn, noisier, qPutStrLn, quieter, ePutStr)
-import System.Process.ListLike (readCreateProcess, collectProcessTriple, collectProcessOutput', collectOutputAndError')
+import System.Process (CreateProcess(cwd, env), proc, readProcessWithExitCode, shell, showCommandForUser)
+import Debian.Repo.Prelude.Verbosity (ePutStrLn, noisier, qPutStrLn, quieter, ePutStr, readProcFailing)
+import System.Process.ListLike (collectProcessTriple, collectProcessOutput', collectOutputAndError')
 import System.Unix.Chroot (useEnv)
 import Text.Printf (printf)
 import Text.Regex (matchRegex, mkRegex)
@@ -400,12 +399,14 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
              root <- rootPath . osRoot <$> getOS
              let path = debdir buildTree
                  path' = fromJust (dropPrefix root path)
-                 doDpkgSource False =
-                     createDirectoryIfMissing True (path' </> "debian/patches") >>
-                     doDpkgSource' >> doesFileExist (path' </> "debian/patches/autobuilder.diff") >>= \ exists ->
-                     when (not exists) (removeDirectory (path' </> "debian/patches"))
-                 doDpkgSource True = doDpkgSource' >> return ()
-                 doDpkgSource' = setEnv "EDITOR" "/bin/true" >> readCreateProcess ((proc "dpkg-source" ["--commit", ".", "autobuilder.diff"]) {cwd = Just path'}) L.empty
+                 dpkgSource = (proc "dpkg-source" ["--commit", ".", "autobuilder.diff"]) {cwd = Just path', env = Just [("EDITOR", "/bin/true")]}
+                 doDpkgSource False = do
+                   createDirectoryIfMissing True (path' </> "debian/patches")
+                   readProcFailing dpkgSource L.empty
+                   exists <- doesFileExist (path' </> "debian/patches/autobuilder.diff")
+                   when (not exists) (removeDirectory (path' </> "debian/patches"))
+                 doDpkgSource True = readProcFailing dpkgSource L.empty >> return ()
+                 -- doDpkgSource' = setEnv "EDITOR" "/bin/true" >> readCreateProcess ((proc "dpkg-source" ["--commit", ".", "autobuilder.diff"]) {cwd = Just path'}) L.empty
              _ <- liftIO $ useEnv' root (\ _ -> return ())
                              (-- Get the version number of dpkg-dev in the build environment
                               let p = shell ("dpkg -s dpkg-dev | sed -n 's/^Version: //p'") in
@@ -740,18 +741,8 @@ sinkFields f (Paragraph fields) =
           f' (Comment _) = False
 
 -- |Download the package's build dependencies into /var/cache
-downloadDependencies :: (MonadOS m, MonadIO m) => DebianBuildTree -> [String] -> Fingerprint -> m String
-downloadDependencies source extra sourceFingerprint =
-    do root <- rootPath . osRoot <$> getOS
-       let path = pathBelow root (topdir source)
-           pbuilderCommand = "cd '" ++  path ++ "' && /usr/lib/pbuilder/pbuilder-satisfydepends"
-           command = ("export DEBIAN_FRONTEND=noninteractive; " ++ (if True then aptGetCommand else pbuilderCommand))
-           aptGetCommand = "apt-get --yes --force-yes install -o APT::Install-Recommends=True --download-only " ++ intercalate " " (showDependencies' sourceFingerprint ++ extra)
-       -- qPutStrLn "Downloading build dependencies"
-       qPutStrLn $ "Dependency packages:\n " ++ intercalate "\n  " (showDependencies' sourceFingerprint)
-       qPutStrLn ("Downloading build dependencies into " ++ root)
-       out <- let p = shell command in liftIO (useEnv' root forceList (readProc p "") >>= collectOutputAndError' p)
-       return $ decode out
+downloadDependencies :: (MonadOS m, MonadIO m, MonadCatch m, MonadMask m) => DebianBuildTree -> [String] -> Fingerprint -> m String
+downloadDependencies = buildDependencies True
 
 pathBelow :: FilePath -> FilePath -> FilePath
 pathBelow root path =
@@ -759,16 +750,26 @@ pathBelow root path =
     where message = "Expected a path below " ++ root ++ ", saw " ++ path
 
 -- |Install the package's build dependencies.
-installDependencies :: (MonadOS m, MonadCatch m, MonadIO m, MonadMask m) => DebianBuildTree -> [String] -> Fingerprint -> m L.ByteString
-installDependencies source extra sourceFingerprint =
+installDependencies :: (MonadOS m, MonadCatch m, MonadIO m, MonadMask m) => DebianBuildTree -> [String] -> Fingerprint -> m String
+installDependencies = buildDependencies False
+
+buildDependencies :: (MonadOS m, MonadCatch m, MonadIO m, MonadMask m) => Bool -> DebianBuildTree -> [String] -> Fingerprint -> m String
+buildDependencies downloadOnly source extra sourceFingerprint =
     do root <- rootPath . osRoot <$> getOS
        let path = pathBelow root (topdir source)
-           pbuilderCommand = "cd '" ++  path ++ "' && /usr/lib/pbuilder/pbuilder-satisfydepends"
-           aptGetCommand = "apt-get --yes --force-yes install -o APT::Install-Recommends=True " ++ intercalate " " (showDependencies' sourceFingerprint ++ extra)
-           command = ("export DEBIAN_FRONTEND=noninteractive; " ++ (if True then aptGetCommand else pbuilderCommand))
-       qPutStrLn $ "Installing build dependencies into " ++ root
-       let p = shell command
-       withProc (liftIO (useEnv' root forceList (noisier 2 (readProc p "")) >>= collectOutputAndError' p))
+           -- pbuilderCommand = "cd '" ++  path ++ "' && /usr/lib/pbuilder/pbuilder-satisfydepends"
+           pbuilderCommand = (proc "/usr/lib/pbuilder/pbuilder-satisfydepends" []) {cwd = Just path}
+           -- aptGetCommand = "apt-get --yes --force-yes install -o APT::Install-Recommends=True --download-only " ++ intercalate " " (showDependencies' sourceFingerprint ++ extra)
+           aptGetCommand = proc "apt-get" (["--yes", "--force-yes", "install", "-o", "APT::Install-Recommends=True"] ++
+                                           (if downloadOnly then ["--download-only"] else []) ++
+                                           showDependencies' sourceFingerprint ++ extra)
+           -- command = ("export DEBIAN_FRONTEND=noninteractive; " ++ (if True then aptGetCommand else pbuilderCommand))
+           command = (if True then aptGetCommand else pbuilderCommand) {env = Just [("DEBIAN_FRONTEND", "noninteractive")]}
+       if downloadOnly then (qPutStrLn $ "Dependency packages:\n " ++ intercalate "\n  " (showDependencies' sourceFingerprint)) else return ()
+       qPutStrLn $ (if downloadOnly then "Downloading" else "Installing") ++ " build dependencies into " ++ root
+       out <- withProc (liftIO (useEnv' root forceList (noisier 2 (readProcFailing command "")) >>=
+                                collectOutputAndError' command))
+       return $ decode out
 
 -- | This should probably be what the real useEnv does.
 useEnv' :: FilePath -> (a -> IO a) -> IO a -> IO a
