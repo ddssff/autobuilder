@@ -16,7 +16,6 @@ import Debian.Debianize.Types.Atoms (EnvSet(..))
 import Debian.Release (ReleaseName, releaseName')
 import Debian.Repo.EnvPath (EnvRoot(EnvRoot))
 import Debian.Repo.Internal.Repos (MonadRepos, putOSImage)
-import Debian.Repo.MonadOS (evalMonadOS, syncLocalPool)
 import Debian.Repo.OSImage (OSImage, osRoot)
 import Debian.Repo.Slice (NamedSliceList)
 import Debian.Repo.State.OSImage (prepareOS)
@@ -50,10 +49,8 @@ prepareDependOS params rel =
        -- release <- prepareRelease repo (P.buildRelease params) [] [parseSection' "main"] (P.archSet params)
        when (P.cleanUp params) (evalInstall deleteGarbage localRepo Nothing)
        eset <- envSet (P.buildRelease params)
-       let dRoot = dependOS eset
        -- exists <- liftIO $ doesDirectoryExist dRoot
        (_cOS, dOS) <- prepareOS eset rel localRepo (P.flushRoot params) (P.flushDepends params) (P.ifSourcesChanged params) (P.includePackages params) (P.optionalIncludePackages params) (P.excludePackages params) (P.components params)
-       evalMonadOS syncLocalPool (EnvRoot dRoot)
        return dOS
 
 prepareBuildOS :: (MonadTop m, MonadRepos m, Applicative m) => ReleaseName -> OSImage -> m EnvRoot
