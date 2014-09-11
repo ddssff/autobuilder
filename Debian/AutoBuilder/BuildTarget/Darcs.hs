@@ -20,7 +20,7 @@ import System.Directory
 import System.Exit (ExitCode(..))
 import System.FilePath
 import System.Process (shell, proc, CreateProcess(cwd))
-import System.Process.ListLike (readCreateProcess, collectProcessTriple)
+import System.Process.ListLike (collectProcessTriple, collectProcessOutput)
 import System.Process.String (readProcessChunks)
 import Debian.Repo.Prelude.Verbosity (timeTask)
 import System.Unix.Directory
@@ -50,7 +50,7 @@ prepare cache package theUri =
       liftIO $ when (P.flushSource (P.params cache)) (removeRecursiveSafely dir)
       exists <- liftIO $ doesDirectoryExist dir
       tree <- liftIO $ if exists then verifySource dir else createSource dir
-      attr <- liftIO $ readCreateProcess ((proc "darcs" ["changes", "--xml-output"]) {cwd = Just dir}) "" >>= return . show . md5
+      attr <- liftIO $ readProcFailing ((proc "darcs" ["log", "--xml-output"]) {cwd = Just dir}) "" >>=  return . show . md5 . collectProcessOutput
       _output <- liftIO $ fixLink base
       return $ T.Download { T.package = package
                           , T.getTop = topdir tree
@@ -59,8 +59,8 @@ prepare cache package theUri =
                           , T.origTarball = Nothing
                           , T.cleanTarget =
                               \ top -> case P.keepRCS package of
-                                         False -> let cmd = "find " ++ top ++ " -name '_darcs' -maxdepth 1 -prune | xargs rm -rf" in
-                                                  timeTask (readProcFailing (shell cmd) "")
+                                         False -> let cmd = shell ("find " ++ top ++ " -name '_darcs' -maxdepth 1 -prune | xargs rm -rf") in
+                                                  timeTask (readProcFailing cmd "")
                                          True -> return ([], 0)
                           , T.buildWrapper = id
                           , T.attrs = singleton (P.DarcsChangesId attr)
@@ -77,8 +77,9 @@ prepare cache package theUri =
       removeSource dir = removeRecursiveSafely dir
 
       updateSource :: FilePath -> IO SourceTree
-      updateSource dir =
-          readProcFailing (shell ("cd " ++ dir ++ " && darcs pull --all " ++ renderForDarcs theUri')) "" >>
+      updateSource dir = do
+          let cmd = (proc "darcs" ["pull", "--all", renderForDarcs theUri']) {cwd = Just dir}
+          readProcFailing cmd ""
           -- runTaskAndTest (updateStyle (commandTask ("cd " ++ dir ++ " && darcs pull --all " ++ renderForDarcs theUri))) >>
           findSourceTree dir
 
@@ -86,15 +87,17 @@ prepare cache package theUri =
       createSource dir =
           let (parent, _) = splitFileName dir in
           do createDirectoryIfMissing True parent
-             _output <- readProcFailing (shell cmd) ""
+             _output <- readProcFailing cmd ""
              findSourceTree dir
           where
-            cmd = unwords $ ["darcs", "get", renderForDarcs theUri'] ++ maybe [] (\ tag -> [" --tag", "'" ++ tag ++ "'"]) theTag ++ [dir]
+            cmd = proc "darcs" (["get", renderForDarcs theUri'] ++ maybe [] (\ tag -> [" --tag", tag]) theTag ++ [dir])
       -- Maybe we should include the "darcs:" in the string we checksum?
-      fixLink base =
+      fixLink base = do
           let link = base ++ "/" ++ name
-              cmd = "rm -rf " ++ link ++ " && ln -s " ++ sum ++ " " ++ link in
-          readProcFailing (shell cmd) ""
+              rm = proc "rm" ["-rf", link]
+              ln = proc "ln" ["-s", sum, link]
+          readProcFailing rm ""
+          readProcFailing ln ""
       name = snd . splitFileName $ (uriPath theUri')
       sum = show (md5 (B.pack uriAndTag))
       uriAndTag = uriToString id theUri' "" ++ maybe "" (\ tag -> "=" ++ tag) theTag
