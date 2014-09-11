@@ -78,7 +78,7 @@ prepare cache package theUri =
 
       updateSource :: FilePath -> IO SourceTree
       updateSource dir = do
-          let cmd = (proc "darcs" ["pull", "--all", renderForDarcs theUri']) {cwd = Just dir}
+          let cmd = (proc "darcs" ["pull", "--all", "--no-allow-conflicts", renderForDarcs theUri']) {cwd = Just dir}
           readProcFailing cmd ""
           -- runTaskAndTest (updateStyle (commandTask ("cd " ++ dir ++ " && darcs pull --all " ++ renderForDarcs theUri))) >>
           findSourceTree dir
