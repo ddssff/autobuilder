@@ -53,7 +53,7 @@ Library
     Hs-Source-Dirs: ../haskell-debian
     Build-Depends: ListLike
   else
-    Build-Depends: debian >= 3.82
+    Build-Depends: debian >= 3.84
 
   Build-Depends:
         applicative-extras >= 0.1.8
@@ -78,6 +78,7 @@ Library
       , old-locale
       , old-time
       , parsec
+      , prettyclass
       , process
       , process-listlike >= 1
       , pureMD5
@@ -149,4 +150,4 @@ Executable autobuilder-tests
   if flag (local-debian)
     Hs-Source-Dirs: ../haskell-debian
   else
-    Build-Depends: debian >= 3.82
+    Build-Depends: debian >= 3.84

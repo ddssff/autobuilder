@@ -21,7 +21,7 @@ import Data.Time(NominalDiffTime)
 import Debian.AutoBuilder.BuildEnv (prepareDependOS, prepareBuildOS)
 import Debian.AutoBuilder.BuildTarget (retrieve)
 import qualified Debian.AutoBuilder.Params as P
-import Debian.AutoBuilder.Target (buildTargets, showTargets, display)
+import Debian.AutoBuilder.Target (buildTargets, showTargets)
 import Debian.AutoBuilder.Types.Buildable (Target, Buildable(debianSourceTree), asBuildable)
 import qualified Debian.AutoBuilder.Types.CacheRec as C
 import qualified Debian.AutoBuilder.Types.Packages as P
@@ -29,7 +29,7 @@ import qualified Debian.AutoBuilder.Types.ParamRec as P
 import qualified Debian.AutoBuilder.Version as V
 import Debian.Control.Policy (debianPackageNames, debianSourcePackageName)
 import Debian.Debianize (DebT)
-import Debian.Pretty (pretty)
+import Debian.Pretty (ppDisplay)
 import Debian.Relation (BinPkgName(unBinPkgName), SrcPkgName(unSrcPkgName))
 import Debian.Release (ReleaseName(ReleaseName, relName), releaseName')
 import Debian.Repo.EnvPath (EnvRoot)
@@ -221,7 +221,7 @@ runParameterSet init cache =
           where
             doShow sources =
                 do qPutStrLn $ (relName . sliceListName $ sources) ++ ":"
-                   qPutStrLn . show . pretty . sliceList $ sources
+                   qPutStrLn . ppDisplay . sliceList $ sources
                    exitWith ExitSuccess
       doFlush top =
           do qPutStrLn "Flushing cache"
@@ -241,7 +241,7 @@ runParameterSet init cache =
                 Just uri -> qPutStrLn "Uploading from local repository to remote" >> liftIO (uploadRemote repo uri)
           | True = return []
       upload (_, failed) =
-          do let msg = ("Some targets failed to build:\n  " ++ intercalate "\n  " (map (display . debianSourcePackageName) failed))
+          do let msg = ("Some targets failed to build:\n  " ++ intercalate "\n  " (map (ppDisplay . debianSourcePackageName) failed))
              qPutStrLn msg
              case P.doUpload params of
                True -> qPutStrLn "Skipping upload."

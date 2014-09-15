@@ -18,7 +18,7 @@ import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import Debian.Debianize as Cabal hiding (verbosity, withCurrentDirectory)
-import Debian.Pretty (pretty)
+import Debian.Pretty (ppDisplay)
 import Debian.Relation (SrcPkgName(..))
 import qualified Debian.Repo.Fingerprint as P
 import Debian.Repo.Prelude (rsync)
@@ -124,7 +124,7 @@ instance CabalFlags P.PackageFlag where
     asCabalFlags (P.Maintainer s) = ["--maintainer", s]
     asCabalFlags (P.BuildDep s) = ["--build-dep", s]
     asCabalFlags (P.DevelDep s) = ["--build-dep", s, "--dev-dep", s]
-    asCabalFlags (P.MapDep c d) = ["--map-dep", c ++ "=" ++ show (pretty d)]
+    asCabalFlags (P.MapDep c d) = ["--map-dep", c ++ "=" ++ ppDisplay d]
     asCabalFlags (P.DebVersion s) = ["--deb-version", s]
     asCabalFlags (P.SkipVersion _) = []
     asCabalFlags (P.FailVersion _) = []

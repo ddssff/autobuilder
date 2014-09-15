@@ -17,7 +17,7 @@ import Data.Monoid (mempty, mappend)
 import Data.Set as Set (Set, insert, toList)
 import Debian.Arch (Arch)
 import Debian.AutoBuilder.Types.Packages (Packages(Packages, list, Package), GroupName(GroupName), foldPackages, foldPackages')
-import Debian.Pretty (Pretty(pretty), vcat)
+import Debian.Pretty (PP(..), ppPrint)
 import Debian.Relation (SrcPkgName(SrcPkgName))
 import Debian.Release (ReleaseName )
 import Debian.Repo.Fingerprint (RetrieveMethod)
@@ -27,6 +27,7 @@ import Debian.Version ( DebianVersion, prettyDebianVersion )
 import Debian.URI ( URI )
 import Prelude hiding (map)
 import System.Console.GetOpt
+import Text.PrettyPrint.HughesPJClass (Pretty(pPrint), text, vcat)
 import Text.Read (readMaybe)
 
 -- |An instance of 'ParamClass' contains the configuration parameters
@@ -289,8 +290,8 @@ data TargetSpec
        , groups :: Set.Set GroupName }
      deriving Show
 
-instance Pretty (String, [DebSource]) where
-    pretty (name, ss) = pretty $ show $ (pretty name, map pretty ss)
+instance Pretty (PP (String, [DebSource])) where
+    pPrint (PP (name, ss)) = text $ show $ (ppPrint name, map ppPrint ss)
 
 -- |Output a (somewhat) readable representation of the parameter set.
 prettyPrint :: ParamRec -> String
@@ -304,7 +305,7 @@ prettyPrint x =
             , "showParams=" ++ take 120 (show (showParams x))
             , "flushAll=" ++ take 120 (show (flushAll x))
             , "useRepoCache=" ++ take 120 (show (useRepoCache x))
-            , "sources=" ++ take 120 (show (vcat (map pretty (sources x))))
+            , "sources=" ++ take 120 (show (vcat (map ppPrint (sources x))))
             , "targets=" ++ take 120 (show (targets x))
             , "patterns=" ++ take 120 (show (patterns x))
             , "goals=" ++ take 120 (show (goals x))
