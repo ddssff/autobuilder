@@ -589,7 +589,7 @@ data Status = Complete | Missing [BinPkgName]
 -- |Compute a new version number for a package by adding a vendor tag
 -- with a number sufficiently high to trump the newest version in the
 -- dist, and distinct from versions in any other dist.
-computeNewVersion :: (MonadApt m, MonadRepos m, MonadOS m) => P.CacheRec -> Target -> Maybe SourcePackage -> SourcePackageStatus -> m (Failing DebianVersion)
+computeNewVersion :: (MonadApt m, MonadRepos m, MonadOS m, MonadMask m) => P.CacheRec -> Target -> Maybe SourcePackage -> SourcePackageStatus -> m (Failing DebianVersion)
 computeNewVersion cache target releaseControlInfo _releaseStatus = do
   let current = if buildTrumped then Nothing else releaseControlInfo
       currentVersion = maybe Nothing (Just . parseDebianVersion . T.unpack) (maybe Nothing (fieldValue "Version" . sourceParagraph) current)
@@ -620,7 +620,7 @@ computeNewVersion cache target releaseControlInfo _releaseStatus = do
         -- All the versions that exist in the pool in any dist,
         -- the new version number must not equal any of these.
         available <- sortSourcePackages [G.sourceName (targetDepends target)] <$> aptSourcePackages
-        qPutStrLn ("available versions: " ++ show available)
+        quieter 3 $ qPutStrLn ("available versions: " ++ show available)
         case parseTag (vendor : oldVendors) sourceVersion of
           (_, Just tag) -> return $
                              Failure ["Error: the version string in the changelog has a vendor tag (" ++ show tag ++

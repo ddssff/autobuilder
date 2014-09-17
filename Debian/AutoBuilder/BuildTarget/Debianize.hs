@@ -13,14 +13,14 @@ import Control.Monad.Trans (MonadIO, liftIO)
 import Data.List (isSuffixOf)
 import Debian.AutoBuilder.BuildEnv (envSet)
 import Debian.AutoBuilder.Params (computeTopDir)
-import qualified Debian.AutoBuilder.Types.CacheRec as P
+import qualified Debian.AutoBuilder.Types.CacheRec as P (CacheRec(params))
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
-import qualified Debian.AutoBuilder.Types.ParamRec as P
+import qualified Debian.AutoBuilder.Types.ParamRec as P (buildRelease)
 import Debian.Debianize as Cabal hiding (verbosity, withCurrentDirectory)
 import Debian.Pretty (ppDisplay)
 import Debian.Relation (SrcPkgName(..))
-import qualified Debian.Repo.Fingerprint as P
+import qualified Debian.Repo.Fingerprint as P (DebSpec(SrcDeb))
 import Debian.Repo.Prelude (rsync)
 import Debian.Repo.Internal.Repos (MonadRepos)
 import Debian.Repo.Top (MonadTop, sub, runTopT)
