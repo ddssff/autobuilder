@@ -99,7 +99,10 @@ autobuilderCabal cache pflags specs debianizeDirectory defaultAtoms =
        done <- runDebianizeScript args'
        case done of
          True -> qPutStrLn (showCommandForUser "runhaskell" ("debian/Debianize.hs" : args'))
-         False -> withArgs [] $ Cabal.evalDebT (do qPutStrLn (showCommandForUser "cabal-debian" (["--native"] ++ concatMap asCabalFlags specs ++ concatMap asCabalFlags pflags))
+         False -> withArgs [] $ Cabal.evalDebT (do -- We don't actually run the cabal-debian command here, we use
+                                                   -- the library API and build and print the equivalent command.
+                                                   qPutStrLn (showCommandForUser "cabal-debian" (["--native"] ++ concatMap asCabalFlags specs ++ concatMap asCabalFlags pflags))
+                                                   sourceFormat ~?= Just Native3
                                                    debianization defaultAtoms (applyDebSpecs specs >> mapM_ applyPackageFlag pflags)
                                                    writeDebianization)
                                                (makeAtoms eset)
