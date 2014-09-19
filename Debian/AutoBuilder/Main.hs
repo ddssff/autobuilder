@@ -20,12 +20,12 @@ import Data.Monoid ((<>))
 import Data.Time(NominalDiffTime)
 import Debian.AutoBuilder.BuildEnv (prepareDependOS, prepareBuildOS)
 import Debian.AutoBuilder.BuildTarget (retrieve)
-import qualified Debian.AutoBuilder.Params as P
+import qualified Debian.AutoBuilder.Params as P (computeTopDir, buildCache, baseRelease, findSlice)
 import Debian.AutoBuilder.Target (buildTargets, showTargets)
 import Debian.AutoBuilder.Types.Buildable (Target, Buildable(debianSourceTree), asBuildable)
 import qualified Debian.AutoBuilder.Types.CacheRec as C
-import qualified Debian.AutoBuilder.Types.Packages as P
-import qualified Debian.AutoBuilder.Types.ParamRec as P
+import qualified Debian.AutoBuilder.Types.Packages as P (foldPackages, Packages(Packages, Package, NoPackage, Named), spec, list, packages, flags, PackageFlag(CabalPin))
+import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec, getParams, doHelp, usage, verbosity, showParams, showSources, flushAll, doSSHExport, uploadURI, report, buildRelease, ifSourcesChanged, requiredVersion, prettyPrint, doUpload, doNewDist, newDistProgram, createRelease, buildPackages)
 import qualified Debian.AutoBuilder.Version as V
 import Debian.Control.Policy (debianPackageNames, debianSourcePackageName)
 import Debian.Debianize (DebT)
@@ -33,7 +33,7 @@ import Debian.Pretty (ppDisplay)
 import Debian.Relation (BinPkgName(unBinPkgName), SrcPkgName(unSrcPkgName))
 import Debian.Release (ReleaseName(ReleaseName, relName), releaseName')
 import Debian.Repo.EnvPath (EnvRoot)
-import qualified Debian.Repo.Fingerprint as P
+import qualified Debian.Repo.Fingerprint as P (RetrieveMethod(Patch, Cd, DebDir, DataFiles, Debianize, Debianize', Proc, Quilt, SourceDeb, Twice))
 import Debian.Repo.Internal.Repos (MonadRepos, runReposCachedT, MonadReposCached)
 import Debian.Repo.LocalRepository(uploadRemote, verifyUploadURI)
 import Debian.Repo.MonadOS (MonadOS(getOS), evalMonadOS)
@@ -75,70 +75,47 @@ main init myParams =
        -- argument, using myParams to create each default ParamRec
        -- value.
        let recs = P.getParams args (myParams home)
+       when (any P.doHelp recs) (IO.hPutStr IO.stderr (P.usage "Usage: ") >> exitWith ExitSuccess)
        tops <- nub <$> mapM P.computeTopDir recs
-       case (any P.doHelp recs, tops) of
-         (False, [top]) ->
-             do
-                let paramSets = map (\ params -> params {P.buildPackages = P.buildTargets params (P.knownPackages params)}) recs
-                results <- runReposCachedT top (foldM (doParameterSet init) [] paramSets) `catch` handle
-                IO.hFlush IO.stdout
-                IO.hFlush IO.stderr
-                -- The result of processing a set of parameters is either an
-                -- exception or a completion code.  Here we print a summary and
-                -- exit with a suitable result code.
-                -- ePutStrLn (intercalate "\n  " (map (\ (num, result) -> "Parameter set " ++ show num ++ ": " ++ showResult result) (zip [(1 :: Int)..] results)))
-                case partitionFailing results of
-                  ([], _) -> return ()
-                  _ ->
-                      ePutStrLn (intercalate "\n  " (map (\ (num, result) -> "Parameter set " ++ show num ++ ": " ++ showResult result) (zip [(1 :: Int)..] results))) >>
-                      exitWith (ExitFailure 1)
-         (True, _) -> IO.hPutStr IO.stderr (P.usage "Usage: ")
-         (_, tops) -> IO.hPutStr IO.stderr ("Parameter sets have different top directories: " ++ show tops)
-    where showResult (Failure ss) = intercalate "\n  " ("Failure:" : ss)
-          showResult (Success _) = "Ok"
-          partitionFailing :: [Failing a] -> ([[String]], [a])
-          partitionFailing xs = p ([], []) xs
-              where p result [] = result
-                    p (fs, ss) (Failure f : more) = p (f : fs, ss) more
-                    p (fs, ss) (Success s : more) = p (fs, s : ss) more
-          handle (e :: SomeException) = IO.hPutStrLn IO.stderr ("Exception: " ++ show e) >> throwM e
+       case tops of
+         -- All the work for a given run must occur in the same top
+         -- directory - ~/.autobuilder for example.
+         [top] -> runReposCachedT top (foldM (doParameterSet init) [] recs) `catch` showAndThrow >>= testResults
+         tops -> IO.hPutStr IO.stderr ("Parameter sets have different top directories: " ++ show tops)
+    where testResults results =
+              case partitionFailing results of
+                ([], _) -> return ()
+                _ ->
+                    ePutStrLn (intercalate "\n  " (map (uncurry showResult) (zip [(1 :: Int)..] results))) >>
+                    exitWith (ExitFailure 1)
+          showResult num result =
+              "Parameter set " ++ show num ++ ": " ++  case result of
+                                                         Failure ss -> intercalate "\n  " ("Failure:" : ss)
+                                                         Success _ -> "Ok"
+          showAndThrow (e :: SomeException) = IO.hPutStrLn IO.stderr ("Exception: " ++ show e) >> throwM e
+
+partitionFailing :: [Failing a] -> ([[String]], [a])
+partitionFailing xs = p ([], []) xs
+    where p result [] = result
+          p (fs, ss) (Failure f : more) = p (f : fs, ss) more
+          p (fs, ss) (Success s : more) = p (fs, s : ss) more
+
+isFailure :: Failing a -> Bool
+isFailure (Failure _) = True
+isFailure _ = False
 
 -- |Process one set of parameters.  Usually there is only one, but there
 -- can be several which are run sequentially.  Stop on first failure.
 doParameterSet :: (MonadReposCached m, MonadMask m) => DebT IO () -> [Failing ([Chunk L.ByteString], NominalDiffTime)] -> P.ParamRec -> m [Failing ([Chunk L.ByteString], NominalDiffTime)]
-doParameterSet init results params =
-#if 0
-    let -- Set of bogus target names in the forceBuild list
-        -- badTargetNames names = difference names allTargetNames
-        allTargetNames :: Set SrcPkgName
-        allTargetNames = P.foldPackages (\ _ _ result -> insert name result) (P.buildPackages params) empty
-        badForceBuild = difference (fromList (P.forceBuild params)) allTargetNames
-        badBuildTrumped = difference (fromList (P.buildTrumped params)) allTargetNames
-        badGoals = difference (fromList (P.goals params)) allTargetNames
-        badDiscards = difference (P.discard params) allTargetNames in
-#endif
-    case () of
-#if 0
-      _ | not (Set.null badForceBuild) ->
-            error $ "Invalid forceBuild target name(s): " ++ intercalate ", " (map unSrcPkgName (toList badForceBuild))
-        | not (Set.null badBuildTrumped) ->
-            error $ "Invalid buildTrumped target name(s): " ++ intercalate ", " (map unSrcPkgName (toList badBuildTrumped))
-        | not (Set.null badGoals) ->
-            error $ "Invalid goal target name(s): " ++ intercalate ", " (map unSrcPkgName (toList badGoals))
-        | not (Set.null badDiscards) ->
-            error $ "Invalid discard target name(s): " ++ intercalate ", " (map unSrcPkgName (toList badDiscards))
-#endif
-      _ | any isFailure results ->
-            return results
-      _ ->
-          withModifiedVerbosity (const (P.verbosity params))
+-- If one parameter set fails, don't try the rest.  Not sure if
+-- this is the right thing, but it is safe.
+doParameterSet _ results _ | any isFailure results = return results
+doParameterSet init results params = do
+  result <- withModifiedVerbosity (const (P.verbosity params))
             (do top <- askTop
                 withLock (top </> "lockfile") (P.buildCache params >>= runParameterSet init))
-            `catch` (\ (e :: SomeException) -> return (Failure [show e])) >>=
-          (\ result -> return (result : results))
-    where
-      isFailure (Failure _) = True
-      isFailure _ = False
+              `catch` (\ (e :: SomeException) -> return (Failure [show e]))
+  return (result : results)
 
 -- | Get the sources.list for the local upload repository associated
 -- with the OSImage.  The resulting paths are for running inside the

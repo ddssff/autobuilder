@@ -116,7 +116,6 @@ defaultParams myBuildRelease -- e.g. wheezy or precise
     , cleanUp = False
     , ifSourcesChanged = SourcesChangedError
     , knownPackages = NoPackage
-    , buildPackages = NoPackage
     }
 
 defaultVendorTag = "+" ++ defaultVendor

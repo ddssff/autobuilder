@@ -7,7 +7,7 @@ module Debian.AutoBuilder.Types.ParamRec
     , prettyPrint
     , getParams
     , usage
-    , buildTargets
+    , buildPackages
     ) where
 
 import Control.Arrow (first)
@@ -265,8 +265,6 @@ data ParamRec =
     --  * 'SourcesChangedRemove' - discard and rebuild the environment
     -- , emailTo :: [String]
     -- -- ^ Who should get emails of autobuilder progress messages.
-    , buildPackages :: Packages
-    -- ^ The set of package that need to be built.
     , knownPackages :: Packages
     -- ^ The set of all known packages
   }
@@ -519,15 +517,15 @@ fmtLong (NoArg  _   ) lo = "--" ++ lo
 fmtLong (ReqArg _ ad) lo = "--" ++ lo ++ "=" ++ ad
 fmtLong (OptArg _ ad) lo = "--" ++ lo ++ "[=" ++ ad ++ "]"
 
-buildTargets :: ParamRec -> Packages -> Packages
-buildTargets params knownTargets =
+buildPackages :: ParamRec -> Packages
+buildPackages params =
     case targets params of
-      TargetSpec {allTargets = True} -> knownTargets
+      TargetSpec {allTargets = True} -> knownPackages params
       TargetSpec {groups = names} -> Packages {list = map findByName (toList names) ++ concatMap findByPattern (patterns params)}
     where
       findByName :: GroupName -> Packages
       findByName s =
-          foldPackages' f n g h knownTargets mempty
+          foldPackages' f n g h (knownPackages params) mempty
           where
             f _ _ r = r
             n s' p r = if s == s'
@@ -540,4 +538,4 @@ buildTargets params knownTargets =
       findByPattern  :: RetrieveMethod -> [Packages]
       findByPattern pat = foldPackages (\ method flags r -> case listify (== pat) method of
                                                               [] -> r
-                                                              _ -> Package method flags : r) knownTargets []
+                                                              _ -> Package method flags : r) (knownPackages params) []
