@@ -24,7 +24,7 @@ import qualified Debian.AutoBuilder.Params as P (computeTopDir, buildCache, base
 import Debian.AutoBuilder.Target (buildTargets, showTargets)
 import Debian.AutoBuilder.Types.Buildable (Target, Buildable(debianSourceTree), asBuildable)
 import qualified Debian.AutoBuilder.Types.CacheRec as C
-import qualified Debian.AutoBuilder.Types.Packages as P (foldPackages, Packages(Packages, Package, NoPackage, Named), spec, list, packages, flags, PackageFlag(CabalPin))
+import qualified Debian.AutoBuilder.Types.Packages as P (foldPackages, Packages(Packages, APackage, NoPackage, Named), spec, list, packages, flags, PackageFlag(CabalPin))
 import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec, getParams, doHelp, usage, verbosity, showParams, showSources, flushAll, doSSHExport, uploadURI, report, buildRelease, ifSourcesChanged, requiredVersion, prettyPrint, doUpload, doNewDist, newDistProgram, createRelease, buildPackages)
 import qualified Debian.AutoBuilder.Version as V
 import Debian.Control.Policy (debianPackageNames, debianSourcePackageName)
@@ -139,7 +139,7 @@ runParameterSet init cache =
       liftIO checkPermissions
       maybe (return ()) (verifyUploadURI (P.doSSHExport $ params)) (P.uploadURI params)
       dependOS <- prepareDependOS params buildRelease
-      let allTargets = (P.foldPackages (\ spec flags l -> (spec, flags) : l) (P.buildPackages params) [])
+      let allTargets = (P.foldPackages (\ p l -> (P.spec p, P.flags p) : l) (P.buildPackages params) [])
       buildOS <- evalMonadOS (do sources <- osBaseDistro <$> getOS
                                  updateCacheSources (P.ifSourcesChanged params) sources
                                  when (P.report params) (ePutStrLn . doReport $ P.buildPackages params)
@@ -288,7 +288,7 @@ doReport =
       doReport' P.NoPackage = []
       doReport' p@(P.Packages {}) = concatMap doReport' (P.list p)
       doReport' p@(P.Named {}) = doReport' (P.packages p)
-      doReport' p@(P.Package {}) =
+      doReport' (P.APackage p) =
           patched (P.spec p) ++ pinned (P.flags p)
           where
             patched :: P.RetrieveMethod -> [String]

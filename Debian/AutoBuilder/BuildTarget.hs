@@ -7,6 +7,7 @@ module Debian.AutoBuilder.BuildTarget
 import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans (liftIO)
 import Data.List (intersperse)
+import Data.Monoid (mempty)
 import Data.Set (empty)
 import qualified Debian.AutoBuilder.BuildTarget.Apt as Apt
 import qualified Debian.AutoBuilder.BuildTarget.Cd as Cd
@@ -127,6 +128,7 @@ retrieve defaultAtoms cache method flags =
       P.Twice base -> retrieve defaultAtoms cache base flags >>=
                       Twice.prepare method flags
       P.Uri uri sum -> Uri.prepare cache method flags uri sum
+      P.Zero -> return $ T.Download P.Zero mempty mempty Nothing mempty mempty undefined undefined mempty
 
 {-
 -- | Perform an IO operation with /proc mounted

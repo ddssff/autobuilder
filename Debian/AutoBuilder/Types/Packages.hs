@@ -3,6 +3,7 @@
 -- or more packages.
 module Debian.AutoBuilder.Types.Packages
     ( Packages(..)
+    , Package(..)
     , GroupName(..)
     , foldPackages
     , foldPackages'
@@ -66,14 +67,7 @@ instance IsString GroupName where
 
 data Packages
     = NoPackage
-    | Package
-      { spec :: RetrieveMethod
-      -- ^ This value describes the method used to download the
-      -- package's source code.
-      , flags :: [PackageFlag]
-      -- ^ These flags provide additional details about how to obtain
-      -- the package.
-      }
+    | APackage Package
     | Packages
       { list :: [Packages]
       }
@@ -83,12 +77,25 @@ data Packages
       } deriving (Show, Data, Typeable)
     -- deriving (Show, Eq, Ord)
 
+data Package
+    = Package
+      { spec :: RetrieveMethod
+      -- ^ This value describes the method used to download the
+      -- package's source code.
+      , flags :: [PackageFlag]
+      -- ^ These flags provide additional details about how to obtain
+      -- the package.
+      } deriving (Show, Data, Typeable) -- We can't derive Eq while PackageFlag contains functions
+
 instance Eq Packages where
-    (Package {spec = s1}) == (Package {spec = s2}) = s1 == s2
+    (APackage p1) == (APackage p2) = p1 == p2
     (Packages {list = l1}) == (Packages {list = l2}) = l1 == l2
     (Named {group = g1, packages = p1}) == (Named {group = g2, packages = p2}) = g1 == g2 && p1 == p2
     NoPackage == NoPackage = True
     _ == _ = False
+
+instance Eq Package where
+    p1 == p2 = spec p1 == spec p2
 
 instance Monoid GroupName where
     mempty = NoName
@@ -99,8 +106,8 @@ instance Monoid Packages where
     mempty = NoPackage
     mappend NoPackage y = y
     mappend x NoPackage = x
-    mappend x@(Package {}) y = mappend (Packages [x]) y
-    mappend x y@(Package {}) = mappend x (Packages [y])
+    mappend x@(APackage {}) y = mappend (Packages [x]) y
+    mappend x y@(APackage {}) = mappend x (Packages [y])
     mappend x@(Packages {}) y@(Packages {}) = Packages { list = list x ++ list y }
     mappend x@(Named {}) y@(Named {}) =
         Named { group = mappend (group x) (group y)
@@ -108,34 +115,34 @@ instance Monoid Packages where
     mappend x@(Named {}) y = x {packages = mappend (packages x) y}
     mappend x y@(Named {}) = y {packages = mappend x (packages y)}
 
-foldPackages' :: (RetrieveMethod -> [PackageFlag] -> r -> r)
+foldPackages' :: (Package -> r -> r)
               -> (GroupName -> Packages -> r -> r)
               -> ([Packages] -> r -> r)
               -> (r -> r)
               -> Packages -> r -> r
 foldPackages' _ n _ _ ps@(Named {}) r = n (group ps) (packages ps) r
 foldPackages' _ _ g _ ps@(Packages {}) r = g (list ps) r
-foldPackages' f _ _ _ p@(Package {}) r = f (spec p) (flags p) r
+foldPackages' f _ _ _ (APackage p) r = f p r
 foldPackages' _ _ _ h NoPackage r = h r
 
 -- FIXME: this can be implemented using foldPackages'
-foldPackages :: (RetrieveMethod -> [PackageFlag] -> r -> r) -> Packages -> r -> r
+foldPackages :: (Package -> r -> r) -> Packages -> r -> r
 foldPackages _ NoPackage r = r
-foldPackages f x@(Package {}) r = f (spec x) (flags x) r
+foldPackages f (APackage x) r = f x r
 foldPackages f x@(Packages {}) r = foldr (foldPackages f) r (list x)
 foldPackages f x@(Named {}) r = foldPackages f (packages x) r
 
 filterPackages :: (Packages -> Bool) -> Packages -> Packages
-filterPackages p xs =
-    foldPackages (\ spec' flags' xs' ->
-                      if p (Package spec' flags')
-                      then mappend (Package spec' flags') xs'
+filterPackages f xs =
+    foldPackages (\ p xs' ->
+                      if f (APackage p)
+                      then mappend (APackage p) xs'
                       else xs')
                  xs
                  mempty
 
 packageCount :: Packages -> Int
-packageCount ps = foldPackages (\ _ _ n -> n + 1) ps 0
+packageCount ps = foldPackages (\ _ n -> n + 1) ps 0
 
 -- | Hints about debianizing and building the package.
 data PackageFlag
@@ -222,99 +229,88 @@ relaxInfo flags' =
 
 -- Combinators for the Packages type
 
-method :: RetrieveMethod -> Packages
-method m =
-    Package { spec = m
-            , flags = [] }
+method :: RetrieveMethod -> Package
+method m = Package { spec = m, flags = [] }
 
 -- | Add a flag to every package in p
-flag :: Packages -> PackageFlag -> Packages
-flag p@(Named {}) f = p {packages = flag (packages p) f}
-flag p@(Package {}) f = p {flags = f : flags p}
-flag p@(Packages {}) f = p {list = map (`flag` f) (list p)}
-flag NoPackage _ = NoPackage
+flag :: Package -> PackageFlag -> Package
+flag p f = p {flags = f : flags p}
 
-mflag :: Packages -> Maybe PackageFlag -> Packages
+mflag :: Package -> Maybe PackageFlag -> Package
 mflag p Nothing = p
 mflag p (Just f) = flag p f
 
-patch :: Packages -> ByteString -> Packages
-patch package@(Package {}) s = package {spec = Patch (spec package) s}
-patch p@(Packages {}) s = p {list = map (`patch` s) (list p)}
-patch NoPackage _ = NoPackage
-patch p@(Named {}) _ = p
+patch :: Package -> ByteString -> Package
+patch p s = p {spec = Patch (spec p) s}
 
 rename :: Packages -> GroupName -> Packages
 rename p s = p {group = s}
 
-mapSpec :: (RetrieveMethod -> RetrieveMethod) -> Packages -> Packages
+mapSpec :: (RetrieveMethod -> RetrieveMethod) -> Package -> Package
 mapSpec f p@(Package {spec = x}) = p {spec = f x}
-mapSpec _ NoPackage = NoPackage
-mapSpec f p@(Packages {list = xs}) = p {list = map (mapSpec f) xs}
-mapSpec f p@(Named {}) = p {packages = mapSpec f (packages p)}
 
-cd :: Packages -> FilePath -> Packages
+cd :: Package -> FilePath -> Package
 cd p path = p {spec = Cd path (spec p)}
 
-apt :: String -> String -> Packages
+apt :: String -> String -> Package
 apt dist name =
           Package
                { spec = Apt dist name
                , flags = [] }
 
-bzr :: String -> Packages
+bzr :: String -> Package
 bzr path = method (Bzr path)
 
-darcs :: String -> Packages
+darcs :: String -> Package
 darcs path =
     Package { spec = Darcs path
             , flags = [] }
 
-datafiles :: RetrieveMethod -> RetrieveMethod -> FilePath -> Packages
+datafiles :: RetrieveMethod -> RetrieveMethod -> FilePath -> Package
 datafiles cabal files dest = method (DataFiles cabal files dest)
 
-debianize :: Packages -> Packages
+debianize :: Package -> Package
 debianize p = p { spec = Debianize (spec p) }
 
 -- debdir :: String -> RetrieveMethod -> RetrieveMethod -> Packages
 -- debdir name method1 method2 = method name (DebDir method1 method1)
 
-debdir :: Packages -> RetrieveMethod -> Packages
+debdir :: Package -> RetrieveMethod -> Package
 debdir p debian = p {spec = DebDir (spec p) debian}
 
-dir :: FilePath -> Packages
+dir :: FilePath -> Package
 dir path = method (Dir path)
 
-git :: String -> [GitSpec] -> Packages
+git :: String -> [GitSpec] -> Package
 git path gitspecs = method (Git path gitspecs)
 
-hackage :: String -> Packages
+hackage :: String -> Package
 hackage s =
     Package { spec = Hackage s
             , flags = [] }
 
-hg :: String -> Packages
+hg :: String -> Package
 hg path = method (Hg path)
 
-proc :: Packages -> Packages
+proc :: Package -> Package
 proc = mapSpec Proc
 
-quilt :: RetrieveMethod -> Packages -> Packages
+quilt :: RetrieveMethod -> Package -> Package
 quilt patchdir p = p {spec = Quilt (spec p) patchdir}
 
-sourceDeb :: Packages -> Packages
+sourceDeb :: Package -> Package
 sourceDeb p = method (SourceDeb (spec p))
 
-svn :: String -> Packages
+svn :: String -> Package
 svn path = method (Svn path)
 
-tla :: String -> Packages
+tla :: String -> Package
 tla path = method (Tla path)
 
-twice :: Packages -> Packages
+twice :: Package -> Package
 twice p = p {spec = Twice (spec p)}
 
-uri :: String -> String -> Packages
+uri :: String -> String -> Package
 uri tarball checksum = method (Uri tarball checksum)
 
 -- | The target name returned is only used by the autobuilder command

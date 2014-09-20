@@ -16,7 +16,7 @@ import Data.List as List (map)
 import Data.Monoid (mempty, mappend)
 import Data.Set as Set (Set, insert, toList)
 import Debian.Arch (Arch)
-import Debian.AutoBuilder.Types.Packages (Packages(Packages, list, Package), GroupName(GroupName), foldPackages, foldPackages')
+import Debian.AutoBuilder.Types.Packages (Packages(Packages, list, APackage), Package(spec), GroupName(GroupName), foldPackages, foldPackages')
 import Debian.Pretty (PP(..), ppPrint)
 import Debian.Relation (SrcPkgName(SrcPkgName))
 import Debian.Release (ReleaseName )
@@ -521,13 +521,13 @@ buildPackages :: ParamRec -> Packages
 buildPackages params =
     case targets params of
       TargetSpec {allTargets = True} -> knownPackages params
-      TargetSpec {groups = names} -> Packages {list = map findByName (toList names) ++ concatMap findByPattern (patterns params)}
+      TargetSpec {groups = names} -> Packages {list = map findByName (toList names) ++ map APackage (concatMap findByPattern (patterns params))}
     where
       findByName :: GroupName -> Packages
       findByName s =
           foldPackages' f n g h (knownPackages params) mempty
           where
-            f _ _ r = r
+            f _ r = r
             n s' p r = if s == s'
                        then mappend r p
                        else foldPackages' f n g h p r
@@ -535,7 +535,7 @@ buildPackages params =
             h r = r
       -- Filter the singleton packages by whether its RetrieveMethod
       -- contains pat.
-      findByPattern  :: RetrieveMethod -> [Packages]
-      findByPattern pat = foldPackages (\ method flags r -> case listify (== pat) method of
-                                                              [] -> r
-                                                              _ -> Package method flags : r) (knownPackages params) []
+      findByPattern  :: RetrieveMethod -> [Package]
+      findByPattern pat = foldPackages (\ p r -> case listify (== pat) (spec p) of
+                                                   [] -> r
+                                                   _ -> p : r) (knownPackages params) []

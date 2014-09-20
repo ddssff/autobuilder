@@ -34,7 +34,7 @@ import Debian.AutoBuilder.Types.Buildable (Buildable(..), failing, prepareTarget
 import qualified Debian.AutoBuilder.Types.CacheRec as P (CacheRec(params))
 import qualified Debian.AutoBuilder.Types.Download as T (Download(buildWrapper, getTop, logText), flags, method)
 import Debian.AutoBuilder.Types.Fingerprint (buildDecision, targetFingerprint)
-import qualified Debian.AutoBuilder.Types.Packages as P (foldPackages, packageCount, PackageFlag(UDeb), Packages)
+import qualified Debian.AutoBuilder.Types.Packages as P (foldPackages, packageCount, PackageFlag(UDeb), Packages, Package(spec))
 import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec(autobuilderEmail, buildDepends, buildRelease, buildTrumped, discard, doNotChangeVersion, dryRun, extraReleaseTag, noClean, oldVendorTags, preferred, releaseAliases, setEnv, strictness, vendorTag), Strictness(Lax))
 import qualified Debian.AutoBuilder.Version as V (autoBuilderVersion)
 import Debian.Changes (ChangedFileSpec(changedFileSize, changedFileName, changedFileMD5sum, changedFileSHA1sum, changedFileSHA256sum), ChangeLogEntry(logWho, logVersion, logDists, logDate, logComments), ChangesFile(changeRelease, changeInfo, changeFiles, changeDir))
@@ -313,7 +313,7 @@ showTargets :: P.Packages -> String
 showTargets targets =
     unlines (heading :
              map (const '-') heading :
-             map concat (columns (reverse (snd (P.foldPackages (\ spec _flags (count, rows) -> (count + 1, [printf "%4d. " count, " ", limit 100 (show spec)] : rows)) targets (1 :: Int, []))))))
+             map concat (columns (reverse (snd (P.foldPackages (\ p (count, rows) -> (count + 1, [printf "%4d. " count, " ", limit 100 (show (P.spec p))] : rows)) targets (1 :: Int, []))))))
     where
       heading = show (P.packageCount targets) ++ " Targets:"
 
