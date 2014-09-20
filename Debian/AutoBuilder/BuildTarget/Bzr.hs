@@ -14,11 +14,12 @@ import Debian.AutoBuilder.Types.Download (Download(..))
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Repo
+import Debian.Repo.Fingerprint (RetrieveMethod)
 import Debian.URI
 import System.FilePath (splitFileName, (</>))
 import System.Unix.Directory
 import System.Process (shell)
-import Debian.Repo.Prelude.Verbosity (timeTask, qPutStrLn, readProcFailing)
+import Debian.Repo.Prelude.Verbosity (timeTask, qPutStrLn)
 import System.Directory
 import System.Process.ListLike (collectProcessTriple)
 
@@ -26,22 +27,23 @@ documentation :: [String]
 documentation = [ "bzr:<revision> - A target of this form retrieves the a Bazaar archive with the"
                 , "given revision name." ]
 
-prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> P.Packages -> String -> m Download
-prepare cache package version =
+prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m Download
+prepare cache method flags version =
   do
     dir <- askTop >>= \ top -> return $ top </> "bzr" </> show (md5 (L.pack (maybe "" uriRegName (uriAuthority uri) ++ (uriPath uri))))
     when (P.flushSource (P.params cache)) (liftIO (removeRecursiveSafely dir))
     exists <- liftIO $ doesDirectoryExist dir
     tree <- liftIO $ if exists then updateSource dir else createSource dir
     return $ Download
-               { package = package
+               { method = method
+               , flags = flags
                , getTop = topdir tree
-               , logText = "Bazaar revision: " ++ show (P.spec package)
+               , logText = "Bazaar revision: " ++ show method
                , mVersion = Nothing
                , origTarball = Nothing
                , cleanTarget = \ top ->
                    do qPutStrLn ("Clean Bazaar target in " ++ top)
-                      case P.keepRCS package of
+                      case any P.isKeepRCS flags of
                         False -> let cmd = "find '" ++ top ++ "' -name '.bzr' -prune | xargs rm -rf" in
                                  timeTask (readProcFailing (shell cmd) "")
                         True -> return ([], 0)

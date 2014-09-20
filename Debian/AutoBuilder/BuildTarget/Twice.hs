@@ -3,6 +3,7 @@ module Debian.AutoBuilder.BuildTarget.Twice where
 
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
+import Debian.Repo.Fingerprint (RetrieveMethod)
 import Debian.Repo.Internal.Repos (MonadRepos)
 
 documentation = [ "twice:<target> - A target of this form modifies another target by"
@@ -10,10 +11,11 @@ documentation = [ "twice:<target> - A target of this form modifies another targe
                 , "the first time.  For some reason, certain packages are designed"
                 , "to fail the first time to prevent fully automated builds."]
 
-prepare :: MonadRepos m => P.Packages -> T.Download -> m T.Download
-prepare package base =
+prepare :: MonadRepos m => RetrieveMethod -> [P.PackageFlag] -> T.Download -> m T.Download
+prepare method flags base =
     do return $ T.Download {
-                    T.package = package
+                    T.method = method
+                  , T.flags = flags
                   , T.getTop = T.getTop base
                   , T.logText = T.logText base ++ " (twice if necessary)"
                   , T.mVersion = Nothing

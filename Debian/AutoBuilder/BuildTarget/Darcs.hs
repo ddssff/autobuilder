@@ -8,13 +8,14 @@ import Control.Monad (when)
 import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as B
 import Data.Digest.Pure.MD5 (md5)
+import Data.Maybe (mapMaybe)
 import Data.Set (singleton)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import Debian.Repo
-import qualified Debian.Repo.Fingerprint as P
+import Debian.Repo.Fingerprint (RetrieveMethod, RetrieveAttribute(DarcsChangesId))
 import Network.URI (URI(..), URIAuth(..), uriToString, parseURI)
 import System.Directory
 import System.Exit (ExitCode(..))
@@ -42,8 +43,8 @@ darcsRev tree m =
       path = topdir tree
 -}
 
-prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> P.Packages -> String -> m T.Download
-prepare cache package theUri =
+prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m T.Download
+prepare cache method flags theUri =
     do
       base <- sub "darcs"
       let dir = base ++ "/" ++ sum
@@ -52,18 +53,19 @@ prepare cache package theUri =
       tree <- liftIO $ if exists then verifySource dir else createSource dir
       attr <- liftIO $ readProcFailing ((proc "darcs" ["log", "--xml-output"]) {cwd = Just dir}) "" >>=  return . show . md5 . collectProcessOutput
       _output <- liftIO $ fixLink base
-      return $ T.Download { T.package = package
+      return $ T.Download { T.method = method
+                          , T.flags = flags
                           , T.getTop = topdir tree
-                          , T.logText =  "Darcs revision: " ++ show (P.spec package)
+                          , T.logText =  "Darcs revision: " ++ show method
                           , T.mVersion = Nothing
                           , T.origTarball = Nothing
                           , T.cleanTarget =
-                              \ top -> case P.keepRCS package of
+                              \ top -> case any P.isKeepRCS flags of
                                          False -> let cmd = shell ("find " ++ top ++ " -name '_darcs' -maxdepth 1 -prune | xargs rm -rf") in
                                                   timeTask (readProcFailing cmd "")
                                          True -> return ([], 0)
                           , T.buildWrapper = id
-                          , T.attrs = singleton (P.DarcsChangesId attr)
+                          , T.attrs = singleton (DarcsChangesId attr)
                           }
     where
       verifySource :: FilePath -> IO SourceTree
@@ -101,7 +103,7 @@ prepare cache package theUri =
       name = snd . splitFileName $ (uriPath theUri')
       sum = show (md5 (B.pack uriAndTag))
       uriAndTag = uriToString id theUri' "" ++ maybe "" (\ tag -> "=" ++ tag) theTag
-      theTag = case P.testPackageFlag (\ x -> case x of P.DarcsTag s -> Just s; _ -> Nothing) package of
+      theTag = case mapMaybe P.darcsTag flags of
                  [] -> Nothing
                  [x] -> Just x
                  xs -> error ("Conflicting tags for darcs get of " ++ theUri ++ ": " ++ show xs)

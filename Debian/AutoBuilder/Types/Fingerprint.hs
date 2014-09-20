@@ -69,24 +69,24 @@ buildDecision :: P.CacheRec
               -> BuildDecision
 buildDecision cache target _ _ _ | elem (debianSourcePackageName (debianSourceTree (tgt target))) (P.forceBuild (P.params cache)) = Yes "--force-build option is set"
 buildDecision _ target _ (Fingerprint {upstreamVersion = sourceVersion}) _
-    | any (== (show (prettyDebianVersion sourceVersion))) (mapMaybe skipVersion . P.flags . T.package . download . tgt $ target) =
+    | any (== (show (prettyDebianVersion sourceVersion))) (mapMaybe skipVersion . T.flags . download . tgt $ target) =
         No ("Skipped version " ++ show (prettyDebianVersion sourceVersion))
     where
       skipVersion (P.SkipVersion s) = Just s
       skipVersion _ = Nothing
 buildDecision _ target _ (Fingerprint {upstreamVersion = sourceVersion}) _
-    | any (== (show (prettyDebianVersion sourceVersion))) (mapMaybe failVersion . P.flags . T.package . download . tgt $ target) =
+    | any (== (show (prettyDebianVersion sourceVersion))) (mapMaybe failVersion . T.flags . download . tgt $ target) =
         No ("Failed version " ++ show (prettyDebianVersion sourceVersion))
     where
       failVersion (P.FailVersion s) = Just s
       failVersion _ = Nothing
 buildDecision _ target _ _ _
-    | any isSkipPackage (P.flags . T.package . download . tgt $ target) =
+    | any isSkipPackage (T.flags . download . tgt $ target) =
         No "Skipped"
     where isSkipPackage P.SkipPackage = True
           isSkipPackage _ = False
 buildDecision _ target _ _ _
-    | any isFailPackage (P.flags . T.package . download . tgt $ target) =
+    | any isFailPackage (T.flags . download . tgt $ target) =
         Error "FailPackage specified"
     where isFailPackage P.FailPackage = True
           isFailPackage _ = False

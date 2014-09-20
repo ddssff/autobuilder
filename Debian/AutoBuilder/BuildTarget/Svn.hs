@@ -16,6 +16,7 @@ import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Repo
+import Debian.Repo.Fingerprint (RetrieveMethod)
 import Network.URI (URI(..), URIAuth(..), parseURI, unEscapeString)
 import System.Directory
 import System.Exit
@@ -44,20 +45,21 @@ password userInfo =
     then []
     else ["--password",unEscapeString pw]
 
-prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> P.Packages -> String -> m T.Download
-prepare cache package uri =
+prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m T.Download
+prepare cache method flags uri =
     do dir <- sub ("svn" </> show (md5 (L.pack (maybe "" uriRegName (uriAuthority uri') ++ (uriPath uri')))))
        when (P.flushSource (P.params cache)) (liftIO (removeRecursiveSafely dir))
        exists <- liftIO $ doesDirectoryExist dir
        tree <- liftIO $ if exists then verifySource dir else createSource dir
-       return $ T.Download { T.package = package
+       return $ T.Download { T.method = method
+                           , T.flags = flags
                            , T.getTop = topdir tree
-                           , T.logText =  "SVN revision: " ++ show (P.spec package)
+                           , T.logText =  "SVN revision: " ++ show method
                            , T.mVersion = Nothing
                            , T.origTarball = Nothing
                            , T.cleanTarget =
                                \ path ->
-                                   case P.keepRCS package of
+                                   case any P.isKeepRCS flags of
                                      False -> let cmd = "find " ++ path ++ " -name .svn -type d -print0 | xargs -0 -r -n1 rm -rf" in
                                               timeTask (readProcFailing (shell cmd) "")
                                      True -> return ([], 0)

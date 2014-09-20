@@ -34,18 +34,18 @@ module Debian.AutoBuilder.Types.Packages
     , uri
     , cd
     , findSource
-    , testPackageFlag
-    , keepRCS
+    , isKeepRCS
+    , cabalPin
+    , gitBranch
+    , darcsTag
+    , aptPin
     ) where
 
 import Debug.Trace as D
 
 import Control.Exception (SomeException, try)
 import Data.ByteString (ByteString)
---import Data.Char (toLower)
 import Data.Generics (Data, Typeable)
-import Data.List (nub, sort)
-import Data.Maybe (catMaybes)
 import Data.Monoid (Monoid(mempty, mappend))
 import Data.String (IsString(fromString))
 import qualified Debian.Debianize as CD
@@ -341,13 +341,22 @@ findSource (Patch (Apt _dist _name) _) copyDir =
                _ -> error $ "Multiple debian source trees in " ++ copyDir ++ ": " ++ show (map fst ts))
 findSource _ copyDir = return copyDir
 
-testPackageFlag :: (Eq a, Ord a, Show a) => (PackageFlag -> Maybe a) -> Packages -> [a]
-testPackageFlag p package@(Package {}) = nub (sort (catMaybes (map p (flags package))))
-testPackageFlag _ _ = []
+isKeepRCS :: PackageFlag -> Bool
+isKeepRCS KeepRCS = True
+isKeepRCS _ = False
 
-keepRCS :: Packages -> Bool
-keepRCS package@(Package {}) =
-    case testPackageFlag (\ x -> case x of KeepRCS -> Just (); _ -> Nothing) package of
-      [] -> False
-      _ -> True
-keepRCS _ = False
+cabalPin :: PackageFlag -> Maybe String
+cabalPin (CabalPin v) = Just v
+cabalPin _ = Nothing
+
+gitBranch :: PackageFlag -> Maybe String
+gitBranch (GitBranch v) = Just v
+gitBranch _ = Nothing
+
+darcsTag :: PackageFlag -> Maybe String
+darcsTag (DarcsTag v) = Just v
+darcsTag _ = Nothing
+
+aptPin :: PackageFlag -> Maybe String
+aptPin (AptPin v) = Just v
+aptPin _ = Nothing

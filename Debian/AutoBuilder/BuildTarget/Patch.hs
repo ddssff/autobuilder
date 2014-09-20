@@ -44,13 +44,13 @@ instance Show Patch where
 documentation :: [String]
 documentation = [ "Patch <target> <patchtext> - Apply the patch to the target." ]
 
-prepare :: (MonadRepos m, MonadTop m) => P.Packages -> B.ByteString -> T.Download -> m T.Download
-prepare package patch base =
-    do copyDir <- sub ("quilt" </> show (md5 (L.pack (show (P.spec package)))))
+prepare :: (MonadRepos m, MonadTop m) => RetrieveMethod -> [P.PackageFlag] -> B.ByteString -> T.Download -> m T.Download
+prepare method flags patch base =
+    do copyDir <- sub ("quilt" </> show (md5 (L.pack (show method))))
        baseTree <- liftIO $ findSourceTree (T.getTop base)
        liftIO $ createDirectoryIfMissing True copyDir
        tree <- liftIO $ copySourceTree baseTree copyDir
-       subDir <- liftIO $ findSource (P.spec package) copyDir
+       subDir <- liftIO $ findSource method copyDir
        (res, out, err) <- liftIO $ readCreateProcessWithExitCode ((proc cmd args) {cwd = Just subDir}) patch
        case res of
          ExitFailure _ -> error (showCommandForUser cmd args ++ " -> " ++ show res ++
@@ -60,7 +60,8 @@ prepare package patch base =
                                  "\npatch:\n" ++ indent (B.unpack patch))
          ExitSuccess ->
              return $ T.Download {
-                          T.package = package
+                          T.method = method
+                        , T.flags = flags
                         , T.getTop = dir' tree
                         , T.logText = T.logText base ++ " (with patch applied)"
                         , T.mVersion = Nothing

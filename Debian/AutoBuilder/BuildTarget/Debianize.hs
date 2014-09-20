@@ -20,7 +20,7 @@ import qualified Debian.AutoBuilder.Types.ParamRec as P (buildRelease)
 import Debian.Debianize as Cabal hiding (verbosity, withCurrentDirectory)
 import Debian.Pretty (ppDisplay)
 import Debian.Relation (SrcPkgName(..))
-import qualified Debian.Repo.Fingerprint as P (DebSpec(SrcDeb))
+import Debian.Repo.Fingerprint (DebSpec(SrcDeb), RetrieveMethod)
 import Debian.Repo.Prelude (rsync)
 import Debian.Repo.Internal.Repos (MonadRepos)
 import Debian.Repo.Top (MonadTop, sub, runTopT)
@@ -39,8 +39,8 @@ documentation = [ "hackage:<name> or hackage:<name>=<version> - a target of this
                 , "retrieves source code from http://hackage.haskell.org." ]
 
 -- | Debianize the download, which is assumed to be a cabal package.
-prepare :: (MonadRepos m, MonadTop m) => DebT IO () -> P.CacheRec -> P.Packages -> [P.DebSpec] -> T.Download -> m T.Download
-prepare defaultAtoms cache package' specs target =
+prepare :: (MonadRepos m, MonadTop m) => DebT IO () -> P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> [DebSpec] -> T.Download -> m T.Download
+prepare defaultAtoms cache method flags specs target =
     do dir <- sub ("debianize" </> takeFileName (T.getTop target))
        liftIO $ createDirectoryIfMissing True dir
        _ <- rsync [] (T.getTop target) dir
@@ -52,10 +52,11 @@ prepare defaultAtoms cache package' specs target =
                 let version = pkgVersion . package . Distribution.PackageDescription.packageDescription $ desc
                 -- We want to see the original changelog, so don't remove this
                 -- removeRecursiveSafely (dir </> "debian")
-                liftIO $ autobuilderCabal cache (P.flags package') specs dir defaultAtoms
-                return $ T.Download { T.package = package'
+                liftIO $ autobuilderCabal cache flags specs dir defaultAtoms
+                return $ T.Download { T.method = method
+                                    , T.flags = flags
                                     , T.getTop = dir
-                                    , T.logText =  "Built from hackage, revision: " ++ show (P.spec package')
+                                    , T.logText =  "Built from hackage, revision: " ++ show method
                                     , T.mVersion = Just version
                                     , T.origTarball = T.origTarball target
                                     , T.cleanTarget = \ top -> T.cleanTarget target top
@@ -87,7 +88,7 @@ collectPackageFlags _cache pflags =
        return $ ["--verbose=" ++ show v] ++
                 concatMap asCabalFlags pflags
 
-autobuilderCabal :: P.CacheRec -> [P.PackageFlag] -> [P.DebSpec] -> FilePath -> DebT IO () -> IO ()
+autobuilderCabal :: P.CacheRec -> [P.PackageFlag] -> [DebSpec] -> FilePath -> DebT IO () -> IO ()
 autobuilderCabal cache pflags specs debianizeDirectory defaultAtoms =
     withCurrentDirectory debianizeDirectory $
     do let rel = P.buildRelease $ P.params cache
@@ -107,10 +108,10 @@ autobuilderCabal cache pflags specs debianizeDirectory defaultAtoms =
                                                    writeDebianization)
                                                (makeAtoms eset)
 
-applyDebSpecs :: [P.DebSpec] -> DebT IO ()
+applyDebSpecs :: [DebSpec] -> DebT IO ()
 applyDebSpecs specs = mapM_ applyDebSpec specs
 
-applyDebSpec:: P.DebSpec -> DebT IO ()
+applyDebSpec:: DebSpec -> DebT IO ()
 applyDebSpec = compileArgs . asCabalFlags
 
 applyPackageFlag :: P.PackageFlag -> DebT IO ()
@@ -120,8 +121,8 @@ applyPackageFlag x = compileArgs . asCabalFlags $ x
 class CabalFlags a where
     asCabalFlags :: a -> [String]
 
-instance CabalFlags P.DebSpec where
-    asCabalFlags (P.SrcDeb name) = ["--source-package-name", unSrcPkgName name]
+instance CabalFlags DebSpec where
+    asCabalFlags (SrcDeb name) = ["--source-package-name", unSrcPkgName name]
 
 instance CabalFlags P.PackageFlag where
     asCabalFlags (P.Maintainer s) = ["--maintainer", s]

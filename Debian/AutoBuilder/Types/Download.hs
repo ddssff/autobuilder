@@ -2,8 +2,6 @@
 {-# OPTIONS -fwarn-unused-imports #-}
 module Debian.AutoBuilder.Types.Download
     ( Download(..)
-    , method
-    , flags
     ) where
 
 import Control.Monad.Catch (MonadMask)
@@ -12,16 +10,17 @@ import qualified Data.ByteString.Lazy as L (ByteString)
 import Data.Set as Set (Set)
 import Data.Time (NominalDiffTime)
 import Data.Version (Version)
-import Debian.AutoBuilder.Types.Packages (PackageFlag, Packages)
-import qualified Debian.AutoBuilder.Types.Packages as P (Packages(flags, spec))
+import Debian.AutoBuilder.Types.Packages (PackageFlag)
 import Debian.Repo.Fingerprint (RetrieveMethod(..), RetrieveAttribute(..))
 import Debian.Repo.MonadOS (MonadOS)
 import System.Process.ListLike (Chunk)
 
 data Download
     = Download
-      { package :: Packages
-      -- ^ the data provided about the package in the target list
+      { method :: RetrieveMethod
+      -- ^ The method used to retrieve this target.
+      , flags :: [PackageFlag]
+      -- ^ The flags assocated with the package
       , getTop :: FilePath
       -- ^ The directory containing the target's files.  For most target types, these
       --  files could be anything, not necessarily a Debian source directory.
@@ -41,10 +40,3 @@ data Download
       -- ^ Attributes collected from performing the various retrieve
       -- methods
       }
-
--- | The method used to retrieve this target.
-method :: Download -> RetrieveMethod
-method = P.spec . package
--- | The flags assocated with the package
-flags :: Download -> [PackageFlag]
-flags  = P.flags . package

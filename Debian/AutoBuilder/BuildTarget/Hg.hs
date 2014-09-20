@@ -12,30 +12,32 @@ import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import Debian.Repo
+import Debian.Repo.Fingerprint (RetrieveMethod)
+import Debian.Repo.Prelude.Verbosity (timeTask)
 import System.Directory
 import System.FilePath (splitFileName, (</>))
 import System.Process (shell)
-import Debian.Repo.Prelude.Verbosity (timeTask)
 import System.Unix.Directory
 
 documentation :: [String]
 documentation = [ "hg:<string> - A target of this form target obtains the source"
                 , "code by running the Mercurial command 'hg clone <string>'." ]
 
-prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> P.Packages -> String -> m T.Download
-prepare cache package archive =
+prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m T.Download
+prepare cache method flags archive =
     do
       dir <- sub ("hg" </> archive)
       when (P.flushSource (P.params cache)) (liftIO $ removeRecursiveSafely dir)
       exists <- liftIO $ doesDirectoryExist dir
       tree <- liftIO $ if exists then verifySource dir else createSource dir
-      return $ T.Download { T.package = package
+      return $ T.Download { T.method = method
+                          , T.flags = flags
                           , T.getTop = topdir tree
-                          , T.logText =  "Hg revision: " ++ show (P.spec package)
+                          , T.logText =  "Hg revision: " ++ show method
                           , T.mVersion = Nothing
                           , T.origTarball = Nothing
                           , T.cleanTarget =
-                              \ path -> case P.keepRCS package of
+                              \ path -> case any P.isKeepRCS flags of
                                           False -> let cmd = "rm -rf " ++ path ++ "/.hg" in
                                                    timeTask (readProcFailing (shell cmd) "")
                                           _ -> return ([], 0)

@@ -14,6 +14,7 @@ import Control.Monad.Trans (MonadIO, liftIO)
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as L
 import Data.List (isPrefixOf, tails, intercalate)
+import Data.Maybe (mapMaybe)
 import Data.Set (empty)
 --import Data.Text as T (empty, unpack)
 import Data.Version (Version, showVersion, parseVersion)
@@ -22,6 +23,7 @@ import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import Debian.Repo as DP
+import Debian.Repo.Fingerprint (RetrieveMethod)
 import GHC.IO.Exception (IOErrorType(OtherError))
 import System.Exit
 import System.FilePath ((</>))
@@ -39,24 +41,25 @@ documentation = [ "debianize:<name> or debianize:<name>=<version> - a target of 
                 , "(currently) retrieves source code from http://hackage.haskell.org and runs"
                 , "cabal-debian to create the debianization." ]
 
-prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> P.Packages -> String -> m T.Download
-prepare cache package name =
+prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m T.Download
+prepare cache method flags name =
     do let server = P.hackageServer (P.params cache) -- typically "hackage.haskell.org"
        version <- liftIO $ maybe (getVersion' server name) (return . readVersion) versionString
        tar <- tarball name version
        liftIO $ when (P.flushSource (P.params cache)) (removeRecursiveSafely tar)
        unp <- downloadCached server name version
        tree <- liftIO $ (findSourceTree unp :: IO SourceTree)
-       return $ T.Download { T.package = package
+       return $ T.Download { T.method = method
+                           , T.flags = flags
                            , T.getTop = topdir tree
-                           , T.logText =  "Built from hackage, revision: " ++ show (P.spec package)
+                           , T.logText =  "Built from hackage, revision: " ++ show method
                            , T.mVersion = Just version
                            , T.origTarball = Just tar
                            , T.cleanTarget = \ _ -> return ([], 0)
                            , T.buildWrapper = id
                            , T.attrs = Data.Set.empty }
     where
-      versionString = case P.testPackageFlag (\ x -> case x of P.CabalPin s -> Just s; _ -> Nothing) package of
+      versionString = case mapMaybe P.cabalPin flags of
                         [] -> Nothing
                         [v] -> Just v
                         vs -> error ("Conflicting cabal version numbers passed to Debianize: [" ++ intercalate ", " vs ++ "]")

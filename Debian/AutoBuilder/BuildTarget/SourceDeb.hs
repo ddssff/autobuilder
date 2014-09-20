@@ -11,6 +11,7 @@ import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.Control.String as S
+import Debian.Repo.Fingerprint (RetrieveMethod)
 import Debian.Repo.Internal.Repos (MonadRepos)
 import Debian.Repo.Prelude.Verbosity (readProcFailing)
 import qualified Debian.Version as V
@@ -25,8 +26,8 @@ documentation = [ "sourcedeb:<target> - A target of this form unpacks the source
 
 -- |Given the BuildTarget for the base target, prepare a SourceDeb BuildTarget
 -- by unpacking the source deb.
-prepare :: MonadRepos m => P.CacheRec -> P.Packages -> T.Download -> m T.Download
-prepare _cache package base =
+prepare :: MonadRepos m => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> T.Download -> m T.Download
+prepare _cache method flags base =
     do dscFiles <- liftIO (getDirectoryContents top) >>= return . filter (isSuffixOf ".dsc")
        dscInfo <- mapM (\ name -> liftIO (readFile (top ++ "/" ++ name) >>= return . S.parseControl name)) dscFiles
        case sortBy compareVersions (zip dscFiles dscInfo) of
@@ -43,9 +44,10 @@ prepare _cache package base =
                      (S.fieldValue "Version" dscInfo)) of
             (Just _package, Just _version) ->
                 return $ T.Download {
-                             T.package = package
+                             T.method = method
+                           , T.flags = flags
                            , T.getTop = top
-                           , T.logText = "Source Deb: " ++ show (P.spec package)
+                           , T.logText = "Source Deb: " ++ show method
                            , T.mVersion = Nothing
                            , T.origTarball = Nothing
                            , T.cleanTarget = \ _ -> return ([], 0)

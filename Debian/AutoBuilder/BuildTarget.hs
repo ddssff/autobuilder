@@ -40,15 +40,16 @@ import System.FilePath ((</>))
 
 -- | Given a RetrieveMethod, perform the retrieval and return the result.
 retrieve :: forall m. (MonadOS m, MonadRepos m, MonadTop m, MonadCatch m) =>
-            DebT IO () -> C.CacheRec -> P.Packages -> m Download
-retrieve defaultAtoms cache target =
-     case P.spec target of
-      P.Apt dist package -> Apt.prepare cache target dist (SrcPkgName package)
-      P.Bzr string -> Bzr.prepare cache target string
+            DebT IO () -> C.CacheRec -> P.RetrieveMethod -> [P.PackageFlag] -> m Download
+retrieve defaultAtoms cache method flags =
+     case method of
+      P.Apt dist package -> Apt.prepare cache method flags dist (SrcPkgName package)
+      P.Bzr string -> Bzr.prepare cache method flags string
 
       P.Cd dir spec' ->
-          retrieve defaultAtoms cache (target {P.spec = spec'}) >>= \ target' ->
-          return $ Download { T.package = target
+          retrieve defaultAtoms cache spec' flags >>= \ target' ->
+          return $ Download { T.method = method
+                            , T.flags = flags
                             , T.getTop = getTop target' </> dir
                             , T.logText = logText target' ++ " (in subdirectory " ++ dir ++ ")"
                             , T.mVersion = Nothing
@@ -58,25 +59,25 @@ retrieve defaultAtoms cache target =
                             , T.attrs = T.attrs target'
                             }
 
-      P.Darcs uri -> Darcs.prepare cache target uri
+      P.Darcs uri -> Darcs.prepare cache method flags uri
 
       P.DataFiles base files loc ->
-          do base' <- retrieve defaultAtoms cache (target {P.spec = base})
-             files' <- retrieve defaultAtoms cache (target {P.spec = files})
+          do base' <- retrieve defaultAtoms cache base flags
+             files' <- retrieve defaultAtoms cache files flags
              baseTree <- liftIO (findSourceTree (T.getTop base') :: IO SourceTree)
              filesTree <- liftIO (findSourceTree (T.getTop files') :: IO SourceTree)
              _ <- liftIO $ copySourceTree filesTree (dir' baseTree </> loc)
              return base'
 
       P.DebDir upstream debian ->
-          do upstream' <- retrieve defaultAtoms cache (target {P.spec = upstream})
-             debian' <- retrieve defaultAtoms cache (target {P.spec = debian})
-             DebDir.prepare target upstream' debian'
+          do upstream' <- retrieve defaultAtoms cache upstream flags
+             debian' <- retrieve defaultAtoms cache debian flags
+             DebDir.prepare method flags upstream' debian'
       P.Debianize package ->
-          retrieve defaultAtoms cache (target {P.spec = P.Debianize' package []})
+          retrieve defaultAtoms cache (P.Debianize' package []) flags
       P.Debianize' package specs ->
-          retrieve defaultAtoms cache (target {P.spec = package}) >>=
-          Debianize.prepare defaultAtoms cache target specs
+          retrieve defaultAtoms cache package flags >>=
+          Debianize.prepare defaultAtoms cache method flags specs
 
       -- Dir is a simple instance of BuildTarget representing building the
       -- debian source in a local directory.  This type of target is used
@@ -85,9 +86,10 @@ retrieve defaultAtoms cache target =
       -- of BuildTarget.
       P.Dir path ->
           do tree <- liftIO (findSourceTree path :: IO SourceTree)
-             return $ T.Download { T.package = target
+             return $ T.Download { T.method = method
+                                 , T.flags = flags
                                  , T.getTop = topdir tree
-                                 , T.logText =  "Built from local directory " ++ show (P.spec target)
+                                 , T.logText =  "Built from local directory " ++ show method
                                  , T.mVersion = Nothing
                                  , T.origTarball = Nothing
                                  , T.cleanTarget = \ _ -> return ([], 0)
@@ -95,17 +97,18 @@ retrieve defaultAtoms cache target =
                                  , T.attrs = empty
                                  }
 
-      P.Git uri specs -> Git.prepare cache target uri specs
-      P.Hackage package -> Hackage.prepare cache target package
-      P.Hg string -> Hg.prepare cache target string
+      P.Git uri specs -> Git.prepare cache method flags uri specs
+      P.Hackage package -> Hackage.prepare cache method flags package
+      P.Hg string -> Hg.prepare cache method flags string
       P.Patch base patch ->
-          retrieve defaultAtoms cache (target {P.spec = base}) >>=
-          Patch.prepare target patch
+          retrieve defaultAtoms cache base flags >>=
+          Patch.prepare method flags patch
 
       P.Proc spec' ->
-          retrieve defaultAtoms cache (target {P.spec = spec'}) >>= \ base ->
+          retrieve defaultAtoms cache spec' flags >>= \ base ->
           return $ T.Download {
-                       T.package = target
+                       T.method = method
+                     , T.flags = flags
                      , T.getTop = T.getTop base
                      , T.logText = T.logText base ++ " (with /proc mounted)"
                      , T.mVersion = Nothing
@@ -115,17 +118,17 @@ retrieve defaultAtoms cache target =
                      , T.attrs = T.attrs base
                      }
       P.Quilt base patches ->
-          do base' <- retrieve defaultAtoms cache (target {P.spec = base})
-             patches' <- retrieve defaultAtoms cache (target {P.spec = patches})
-             Quilt.prepare target base' patches'
+          do base' <- retrieve defaultAtoms cache base flags
+             patches' <- retrieve defaultAtoms cache patches flags
+             Quilt.prepare method flags base' patches'
       P.SourceDeb spec' ->
-          retrieve defaultAtoms cache (target {P.spec = spec'}) >>=
-          SourceDeb.prepare cache target
-      P.Svn uri -> Svn.prepare cache target uri
-      P.Tla string -> Tla.prepare cache target string
-      P.Twice base -> retrieve defaultAtoms cache (target {P.spec = base}) >>=
-                      Twice.prepare target
-      P.Uri uri sum -> Uri.prepare cache target uri sum
+          retrieve defaultAtoms cache spec' flags >>=
+          SourceDeb.prepare cache method flags
+      P.Svn uri -> Svn.prepare cache method flags uri
+      P.Tla string -> Tla.prepare cache method flags string
+      P.Twice base -> retrieve defaultAtoms cache base flags >>=
+                      Twice.prepare method flags
+      P.Uri uri sum -> Uri.prepare cache method flags uri sum
 
 {-
 -- | Perform an IO operation with /proc mounted

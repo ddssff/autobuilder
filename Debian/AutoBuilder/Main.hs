@@ -139,7 +139,7 @@ runParameterSet init cache =
       liftIO checkPermissions
       maybe (return ()) (verifyUploadURI (P.doSSHExport $ params)) (P.uploadURI params)
       dependOS <- prepareDependOS params buildRelease
-      let allTargets = (P.foldPackages (\ spec flags l -> P.Package spec flags : l) (P.buildPackages params) [])
+      let allTargets = (P.foldPackages (\ spec flags l -> (spec, flags) : l) (P.buildPackages params) [])
       buildOS <- evalMonadOS (do sources <- osBaseDistro <$> getOS
                                  updateCacheSources (P.ifSourcesChanged params) sources
                                  when (P.report params) (ePutStrLn . doReport $ P.buildPackages params)
@@ -162,15 +162,15 @@ runParameterSet init cache =
                         noisier 1 . upload >>=
                         liftIO . newDist)
     where
-      retrieveTarget :: MonadReposCached m => EnvRoot -> Int -> Int -> P.Packages -> m (Either String Buildable)
-      retrieveTarget buildOS count index target = do
+      retrieveTarget :: MonadReposCached m => EnvRoot -> Int -> Int -> (P.RetrieveMethod, [P.PackageFlag]) -> m (Either String Buildable)
+      retrieveTarget buildOS count index (method, flags) = do
             liftIO (hPutStr stderr (printf "[%2d of %2d]" index count))
-            res <- (Right <$> evalMonadOS (do download <- retrieve init cache target
+            res <- (Right <$> evalMonadOS (do download <- retrieve init cache method flags
                                               buildable <- liftIO (asBuildable download)
                                               let (src, bins) = debianPackageNames (debianSourceTree buildable)
-                                              liftIO (hPutStrLn stderr (printf " %s - %s:" (unSrcPkgName src) (limit 100 (show (P.spec target)) :: String)))
+                                              liftIO (hPutStrLn stderr (printf " %s - %s:" (unSrcPkgName src) (limit 100 (show method) :: String)))
                                               qPutStrLn $ "Binary debs: [" <> intercalate ", " (map unBinPkgName bins) <> "]"
-                                              return buildable) buildOS) `catch` handleRetrieveException target
+                                              return buildable) buildOS) `catch` handleRetrieveException method
             return res
       params = C.params cache
       baseRelease =  either (error . show) id (P.findSlice cache (P.baseRelease params))
@@ -270,12 +270,12 @@ doVerifyBuildRepo cache =
       g = return . repoReleaseInfo
       params = C.params cache
 
-handleRetrieveException :: MonadReposCached m => P.Packages -> SomeException -> m (Either String Buildable)
-handleRetrieveException target e =
+handleRetrieveException :: MonadReposCached m => P.RetrieveMethod -> SomeException -> m (Either String Buildable)
+handleRetrieveException method e =
           case (fromException (toException e) :: Maybe AsyncException) of
             Just UserInterrupt ->
                 throwM e -- break out of loop
-            _ -> let message = ("Failure retrieving " ++ show (P.spec target) ++ ":\n  " ++ show e) in
+            _ -> let message = ("Failure retrieving " ++ show method ++ ":\n  " ++ show e) in
                  liftIO (IO.hPutStrLn IO.stderr message) >> return (Left message)
 
 limit n s = if length s > n + 3 then take n s ++ "..." else s

@@ -21,6 +21,7 @@ import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import qualified Debian.Repo as R (readProcFailing, topdir, SourceTree, findSourceTree)
+import Debian.Repo.Fingerprint (RetrieveMethod)
 import Debian.Repo.Internal.Repos (MonadRepos)
 import Debian.Repo.Top (MonadTop, sub)
 import Debian.URI
@@ -40,11 +41,12 @@ documentation = [ "uri:<string>:<md5sum> - A target of this form retrieves the f
 -- | A URI that returns a tarball, with an optional md5sum which must
 -- match if given.  The purpose of the md5sum is to be able to block
 -- changes to the tarball on the remote host.
-prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> P.Packages -> String -> String -> m T.Download
-prepare c package u s =
+prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> String -> m T.Download
+prepare c method flags u s =
     do (uri, sum, tree) <- checkTarget >>= downloadTarget >> validateTarget >>= unpackTarget
        tar <- tarball (uriToString' uri) sum
-       return $ T.Download { T.package = package
+       return $ T.Download { T.method = method
+                           , T.flags = flags
                            , T.getTop = R.topdir tree
                            , T.logText = "Built from URI download " ++ (uriToString' uri)
                            , T.mVersion = Nothing

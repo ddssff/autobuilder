@@ -14,7 +14,7 @@ import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import Debian.Repo (SourceTree, topdir, MonadRepos, MonadTop, sub, findSourceTree)
-import qualified Debian.Repo.Fingerprint as P
+import Debian.Repo.Fingerprint (RetrieveMethod, RetrieveAttribute(GitCommit), GitSpec(Branch, Commit))
 import Debian.Repo.Prelude.Verbosity (readProcFailing, timeTask)
 import Network.URI (URI(..), URIAuth(..), uriToString, parseURI)
 import System.Directory
@@ -31,7 +31,7 @@ documentation = [ "darcs:<string> - a target of this form obtains the source cod
                 , "repository, it is necessary to set up ssh keys to allow access without"
                 , "typing a password.  See the --ssh-export option for help doing this." ]
 
-darcsRev :: SourceTree -> P.RetrieveMethod -> IO (Either SomeException String)
+darcsRev :: SourceTree -> RetrieveMethod -> IO (Either SomeException String)
 darcsRev tree m =
     try (readProcFailing (cmd {cwd = Just path}) mempty >>= collectProcessOutput' cmd >>=
          return . matchRegex (mkRegex "hash='([^']*)'") . B.unpack) >>=
@@ -43,8 +43,8 @@ darcsRev tree m =
 
 showCmd = showCmdSpecForUser
 
-prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> P.Packages -> String -> [P.GitSpec] -> m T.Download
-prepare cache package theUri gitspecs =
+prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> [GitSpec] -> m T.Download
+prepare cache method flags theUri gitspecs =
     sub "git" >>= \ base ->
     sub ("git" </> sum) >>= \ dir -> liftIO $
     do
@@ -57,17 +57,18 @@ prepare cache package theUri gitspecs =
       commit <- case code of
                   ExitSuccess -> return . head . lines $ out
                   _ -> error $ displayCreateProcess p ++ " -> " ++ show code
-      return $ T.Download { T.package = package
+      return $ T.Download { T.method = method
+                          , T.flags = flags
                           , T.getTop = topdir tree
-                          , T.logText =  "git revision: " ++ show (P.spec package)
+                          , T.logText =  "git revision: " ++ show method
                           , T.mVersion = Nothing
                           , T.origTarball = Nothing
                           , T.cleanTarget =
-                              \ top -> case P.keepRCS package  of
+                              \ top -> case any P.isKeepRCS flags of
                                          False -> let cmd = "find " ++ top ++ " -name '.git' -maxdepth 1 -prune | xargs rm -rf" in timeTask (readProcFailing (shell cmd) "")
                                          True -> return ([], 0)
                           , T.buildWrapper = id
-                          , T.attrs = singleton (P.GitCommit commit)
+                          , T.attrs = singleton (GitCommit commit)
                           }
     where
       verifySource :: FilePath -> IO SourceTree
@@ -98,9 +99,9 @@ prepare cache package theUri gitspecs =
           do let (parent, _) = splitFileName dir
              createDirectoryIfMissing True parent
              removeRecursiveSafely dir
-             let p = proc "git" (["clone", renderForGit theUri'] ++ concat (map (\ x -> case x of (P.Branch s) -> ["--branch", s]; _ -> []) gitspecs) ++ [dir])
+             let p = proc "git" (["clone", renderForGit theUri'] ++ concat (map (\ x -> case x of (Branch s) -> ["--branch", s]; _ -> []) gitspecs) ++ [dir])
              (code, _, _) <- readProcFailing p "" >>= return . collectProcessTriple
-             case (code, mapMaybe (\ x -> case x of (P.Commit s) -> Just s; _ -> Nothing) gitspecs) of
+             case (code, mapMaybe (\ x -> case x of (Commit s) -> Just s; _ -> Nothing) gitspecs) of
                     (ExitFailure _, _) -> error $ "Git failed: " ++ displayCreateProcess p ++ " -> " ++ show code
                     (_, []) -> return ()
                     (_, [commit]) -> do
@@ -121,7 +122,7 @@ prepare cache package theUri gitspecs =
       -- Maybe we should include the "git:" in the string we checksum?  -- DSF
       -- Need more info to answer that, but addition of git makes it more likely. -- CB
       uriAndBranch = uriToString id theUri' "" ++ maybe "" (\ branch -> "=" ++ branch) theBranch
-      theBranch = case P.testPackageFlag (\ x -> case x of P.GitBranch s -> Just s; _ -> Nothing) package of
+      theBranch = case mapMaybe P.gitBranch flags of
                     [] -> Nothing
                     [x] -> Just x
                     xs -> error ("Conflicting branches for git clone of " ++ theUri ++ ": " ++ show xs)
