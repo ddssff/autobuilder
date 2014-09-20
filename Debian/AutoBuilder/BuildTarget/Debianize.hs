@@ -85,7 +85,7 @@ autobuilderDebianize cache pflags currentDirectory =
 collectPackageFlags :: P.CacheRec -> [P.PackageFlag] -> IO [String]
 collectPackageFlags _cache pflags =
     do v <- return 0 -- verbosity
-       return $ ["--verbose=" ++ show v] ++
+       return $ ["--verbose=" ++ show (v :: Int)] ++
                 concatMap asCabalFlags pflags
 
 autobuilderCabal :: P.CacheRec -> [P.PackageFlag] -> FilePath -> DebT IO () -> IO ()

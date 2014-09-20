@@ -402,7 +402,7 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
              dpkgSource <- liftIO $ modifyProcessEnv [("EDITOR", Just "/bin/true")] ((proc "dpkg-source" ["--commit", ".", "autobuilder.diff"]) {cwd = Just path'})
              let doDpkgSource False = do
                    createDirectoryIfMissing True (path' </> "debian/patches")
-                   readProcFailing dpkgSource L.empty
+                   _ <- readProcFailing dpkgSource L.empty
                    exists <- doesFileExist (path' </> "debian/patches/autobuilder.diff")
                    when (not exists) (removeDirectory (path' </> "debian/patches"))
                  doDpkgSource True = readProcFailing dpkgSource L.empty >> return ()

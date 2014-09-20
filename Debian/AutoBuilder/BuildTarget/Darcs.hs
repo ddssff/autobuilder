@@ -81,7 +81,7 @@ prepare cache method flags theUri =
       updateSource :: FilePath -> IO SourceTree
       updateSource dir = do
           let cmd = (proc "darcs" ["pull", "--all", "--no-allow-conflicts", renderForDarcs theUri']) {cwd = Just dir}
-          readProcFailing cmd ""
+          _ <- readProcFailing cmd ""
           -- runTaskAndTest (updateStyle (commandTask ("cd " ++ dir ++ " && darcs pull --all " ++ renderForDarcs theUri))) >>
           findSourceTree dir
 
@@ -98,7 +98,7 @@ prepare cache method flags theUri =
           let link = base ++ "/" ++ name
               rm = proc "rm" ["-rf", link]
               ln = proc "ln" ["-s", sum, link]
-          readProcFailing rm ""
+          _ <- readProcFailing rm ""
           readProcFailing ln ""
       name = snd . splitFileName $ (uriPath theUri')
       sum = show (md5 (B.pack uriAndTag))

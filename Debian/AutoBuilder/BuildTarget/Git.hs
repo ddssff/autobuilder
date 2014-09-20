@@ -90,7 +90,7 @@ prepare cache method flags theUri gitspecs =
       updateSource :: FilePath -> IO SourceTree
       updateSource dir = do
         let p = (proc "git" ["pull", "--all"]) {cwd = Just dir}
-        readProcFailing p ""
+        _ <- readProcFailing p ""
         -- runTaskAndTest (updateStyle (commandTask ("cd " ++ dir ++ " && darcs pull --all " ++ renderForDarcs theUri))) >>
         findSourceTree dir
 
