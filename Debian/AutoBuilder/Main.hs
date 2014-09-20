@@ -15,6 +15,7 @@ import Control.Monad.Catch (MonadMask, catch, throwM)
 import Control.Monad.State (MonadIO(liftIO))
 import qualified Data.ByteString.Lazy as L
 import Data.Either (partitionEithers)
+import Data.Generics (listify)
 import Data.List as List (intercalate, null, nub)
 import Data.Monoid ((<>))
 import Data.Time(NominalDiffTime)
@@ -24,7 +25,7 @@ import qualified Debian.AutoBuilder.Params as P (computeTopDir, buildCache, base
 import Debian.AutoBuilder.Target (buildTargets, showTargets)
 import Debian.AutoBuilder.Types.Buildable (Target, Buildable(debianSourceTree), asBuildable)
 import qualified Debian.AutoBuilder.Types.CacheRec as C
-import qualified Debian.AutoBuilder.Types.Packages as P (foldPackages, Packages(Packages, APackage, NoPackage, Named), spec, list, packages, flags, PackageFlag(CabalPin))
+import qualified Debian.AutoBuilder.Types.Packages as P (foldPackages, spec, flags, PackageFlag(CabalPin))
 import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec, getParams, doHelp, usage, verbosity, showParams, showSources, flushAll, doSSHExport, uploadURI, report, buildRelease, ifSourcesChanged, requiredVersion, prettyPrint, doUpload, doNewDist, newDistProgram, createRelease, buildPackages)
 import qualified Debian.AutoBuilder.Version as V
 import Debian.Control.Policy (debianPackageNames, debianSourcePackageName)
@@ -33,7 +34,7 @@ import Debian.Pretty (ppDisplay)
 import Debian.Relation (BinPkgName(unBinPkgName), SrcPkgName(unSrcPkgName))
 import Debian.Release (ReleaseName(ReleaseName, relName), releaseName')
 import Debian.Repo.EnvPath (EnvRoot)
-import qualified Debian.Repo.Fingerprint as P (RetrieveMethod(Patch, Cd, DebDir, DataFiles, Debianize, Proc, Quilt, SourceDeb, Twice))
+import qualified Debian.Repo.Fingerprint as P (RetrieveMethod(Patch, Cd, DebDir, DataFiles, Debianize, Proc, Quilt, SourceDeb, Twice, Zero))
 import Debian.Repo.Internal.Repos (MonadRepos, runReposCachedT, MonadReposCached)
 import Debian.Repo.LocalRepository(uploadRemote, verifyUploadURI)
 import Debian.Repo.MonadOS (MonadOS(getOS), evalMonadOS)
@@ -139,11 +140,11 @@ runParameterSet init cache =
       liftIO checkPermissions
       maybe (return ()) (verifyUploadURI (P.doSSHExport $ params)) (P.uploadURI params)
       dependOS <- prepareDependOS params buildRelease
-      let allTargets = (P.foldPackages (\ p l -> (P.spec p, P.flags p) : l) (P.buildPackages params) [])
+      let allTargets = filter (notZero . fst) (P.foldPackages (\ p l -> (P.spec p, P.flags p) : l) (P.buildPackages params) [])
       buildOS <- evalMonadOS (do sources <- osBaseDistro <$> getOS
                                  updateCacheSources (P.ifSourcesChanged params) sources
-                                 when (P.report params) (ePutStrLn . doReport $ P.buildPackages params)
-                                 qPutStr ("\n" ++ showTargets (P.buildPackages params) ++ "\n")
+                                 when (P.report params) (ePutStrLn . doReport $ allTargets)
+                                 qPutStr ("\n" ++ showTargets allTargets ++ "\n")
                                  getOS >>= prepareBuildOS (P.buildRelease params)) dependOS
       qPutStrLn "Retrieving all source code:\n"
       (failures, targets) <- partitionEithers <$> (mapM (uncurry (retrieveTarget buildOS (length allTargets))) (zip [1..] allTargets))
@@ -162,6 +163,7 @@ runParameterSet init cache =
                         noisier 1 . upload >>=
                         liftIO . newDist)
     where
+      notZero x = null (listify (\ x -> case x of P.Zero -> True; _ -> False) x)
       retrieveTarget :: MonadReposCached m => EnvRoot -> Int -> Int -> (P.RetrieveMethod, [P.PackageFlag]) -> m (Either String Buildable)
       retrieveTarget buildOS count index (method, flags) = do
             liftIO (hPutStr stderr (printf "[%2d of %2d]" index count))
@@ -280,19 +282,16 @@ handleRetrieveException method e =
 
 limit n s = if length s > n + 3 then take n s ++ "..." else s
 
-doReport :: P.Packages -> String
+doReport :: [(P.RetrieveMethod, [P.PackageFlag])] -> String
 doReport =
-    intercalate "\n" . doReport'
+    intercalate "\n" . concatMap doReport'
     where
-      doReport' :: P.Packages -> [String]
-      doReport' P.NoPackage = []
-      doReport' p@(P.Packages {}) = concatMap doReport' (P.list p)
-      doReport' p@(P.Named {}) = doReport' (P.packages p)
-      doReport' (P.APackage p) =
-          patched (P.spec p) ++ pinned (P.flags p)
+      doReport' :: (P.RetrieveMethod, [P.PackageFlag]) -> [String]
+      doReport' (spec, flags) =
+          patched spec ++ pinned flags
           where
             patched :: P.RetrieveMethod -> [String]
-            patched (P.Patch _ _) = [show (P.spec p) ++ " is patched"]
+            patched (P.Patch _ _) = [show spec ++ " is patched"]
             patched (P.Cd _ x) = patched x
             patched (P.DataFiles x y _) = patched x ++ patched y
             patched (P.DebDir x y) = patched x ++ patched y
@@ -304,5 +303,5 @@ doReport =
             patched _ = []
             pinned :: [P.PackageFlag] -> [String]
             pinned [] = []
-            pinned (P.CabalPin v : more) = [show (P.spec p) ++ " is pinned at version " ++ v] ++ pinned more
+            pinned (P.CabalPin v : more) = [show spec ++ " is pinned at version " ++ v] ++ pinned more
             pinned (_ : more) = pinned more

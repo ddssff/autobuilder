@@ -94,10 +94,12 @@ buildDecision _ _ Nothing (Fingerprint {upstreamVersion = sourceVersion}) _ =
     Yes ("Initial build of version " ++ show (prettyDebianVersion sourceVersion))
 buildDecision _ _ (Just (DownstreamFingerprint {upstreamFingerprint = Fingerprint {retrievedAttributes = oldAttrs}})) (Fingerprint {retrievedAttributes = newAttrs}) _
     | oldAttrs /= newAttrs = Yes ("Package attributes changed: " ++ show oldAttrs ++ " -> " ++ show newAttrs)
+{-
 buildDecision _ _ (Just (DownstreamFingerprint {upstreamFingerprint = Fingerprint {method = oldMethod}})) (Fingerprint {method = newMethod}) _
     -- This doesn't make sense the retrieve method is the package
     -- identity, it can't change or it wouldn't be the same package.
     | oldMethod /= newMethod = Yes ("Retrieve method changed: " ++ show oldMethod ++ " -> " ++ show newMethod)
+-}
 buildDecision cache target (Just (DownstreamFingerprint { upstreamFingerprint =
                                                               Fingerprint { upstreamVersion = oldSrcVersion
                                                                           , buildDependencyVersions = builtDependencies }

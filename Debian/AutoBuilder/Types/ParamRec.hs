@@ -11,7 +11,7 @@ module Debian.AutoBuilder.Types.ParamRec
     ) where
 
 import Control.Arrow (first)
-import Data.Generics (listify)
+import Data.Generics (listify, geq)
 import Data.List as List (map)
 import Data.Monoid (mempty, mappend)
 import Data.Set as Set (Set, insert, toList)
@@ -536,6 +536,6 @@ buildPackages params =
       -- Filter the singleton packages by whether its RetrieveMethod
       -- contains pat.
       findByPattern  :: RetrieveMethod -> [Package]
-      findByPattern pat = foldPackages (\ p r -> case listify (== pat) (spec p) of
+      findByPattern pat = foldPackages (\ p r -> case listify (geq pat) (spec p) of
                                                    [] -> r
                                                    _ -> p : r) (knownPackages params) []

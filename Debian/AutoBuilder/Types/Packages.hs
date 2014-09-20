@@ -87,15 +87,15 @@ data Package
       -- the package.
       } deriving (Show, Data, Typeable) -- We can't derive Eq while PackageFlag contains functions
 
-instance Eq Packages where
-    (APackage p1) == (APackage p2) = p1 == p2
-    (Packages {list = l1}) == (Packages {list = l2}) = l1 == l2
-    (Named {group = g1, packages = p1}) == (Named {group = g2, packages = p2}) = g1 == g2 && p1 == p2
-    NoPackage == NoPackage = True
-    _ == _ = False
-
-instance Eq Package where
-    p1 == p2 = spec p1 == spec p2
+-- instance Eq Packages where
+--     (APackage p1) == (APackage p2) = p1 == p2
+--     (Packages {list = l1}) == (Packages {list = l2}) = l1 == l2
+--     (Named {group = g1, packages = p1}) == (Named {group = g2, packages = p2}) = g1 == g2 && p1 == p2
+--     NoPackage == NoPackage = True
+--     _ == _ = False
+--
+-- instance Eq Package where
+--     p1 == p2 = spec p1 == spec p2
 
 instance Monoid GroupName where
     mempty = NoName

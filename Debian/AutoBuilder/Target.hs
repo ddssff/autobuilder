@@ -44,7 +44,7 @@ import Debian.Pretty (ppDisplay, ppPrint)
 import Debian.Relation (BinPkgName(..), SrcPkgName(..))
 import Debian.Relation.ByteString (Relation(..), Relations)
 import Debian.Release (ReleaseName(relName), releaseName')
-import Debian.Repo.Fingerprint (dependencyChanges, DownstreamFingerprint, Fingerprint, packageFingerprint, showDependencies', showFingerprint)
+import Debian.Repo.Fingerprint (RetrieveMethod, dependencyChanges, DownstreamFingerprint, Fingerprint, packageFingerprint, showDependencies', showFingerprint)
 import Debian.Repo.Internal.Apt (MonadApt)
 import Debian.Repo.Internal.Repos (MonadRepos)
 import Debian.Repo.MonadOS (MonadOS(getOS), evalMonadOS, updateLists, withProc, withTmp, syncLocalPool, buildEssential, syncOS)
@@ -309,13 +309,15 @@ cycleMessage cache arcs =
       binaryNames :: Target -> Target -> [BinPkgName]
       binaryNames pkg dep = G.binaryNames (targetRelaxed (relaxDepends cache (tgt pkg)) dep)
 
-showTargets :: P.Packages -> String
+showTargets :: [(RetrieveMethod, [P.PackageFlag])] -> String
 showTargets targets =
     unlines (heading :
              map (const '-') heading :
-             map concat (columns (reverse (snd (P.foldPackages (\ p (count, rows) -> (count + 1, [printf "%4d. " count, " ", limit 100 (show (P.spec p))] : rows)) targets (1 :: Int, []))))))
+             map (\ (count, (spec, flags)) -> printf "%4d. " count <> " " <> limit 100 (show spec)) (zip ([1..] :: [Int]) targets)
+             -- map concat (columns (reverse (snd (P.foldPackages (\ p (count, rows) -> (count + 1, [printf "%4d. " count, " ", limit 100 (show (P.spec p))] : rows)) targets (1 :: Int, [])))))
+            )
     where
-      heading = show (P.packageCount targets) ++ " Targets:"
+      heading = show (length targets) ++ " Targets:"
 
 limit :: Int -> String -> String
 limit n s = if length s > n + 3 then take n s ++ "..." else s
