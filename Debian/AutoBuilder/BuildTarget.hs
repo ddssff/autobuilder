@@ -74,10 +74,8 @@ retrieve defaultAtoms cache method flags =
              debian' <- retrieve defaultAtoms cache debian flags
              DebDir.prepare method flags upstream' debian'
       P.Debianize package ->
-          retrieve defaultAtoms cache (P.Debianize' package []) flags
-      P.Debianize' package specs ->
           retrieve defaultAtoms cache package flags >>=
-          Debianize.prepare defaultAtoms cache method flags specs
+          Debianize.prepare defaultAtoms cache method flags
 
       -- Dir is a simple instance of BuildTarget representing building the
       -- debian source in a local directory.  This type of target is used

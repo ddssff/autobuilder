@@ -20,7 +20,7 @@ import qualified Debian.AutoBuilder.Types.ParamRec as P (buildRelease)
 import Debian.Debianize as Cabal hiding (verbosity, withCurrentDirectory)
 import Debian.Pretty (ppDisplay)
 import Debian.Relation (SrcPkgName(..))
-import Debian.Repo.Fingerprint (DebSpec(SrcDeb), RetrieveMethod)
+import Debian.Repo.Fingerprint (RetrieveMethod)
 import Debian.Repo.Prelude (rsync)
 import Debian.Repo.Internal.Repos (MonadRepos)
 import Debian.Repo.Top (MonadTop, sub, runTopT)
@@ -39,8 +39,8 @@ documentation = [ "hackage:<name> or hackage:<name>=<version> - a target of this
                 , "retrieves source code from http://hackage.haskell.org." ]
 
 -- | Debianize the download, which is assumed to be a cabal package.
-prepare :: (MonadRepos m, MonadTop m) => DebT IO () -> P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> [DebSpec] -> T.Download -> m T.Download
-prepare defaultAtoms cache method flags specs target =
+prepare :: (MonadRepos m, MonadTop m) => DebT IO () -> P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> T.Download -> m T.Download
+prepare defaultAtoms cache method flags target =
     do dir <- sub ("debianize" </> takeFileName (T.getTop target))
        liftIO $ createDirectoryIfMissing True dir
        _ <- rsync [] (T.getTop target) dir
@@ -52,7 +52,7 @@ prepare defaultAtoms cache method flags specs target =
                 let version = pkgVersion . package . Distribution.PackageDescription.packageDescription $ desc
                 -- We want to see the original changelog, so don't remove this
                 -- removeRecursiveSafely (dir </> "debian")
-                liftIO $ autobuilderCabal cache flags specs dir defaultAtoms
+                liftIO $ autobuilderCabal cache flags dir defaultAtoms
                 return $ T.Download { T.method = method
                                     , T.flags = flags
                                     , T.getTop = dir
@@ -88,8 +88,8 @@ collectPackageFlags _cache pflags =
        return $ ["--verbose=" ++ show v] ++
                 concatMap asCabalFlags pflags
 
-autobuilderCabal :: P.CacheRec -> [P.PackageFlag] -> [DebSpec] -> FilePath -> DebT IO () -> IO ()
-autobuilderCabal cache pflags specs debianizeDirectory defaultAtoms =
+autobuilderCabal :: P.CacheRec -> [P.PackageFlag] -> FilePath -> DebT IO () -> IO ()
+autobuilderCabal cache pflags debianizeDirectory defaultAtoms =
     withCurrentDirectory debianizeDirectory $
     do let rel = P.buildRelease $ P.params cache
        top <- computeTopDir (P.params cache)
@@ -102,17 +102,11 @@ autobuilderCabal cache pflags specs debianizeDirectory defaultAtoms =
          True -> qPutStrLn (showCommandForUser "runhaskell" ("debian/Debianize.hs" : args'))
          False -> withArgs [] $ Cabal.evalDebT (do -- We don't actually run the cabal-debian command here, we use
                                                    -- the library API and build and print the equivalent command.
-                                                   qPutStrLn (showCommandForUser "cabal-debian" (["--native"] ++ concatMap asCabalFlags specs ++ concatMap asCabalFlags pflags))
+                                                   qPutStrLn (showCommandForUser "cabal-debian" (["--native"] ++ concatMap asCabalFlags pflags))
                                                    sourceFormat ~?= Just Native3
-                                                   debianization defaultAtoms (applyDebSpecs specs >> mapM_ applyPackageFlag pflags)
+                                                   debianization defaultAtoms (mapM_ applyPackageFlag pflags)
                                                    writeDebianization)
                                                (makeAtoms eset)
-
-applyDebSpecs :: [DebSpec] -> DebT IO ()
-applyDebSpecs specs = mapM_ applyDebSpec specs
-
-applyDebSpec:: DebSpec -> DebT IO ()
-applyDebSpec = compileArgs . asCabalFlags
 
 applyPackageFlag :: P.PackageFlag -> DebT IO ()
 applyPackageFlag (P.ModifyAtoms f) = modify f
@@ -121,10 +115,8 @@ applyPackageFlag x = compileArgs . asCabalFlags $ x
 class CabalFlags a where
     asCabalFlags :: a -> [String]
 
-instance CabalFlags DebSpec where
-    asCabalFlags (SrcDeb name) = ["--source-package-name", unSrcPkgName name]
-
 instance CabalFlags P.PackageFlag where
+    asCabalFlags (P.SourceDebName name) = ["--source-package-name", unSrcPkgName (SrcPkgName name)]
     asCabalFlags (P.Maintainer s) = ["--maintainer", s]
     asCabalFlags (P.BuildDep s) = ["--build-dep", s]
     asCabalFlags (P.DevelDep s) = ["--build-dep", s, "--dev-dep", s]

@@ -33,7 +33,7 @@ import Debian.Pretty (ppDisplay)
 import Debian.Relation (BinPkgName(unBinPkgName), SrcPkgName(unSrcPkgName))
 import Debian.Release (ReleaseName(ReleaseName, relName), releaseName')
 import Debian.Repo.EnvPath (EnvRoot)
-import qualified Debian.Repo.Fingerprint as P (RetrieveMethod(Patch, Cd, DebDir, DataFiles, Debianize, Debianize', Proc, Quilt, SourceDeb, Twice))
+import qualified Debian.Repo.Fingerprint as P (RetrieveMethod(Patch, Cd, DebDir, DataFiles, Debianize, Proc, Quilt, SourceDeb, Twice))
 import Debian.Repo.Internal.Repos (MonadRepos, runReposCachedT, MonadReposCached)
 import Debian.Repo.LocalRepository(uploadRemote, verifyUploadURI)
 import Debian.Repo.MonadOS (MonadOS(getOS), evalMonadOS)
@@ -297,7 +297,6 @@ doReport =
             patched (P.DataFiles x y _) = patched x ++ patched y
             patched (P.DebDir x y) = patched x ++ patched y
             patched (P.Debianize x) = patched x
-            patched (P.Debianize' x _) = patched x
             patched (P.Proc x) = patched x
             patched (P.Quilt x y) = patched x ++ patched y
             patched (P.SourceDeb x) = patched x

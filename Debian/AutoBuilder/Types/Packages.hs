@@ -137,8 +137,7 @@ filterPackages p xs =
 packageCount :: Packages -> Int
 packageCount ps = foldPackages (\ _ _ n -> n + 1) ps 0
 
--- | Flags that are applicable to any debianized package, which means
--- any package because this autobuilder only builds debs.
+-- | Hints about debianizing and building the package.
 data PackageFlag
     = RelaxDep String
     -- ^ Build dependencies which should be ignored when deciding whether to rebuild
@@ -201,6 +200,8 @@ data PackageFlag
     -- added to the cabal version to get the debian version.  By
     -- default this is -1~hackage1.  Debian policy says this should
     -- either be empty or begin with a dash.
+    | SourceDebName String
+    -- ^ Use this string for the source deb name when debianizing.
     | Epoch String Int
     -- ^ Set the epoch number in the debian version number generated
     -- for the given cabal package
@@ -273,7 +274,7 @@ datafiles :: RetrieveMethod -> RetrieveMethod -> FilePath -> Packages
 datafiles cabal files dest = method (DataFiles cabal files dest)
 
 debianize :: Packages -> Packages
-debianize p = p { spec = Debianize' (spec p) [] }
+debianize p = p { spec = Debianize (spec p) }
 
 -- debdir :: String -> RetrieveMethod -> RetrieveMethod -> Packages
 -- debdir name method1 method2 = method name (DebDir method1 method1)
