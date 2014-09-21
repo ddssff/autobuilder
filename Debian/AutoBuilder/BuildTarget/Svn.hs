@@ -51,21 +51,20 @@ prepare cache method flags uri =
        when (P.flushSource (P.params cache)) (liftIO (removeRecursiveSafely dir))
        exists <- liftIO $ doesDirectoryExist dir
        tree <- liftIO $ if exists then verifySource dir else createSource dir
-       return $ T.Download { T.method = method
-                           , T.flags = flags
-                           , T.getTop = topdir tree
-                           , T.logText =  "SVN revision: " ++ show method
-                           , T.mVersion = Nothing
-                           , T.origTarball = Nothing
-                           , T.cleanTarget =
-                               \ path ->
+       return $ T.download'{-  T.method = -} method
+                           {- , T.flags = -} flags
+                           {- , T.getTop = -} (topdir tree)
+                           {- , T.logText = -}  ("SVN revision: " ++ show method)
+                           {- , T.mVersion = -} Nothing
+                           {- , T.origTarball = -} Nothing
+                           {- , T.cleanTarget = -}
+                               (\ path ->
                                    case any P.isKeepRCS flags of
                                      False -> let cmd = "find " ++ path ++ " -name .svn -type d -print0 | xargs -0 -r -n1 rm -rf" in
                                               timeTask (readProcFailing (shell cmd) "")
-                                     True -> return ([], 0)
-                           , T.buildWrapper = id
-                           , T.attrs = empty
-                           }
+                                     True -> return ([], 0))
+                           {- , T.buildWrapper = -} id
+                           {- , T.attrs = -} empty
     where
       uri' = mustParseURI uri
       verifySource dir =

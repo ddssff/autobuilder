@@ -3,7 +3,7 @@
 module Debian.AutoBuilder.BuildTarget.Cd where
 
 import Data.Set (empty)
-import Debian.AutoBuilder.Types.Download (Download(..))
+import Debian.AutoBuilder.Types.Download (Download(..), Download'(..), download')
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Repo.Fingerprint (RetrieveMethod)
@@ -17,13 +17,12 @@ documentation = [ "cd:<relpath>:<target> - A target of this form modifies anothe
 prepare :: MonadRepos m => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> FilePath -> Download -> m Download
 prepare _cache method flags subdir target =
     do
-    return $ Download { method = method
-                      , flags = flags
-                        , getTop = getTop target </> subdir
-                        , logText = logText target ++ " (in subdirectory " ++ subdir ++ ")"
-                        , mVersion = Nothing
-                        , origTarball = Nothing
-                        , cleanTarget = cleanTarget target
-                        , buildWrapper = id
-                        , attrs = empty
-                        }
+    return $ download' {- method = -} method
+                      {- , flags = -} flags
+                        {- , getTop = -} (getTop target </> subdir)
+                        {- , logText = -} (logText target ++ " (in subdirectory " ++ subdir ++ ")")
+                        {- , mVersion = -} Nothing
+                        {- , origTarball = -} Nothing
+                        {- , cleanTarget = -} (cleanTarget target)
+                        {- , buildWrapper = -} id
+                        {- , attrs = -} empty

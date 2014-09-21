@@ -43,17 +43,16 @@ prepare _cache method flags base =
           case (S.fieldValue "Source" dscInfo, maybe Nothing (Just . V.parseDebianVersion)
                      (S.fieldValue "Version" dscInfo)) of
             (Just _package, Just _version) ->
-                return $ T.Download {
-                             T.method = method
-                           , T.flags = flags
-                           , T.getTop = top
-                           , T.logText = "Source Deb: " ++ show method
-                           , T.mVersion = Nothing
-                           , T.origTarball = Nothing
-                           , T.cleanTarget = \ _ -> return ([], 0)
-                           , T.buildWrapper = id
-                           , T.attrs = T.attrs base
-                           }
+                return $ T.download'
+                           {-   T.method = -} method
+                           {- , T.flags = -} flags
+                           {- , T.getTop = -} top
+                           {- , T.logText = -} ("Source Deb: " ++ show method)
+                           {- , T.mVersion = -} Nothing
+                           {- , T.origTarball = -} Nothing
+                           {- , T.cleanTarget = -} (\ _ -> return ([], 0))
+                           {- , T.buildWrapper = -} id
+                           {- , T.attrs = -} (T.attrs base)
             _ -> error $ "Invalid .dsc file: " ++ dscName
       -- unpack top dscName = "cd " ++ top ++ " && dpkg-source -x " ++ dscName
       unpack top dscName = (proc "dpkg-source" ["-x", dscName]) {cwd = Just top}

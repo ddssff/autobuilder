@@ -53,20 +53,19 @@ prepare cache method flags theUri =
       tree <- liftIO $ if exists then verifySource dir else createSource dir
       attr <- liftIO $ readProcFailing ((proc "darcs" ["log", "--xml-output"]) {cwd = Just dir}) "" >>=  return . show . md5 . collectProcessOutput
       _output <- liftIO $ fixLink base
-      return $ T.Download { T.method = method
-                          , T.flags = flags
-                          , T.getTop = topdir tree
-                          , T.logText =  "Darcs revision: " ++ show method
-                          , T.mVersion = Nothing
-                          , T.origTarball = Nothing
-                          , T.cleanTarget =
-                              \ top -> case any P.isKeepRCS flags of
+      return $ T.download' {- T.method = -} method
+                          {- , T.flags = -} flags
+                          {- , T.getTop = -} (topdir tree)
+                          {- , T.logText = -}  ("Darcs revision: " ++ show method)
+                          {- , T.mVersion = -} Nothing
+                          {- , T.origTarball = -} Nothing
+                          {- , T.cleanTarget = -}
+                              (\ top -> case any P.isKeepRCS flags of
                                          False -> let cmd = shell ("find " ++ top ++ " -name '_darcs' -maxdepth 1 -prune | xargs rm -rf") in
                                                   timeTask (readProcFailing cmd "")
-                                         True -> return ([], 0)
-                          , T.buildWrapper = id
-                          , T.attrs = singleton (DarcsChangesId attr)
-                          }
+                                         True -> return ([], 0))
+                          {- , T.buildWrapper = -} id
+                          {- , T.attrs = -} (singleton (DarcsChangesId attr))
     where
       verifySource :: FilePath -> IO SourceTree
       verifySource dir =

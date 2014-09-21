@@ -27,7 +27,7 @@ import qualified Debian.AutoBuilder.BuildTarget.Bzr as Bzr
 import qualified Debian.AutoBuilder.BuildTarget.Uri as Uri
 import qualified Debian.AutoBuilder.BuildTarget.Twice as Twice
 import qualified Debian.AutoBuilder.Types.CacheRec as C
-import Debian.AutoBuilder.Types.Download (Download(..))
+import Debian.AutoBuilder.Types.Download (Download(..), Download'(..), download')
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Debianize (DebT)
@@ -43,22 +43,21 @@ import System.FilePath ((</>))
 retrieve :: forall m. (MonadOS m, MonadRepos m, MonadTop m, MonadCatch m) =>
             DebT IO () -> C.CacheRec -> P.RetrieveMethod -> [P.PackageFlag] -> m Download
 retrieve defaultAtoms cache method flags =
-     case method of
+    case method of
       P.Apt dist package -> Apt.prepare cache method flags dist (SrcPkgName package)
       P.Bzr string -> Bzr.prepare cache method flags string
 
       P.Cd dir spec' ->
           retrieve defaultAtoms cache spec' flags >>= \ target' ->
-          return $ Download { T.method = method
-                            , T.flags = flags
-                            , T.getTop = getTop target' </> dir
-                            , T.logText = logText target' ++ " (in subdirectory " ++ dir ++ ")"
-                            , T.mVersion = Nothing
-                            , T.origTarball = Nothing
-                            , T.cleanTarget = cleanTarget target'
-                            , T.buildWrapper = id
-                            , T.attrs = T.attrs target'
-                            }
+          return $ download' {- T.method = -} method
+                            {- , T.flags = -} flags
+                            {- , T.getTop = -} (getTop target' </> dir)
+                            {- , T.logText = -} (logText target' ++ " (in subdirectory " ++ dir ++ ")")
+                            {- , T.mVersion = -} Nothing
+                            {- , T.origTarball = -} Nothing
+                            {- , T.cleanTarget = -} (cleanTarget target')
+                            {- , T.buildWrapper = -} id
+                            {- , T.attrs = -} (T.attrs target')
 
       P.Darcs uri -> Darcs.prepare cache method flags uri
 
@@ -85,16 +84,15 @@ retrieve defaultAtoms cache method flags =
       -- of BuildTarget.
       P.Dir path ->
           do tree <- liftIO (findSourceTree path :: IO SourceTree)
-             return $ T.Download { T.method = method
-                                 , T.flags = flags
-                                 , T.getTop = topdir tree
-                                 , T.logText =  "Built from local directory " ++ show method
-                                 , T.mVersion = Nothing
-                                 , T.origTarball = Nothing
-                                 , T.cleanTarget = \ _ -> return ([], 0)
-                                 , T.buildWrapper = id
-                                 , T.attrs = empty
-                                 }
+             return $ download' {- { T.method = -} method
+                                 {- , T.flags = -} flags
+                                 {- , T.getTop = -} (topdir tree)
+                                 {- , T.logText = -}  ("Built from local directory " ++ show method)
+                                 {- , T.mVersion = -} Nothing
+                                 {- , T.origTarball = -} Nothing
+                                 {- , T.cleanTarget = -} (\ _ -> return ([], 0))
+                                 {- , T.buildWrapper = -} id
+                                 {- , T.attrs = -} empty
 
       P.Git uri specs -> Git.prepare cache method flags uri specs
       P.Hackage package -> Hackage.prepare cache method flags package
@@ -105,17 +103,16 @@ retrieve defaultAtoms cache method flags =
 
       P.Proc spec' ->
           retrieve defaultAtoms cache spec' flags >>= \ base ->
-          return $ T.Download {
-                       T.method = method
-                     , T.flags = flags
-                     , T.getTop = T.getTop base
-                     , T.logText = T.logText base ++ " (with /proc mounted)"
-                     , T.mVersion = Nothing
-                     , T.origTarball = Nothing
-                     , T.cleanTarget = T.cleanTarget base
-                     , T.buildWrapper = withProc
-                     , T.attrs = T.attrs base
-                     }
+          return $ download'
+                     {-   T.method = -} method
+                     {- , T.flags = -} flags
+                     {- , T.getTop = -} (T.getTop base)
+                     {- , T.logText = -} (T.logText base ++ " (with /proc mounted)")
+                     {- , T.mVersion = -} Nothing
+                     {- , T.origTarball = -} Nothing
+                     {- , T.cleanTarget = -} (T.cleanTarget base)
+                     {- , T.buildWrapper = -} withProc
+                     {- , T.attrs = -} (T.attrs base)
       P.Quilt base patches ->
           do base' <- retrieve defaultAtoms cache base flags
              patches' <- retrieve defaultAtoms cache patches flags
@@ -128,7 +125,7 @@ retrieve defaultAtoms cache method flags =
       P.Twice base -> retrieve defaultAtoms cache base flags >>=
                       Twice.prepare method flags
       P.Uri uri sum -> Uri.prepare cache method flags uri sum
-      P.Zero -> return $ T.Download P.Zero mempty mempty Nothing mempty mempty undefined undefined mempty
+      P.Zero -> return $ download' P.Zero mempty mempty mempty Nothing mempty undefined undefined mempty
 
 {-
 -- | Perform an IO operation with /proc mounted

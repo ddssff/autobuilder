@@ -30,20 +30,19 @@ prepare cache method flags archive =
       when (P.flushSource (P.params cache)) (liftIO $ removeRecursiveSafely dir)
       exists <- liftIO $ doesDirectoryExist dir
       tree <- liftIO $ if exists then verifySource dir else createSource dir
-      return $ T.Download { T.method = method
-                          , T.flags = flags
-                          , T.getTop = topdir tree
-                          , T.logText =  "Hg revision: " ++ show method
-                          , T.mVersion = Nothing
-                          , T.origTarball = Nothing
-                          , T.cleanTarget =
-                              \ path -> case any P.isKeepRCS flags of
+      return $ T.download' {- T.method = -} method
+                          {- , T.flags = -} flags
+                          {- , T.getTop = -} (topdir tree)
+                          {- , T.logText = -}  ("Hg revision: " ++ show method)
+                          {- , T.mVersion = -} Nothing
+                          {- , T.origTarball = -} Nothing
+                          {- , T.cleanTarget = -}
+                              (\ path -> case any P.isKeepRCS flags of
                                           False -> let cmd = "rm -rf " ++ path ++ "/.hg" in
                                                    timeTask (readProcFailing (shell cmd) "")
-                                          _ -> return ([], 0)
-                          , T.buildWrapper = id
-                          , T.attrs = empty
-                          }
+                                          _ -> return ([], 0))
+                          {- , T.buildWrapper = -} id
+                          {- , T.attrs = -} empty
     where
       verifySource dir =
           try (readProcFailing (shell ("cd " ++ dir ++ " && hg status | grep -q .")) "") >>=

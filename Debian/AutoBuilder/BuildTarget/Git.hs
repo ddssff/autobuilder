@@ -57,19 +57,18 @@ prepare cache method flags theUri gitspecs =
       commit <- case code of
                   ExitSuccess -> return . head . lines $ out
                   _ -> error $ displayCreateProcess p ++ " -> " ++ show code
-      return $ T.Download { T.method = method
-                          , T.flags = flags
-                          , T.getTop = topdir tree
-                          , T.logText =  "git revision: " ++ show method
-                          , T.mVersion = Nothing
-                          , T.origTarball = Nothing
-                          , T.cleanTarget =
-                              \ top -> case any P.isKeepRCS flags of
+      return $ T.download' {- T.method = -} method
+                          {- , T.flags = -} flags
+                          {- , T.getTop = -} (topdir tree)
+                          {- , T.logText = -}  ("git revision: " ++ show method)
+                          {- , T.mVersion = -} Nothing
+                          {- , T.origTarball = -} Nothing
+                          {- , T.cleanTarget = -}
+                              (\ top -> case any P.isKeepRCS flags of
                                          False -> let cmd = "find " ++ top ++ " -name '.git' -maxdepth 1 -prune | xargs rm -rf" in timeTask (readProcFailing (shell cmd) "")
-                                         True -> return ([], 0)
-                          , T.buildWrapper = id
-                          , T.attrs = singleton (GitCommit commit)
-                          }
+                                         True -> return ([], 0))
+                          {- , T.buildWrapper = -} id
+                          {- , T.attrs = -} (singleton (GitCommit commit))
     where
       verifySource :: FilePath -> IO SourceTree
       verifySource dir =

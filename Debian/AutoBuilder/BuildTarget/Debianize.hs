@@ -53,15 +53,15 @@ prepare defaultAtoms cache method flags target =
                 -- We want to see the original changelog, so don't remove this
                 -- removeRecursiveSafely (dir </> "debian")
                 liftIO $ autobuilderCabal cache flags dir defaultAtoms
-                return $ T.Download { T.method = method
-                                    , T.flags = flags
-                                    , T.getTop = dir
-                                    , T.logText =  "Built from hackage, revision: " ++ show method
-                                    , T.mVersion = Just version
-                                    , T.origTarball = T.origTarball target
-                                    , T.cleanTarget = \ top -> T.cleanTarget target top
-                                    , T.buildWrapper = id
-                                    , T.attrs = T.attrs target }
+                return $ T.download' {- T.method = -} method
+                                    {- , T.flags = -} flags
+                                    {- , T.getTop = -} dir
+                                    {- , T.logText = -}  ("Built from hackage, revision: " ++ show method)
+                                    {- , T.mVersion = -} (Just version)
+                                    {- , T.origTarball = -} (T.origTarball target)
+                                    {- , T.cleanTarget = -} (\ top -> T.cleanTarget target top)
+                                    {- , T.buildWrapper = -} id
+                                    {- , T.attrs = -} (T.attrs target)
          _ -> error $ "Download at " ++ dir ++ ": missing or multiple cabal files"
 
 withCurrentDirectory :: (MonadMask m, MonadIO m) => FilePath -> m a -> m a

@@ -13,16 +13,15 @@ documentation = [ "twice:<target> - A target of this form modifies another targe
 
 prepare :: MonadRepos m => RetrieveMethod -> [P.PackageFlag] -> T.Download -> m T.Download
 prepare method flags base =
-    do return $ T.Download {
-                    T.method = method
-                  , T.flags = flags
-                  , T.getTop = T.getTop base
-                  , T.logText = T.logText base ++ " (twice if necessary)"
-                  , T.mVersion = Nothing
-                  , T.origTarball = Nothing
-                  , T.cleanTarget = T.cleanTarget base
+    do return $ T.download'
+                  {-  T.method = -} method
+                  {- , T.flags = -} flags
+                  {- , T.getTop = -} (T.getTop base)
+                  {- , T.logText = -} (T.logText base ++ " (twice if necessary)")
+                  {- , T.mVersion = -} Nothing
+                  {- , T.origTarball = -} Nothing
+                  {- , T.cleanTarget = -} (T.cleanTarget base)
                   -- This is a quick and dirty implementation, if you nest this inside another
                   -- target type it will have no effect.
-                  , T.buildWrapper = \ action -> action >> action
-                  , T.attrs = T.attrs base
-                  }
+                  {- , T.buildWrapper = -} (\ action -> action >> action)
+                  {- , T.attrs = -} (T.attrs base)

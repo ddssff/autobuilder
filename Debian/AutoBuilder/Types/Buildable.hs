@@ -20,7 +20,7 @@ import qualified Data.Map as Map
 import qualified Data.Set as Set
 import qualified Debian.AutoBuilder.Types.CacheRec as C
 import qualified Debian.AutoBuilder.Types.Download as T
-import Debian.AutoBuilder.Types.Download (Download(..))
+import Debian.AutoBuilder.Types.Download (Download'(..))
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as R
 import Debian.AutoBuilder.Types.Packages (foldPackages)
@@ -64,7 +64,7 @@ instance Monad Failing where
 -- moves into the function that turns a RetrieveMethod into a BuildTarget.
 data Buildable
     = Buildable
-      { download :: Download
+      { download :: T.Download
       , debianSourceTree :: DebianSourceTree
       -- ^ Return the debian source tree.  Every target must have
       -- this, since this program only builds debian packages.
@@ -76,7 +76,7 @@ instance HasDebianControl Buildable where
 -- | Try to turn a Download into a Target.  First look for a debianization in the
 -- top directory, then for debianizations in subdirectory.  This will throw an
 -- exception if we can't find any, or we find too many.
-asBuildable :: Download -> IO Buildable
+asBuildable :: T.Download -> IO Buildable
 asBuildable x =
     try (findSourceTree (getTop x)) >>=
             either (\ (_ :: SomeException) ->

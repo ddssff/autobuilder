@@ -59,17 +59,16 @@ prepare method flags patch base =
                                  "\nstderr:\n" ++ indent (B.unpack err) ++
                                  "\npatch:\n" ++ indent (B.unpack patch))
          ExitSuccess ->
-             return $ T.Download {
-                          T.method = method
-                        , T.flags = flags
-                        , T.getTop = dir' tree
-                        , T.logText = T.logText base ++ " (with patch applied)"
-                        , T.mVersion = Nothing
-                        , T.origTarball = Nothing
-                        , T.cleanTarget = T.cleanTarget base
-                        , T.buildWrapper = id
-                        , T.attrs = T.attrs base
-                        }
+             return $ T.download'
+                        {-   T.method = -} method
+                        {- , T.flags = -} flags
+                        {- , T.getTop = -} (dir' tree)
+                        {- , T.logText = -} (T.logText base ++ " (with patch applied)")
+                        {- , T.mVersion = -} Nothing
+                        {- , T.origTarball = -} Nothing
+                        {- , T.cleanTarget = -} (T.cleanTarget base)
+                        {- , T.buildWrapper = -} id
+                        {- , T.attrs = -} (T.attrs base)
     where
       cmd = "/usr/bin/patch"
       args = ["-p1"]

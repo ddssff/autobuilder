@@ -129,17 +129,16 @@ prepare method flags base patch = do
                                      (ExitSuccess, _, _) ->
                                          do tree <- findSourceTree (topdir quiltTree) :: IO SourceTree
                                             -- return $ Quilt base patch tree m
-                                            return $ T.Download {
-                                                         T.method = method
-                                                       , T.flags = flags
-                                                       , T.getTop = topdir tree
-                                                       , T.logText = "Quilt revision " ++ show method
-                                                       , T.mVersion = Nothing
-                                                       , T.origTarball = Nothing
-                                                       , T.cleanTarget = \ top -> T.cleanTarget base top
-                                                       , T.buildWrapper = id
-                                                       , T.attrs = union (T.attrs base) (T.attrs patch)
-                                                       }
+                                            return $ T.download'
+                                                       {-   T.method = -} method
+                                                       {- , T.flags = -} flags
+                                                       {- , T.getTop = -} (topdir tree)
+                                                       {- , T.logText = -} ("Quilt revision " ++ show method)
+                                                       {- , T.mVersion = -} Nothing
+                                                       {- , T.origTarball = -} Nothing
+                                                       {- , T.cleanTarget = -} (\ top -> T.cleanTarget base top)
+                                                       {- , T.buildWrapper = -} id
+                                                       {- , T.attrs = -} (union (T.attrs base) (T.attrs patch))
                                      _ -> fail $ target ++ " - Failure removing quilt directory: " ++ cmd3
                (ExitFailure _, _, err) -> fail $ target ++ " - Unexpected output from quilt applied: " ++ decode err
                (_, _, _) -> fail $ target ++ " - Unexpected result code (ExitSuccess) from " ++ show cmd1a

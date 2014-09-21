@@ -6,7 +6,7 @@ import Control.Monad.Trans (MonadIO(liftIO))
 import Data.Maybe (mapMaybe)
 import Data.Set (empty, singleton)
 import qualified Debian.AutoBuilder.Types.CacheRec as P (CacheRec(allSources, params))
-import Debian.AutoBuilder.Types.Download (Download(..))
+import Debian.AutoBuilder.Types.Download (Download(..), download')
 import qualified Debian.AutoBuilder.Types.Packages as P (PackageFlag, aptPin)
 import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec(flushSource, ifSourcesChanged))
 import Debian.Relation (SrcPkgName)
@@ -31,16 +31,16 @@ prepare cache method flags dist package =
       apt <- aptDir package
       when (P.flushSource (P.params cache)) (liftIO . removeRecursiveSafely $ apt)
       tree <- prepareSource package version'
-      return $ Download
-                 { method = method
-                 , flags = flags
-                 , getTop = topdir tree
-                 , logText = "Built from " ++ relName (sliceListName distro) ++ " apt pool, apt-revision: " ++ show method
-                 , mVersion = Nothing
-                 , origTarball = Nothing
-                 , cleanTarget = \ _ -> return ([], 0)
-                 , buildWrapper = id
-                 , attrs = maybe empty (singleton . AptVersion) version' }
+      return $ download'
+                 {- { method = -} method
+                 {- , flags = -} flags
+                 {- , getTop = -} (topdir tree)
+                 {- , logText = -} ("Built from " ++ relName (sliceListName distro) ++ " apt pool, apt-revision: " ++ show method)
+                 {- , mVersion = -} Nothing
+                 {- , origTarball = -} Nothing
+                 {- , cleanTarget = -} (\ _ -> return ([], 0))
+                 {- , buildWrapper = -} id
+                 {- , attrs = -} (maybe empty (singleton . AptVersion) version')
     where
       distro = maybe (error $ "Invalid dist: " ++ relName dist') id (findRelease (P.allSources cache) dist')
       dist' = ReleaseName dist

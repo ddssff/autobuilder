@@ -30,17 +30,17 @@ prepare method flags upstream debian =
     rsync [] (T.getTop upstream) dest >>
     rsync [] (T.getTop debian </> "debian") (dest </> "debian") >>
     liftIO (findSourceTree dest :: IO DebianSourceTree) >>= \ tree ->
-    let tgt = T.Download {
-                T.method = method
-              , T.flags = flags
-              , T.getTop = topdir tree
-              , T.logText = "deb-dir revision: " ++ show method
-              , T.mVersion = Nothing
-              , T.origTarball = T.origTarball upstream
-              , T.cleanTarget = \ _ -> return ([], 0)
-              , T.buildWrapper = id
-              , T.attrs = union (T.attrs upstream) (T.attrs debian)
-              } in
+    let tgt = T.download'
+              {-  T.method = -} method
+              {- , T.flags = -} flags
+              {- , T.getTop = -} (topdir tree)
+              {- , T.logText = -} ("deb-dir revision: " ++ show method)
+              {- , T.mVersion = -} Nothing
+              {- , T.origTarball = -} (T.origTarball upstream)
+              {- , T.cleanTarget = -} (\ _ -> return ([], 0))
+              {- , T.buildWrapper = -} id
+              {- , T.attrs = -} (union (T.attrs upstream) (T.attrs debian))
+              in
     -- The upstream and downstream versions must match after the epoch and revision is stripped.
     case T.mVersion upstream of
       Nothing -> return tgt

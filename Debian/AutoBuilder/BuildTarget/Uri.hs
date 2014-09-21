@@ -45,15 +45,15 @@ prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.Pack
 prepare c method flags u s =
     do (uri, sum, tree) <- checkTarget >>= downloadTarget >> validateTarget >>= unpackTarget
        tar <- tarball (uriToString' uri) sum
-       return $ T.Download { T.method = method
-                           , T.flags = flags
-                           , T.getTop = R.topdir tree
-                           , T.logText = "Built from URI download " ++ (uriToString' uri)
-                           , T.mVersion = Nothing
-                           , T.origTarball = Just tar
-                           , T.cleanTarget = \ _ -> return ([], 0)
-                           , T.buildWrapper = id
-                           , T.attrs = empty }
+       return $ T.download' {- T.method = -} method
+                            {- T.flags = -} flags
+                            {- T.getTop = -} (R.topdir tree)
+                            {- T.logText = -} ("Built from URI download " ++ (uriToString' uri))
+                            {- T.mVersion = -} Nothing
+                            {- T.origTarball = -} (Just tar)
+                            {- T.cleanTarget = -} (\ _ -> return ([], 0))
+                            {- T.buildWrapper = -} id
+                            {- T.attrs = -} empty
     where
       checkTarget :: (MonadRepos m, MonadTop m) => m Bool
       checkTarget =

@@ -10,7 +10,7 @@ import Data.Digest.Pure.MD5 (md5)
 import Data.List
 import Data.Set (empty)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
-import Debian.AutoBuilder.Types.Download (Download(..))
+import Debian.AutoBuilder.Types.Download (Download(..), download')
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Repo
@@ -34,21 +34,21 @@ prepare cache method flags version =
     when (P.flushSource (P.params cache)) (liftIO (removeRecursiveSafely dir))
     exists <- liftIO $ doesDirectoryExist dir
     tree <- liftIO $ if exists then updateSource dir else createSource dir
-    return $ Download
-               { method = method
-               , flags = flags
-               , getTop = topdir tree
-               , logText = "Bazaar revision: " ++ show method
-               , mVersion = Nothing
-               , origTarball = Nothing
-               , cleanTarget = \ top ->
+    return $ download'
+               {- { method = -} method
+               {- , flags = -} flags
+               {- , getTop = -} (topdir tree)
+               {- , logText = -} ("Bazaar revision: " ++ show method)
+               {- , mVersion = -} Nothing
+               {- , origTarball = -} Nothing
+               {- , cleanTarget = -} (\ top ->
                    do qPutStrLn ("Clean Bazaar target in " ++ top)
                       case any P.isKeepRCS flags of
                         False -> let cmd = "find '" ++ top ++ "' -name '.bzr' -prune | xargs rm -rf" in
                                  timeTask (readProcFailing (shell cmd) "")
-                        True -> return ([], 0)
-               , buildWrapper = id
-               , attrs = empty }
+                        True -> return ([], 0))
+               {- , buildWrapper = -} id
+               {- , attrs = -} empty
     where
         -- Tries to update a pre-existant bazaar source tree
         updateSource dir =

@@ -49,15 +49,15 @@ prepare cache method flags name =
        liftIO $ when (P.flushSource (P.params cache)) (removeRecursiveSafely tar)
        unp <- downloadCached server name version
        tree <- liftIO $ (findSourceTree unp :: IO SourceTree)
-       return $ T.Download { T.method = method
-                           , T.flags = flags
-                           , T.getTop = topdir tree
-                           , T.logText =  "Built from hackage, revision: " ++ show method
-                           , T.mVersion = Just version
-                           , T.origTarball = Just tar
-                           , T.cleanTarget = \ _ -> return ([], 0)
-                           , T.buildWrapper = id
-                           , T.attrs = Data.Set.empty }
+       return $ T.download'{- T.method = -} method
+                           {- , T.flags = -} flags
+                           {- , T.getTop = -} (topdir tree)
+                           {- , T.logText = -}  ("Built from hackage, revision: " ++ show method)
+                           {- , T.mVersion = -} (Just version)
+                           {- , T.origTarball = -} (Just tar)
+                           {- , T.cleanTarget = -} (\ _ -> return ([], 0))
+                           {- , T.buildWrapper = -} id
+                           {- , T.attrs = -} Data.Set.empty
     where
       versionString = case mapMaybe P.cabalPin flags of
                         [] -> Nothing
