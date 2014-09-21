@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, PackageImports, ScopedTypeVariables, TypeFamilies #-}
+{-# LANGUAGE CPP, GADTs, PackageImports, ScopedTypeVariables, TypeFamilies #-}
 {-# OPTIONS_GHC -fno-warn-name-shadowing -fno-warn-type-defaults -fno-warn-missing-signatures #-}
 module Debian.AutoBuilder.BuildTarget.Hackage
     ( prepare
@@ -41,7 +41,7 @@ documentation = [ "debianize:<name> or debianize:<name>=<version> - a target of 
                 , "(currently) retrieves source code from http://hackage.haskell.org and runs"
                 , "cabal-debian to create the debianization." ]
 
-prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m T.Download
+prepare :: (MonadRepos m, MonadTop m, T.Download a, a ~ T.Download') => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m a
 prepare cache method flags name =
     do let server = P.hackageServer (P.params cache) -- typically "hackage.haskell.org"
        version <- liftIO $ maybe (getVersion' server name) (return . readVersion) versionString

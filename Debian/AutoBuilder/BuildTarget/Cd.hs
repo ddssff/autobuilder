@@ -1,4 +1,4 @@
-{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE ExistentialQuantification, GADTs #-}
 -- |Modify a target so we cd to a subdirectory before building
 module Debian.AutoBuilder.BuildTarget.Cd where
 
@@ -14,7 +14,8 @@ documentation = [ "cd:<relpath>:<target> - A target of this form modifies anothe
                 , "changing directories into a subdirectory before doing the build.  It is"
                 , "used for repositories where the debian directory is in a subdirectory."]
 
-prepare :: MonadRepos m => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> FilePath -> Download -> m Download
+prepare :: (MonadRepos m, Download a, Download b, b ~ Download') =>
+           P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> FilePath -> a -> m b
 prepare _cache method flags subdir target =
     do
     return $ download' {- method = -} method

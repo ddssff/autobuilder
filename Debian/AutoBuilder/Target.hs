@@ -32,7 +32,7 @@ import Debian.Arch (Arch)
 import qualified Debian.AutoBuilder.Params as P (baseRelease, isDevelopmentRelease)
 import Debian.AutoBuilder.Types.Buildable (Buildable(..), failing, prepareTarget, relaxDepends, Target(tgt, cleanSource, targetDepends), targetRelaxed)
 import qualified Debian.AutoBuilder.Types.CacheRec as P (CacheRec(params))
-import qualified Debian.AutoBuilder.Types.Download as T (Download'(buildWrapper, getTop, logText), flags, method)
+import qualified Debian.AutoBuilder.Types.Download as T (Download(buildWrapper, getTop, logText), flags, method)
 import Debian.AutoBuilder.Types.Fingerprint (buildDecision, targetFingerprint)
 import qualified Debian.AutoBuilder.Types.Packages as P (foldPackages, packageCount, PackageFlag(UDeb), Packages, Package(spec))
 import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec(autobuilderEmail, buildDepends, buildRelease, buildTrumped, discard, doNotChangeVersion, dryRun, extraReleaseTag, noClean, oldVendorTags, preferred, releaseAliases, setEnv, strictness, vendorTag), Strictness(Lax))
@@ -81,7 +81,7 @@ import System.Unix.Chroot (useEnv)
 import Text.Printf (printf)
 import Text.Regex (matchRegex, mkRegex)
 
-instance Ord Target where
+instance T.Download a => Ord (Target a) where
     compare = compare `on` debianSourcePackageName
 
 instance Monad Failing where
@@ -100,7 +100,7 @@ decode = UTF8.toString . B.concat . L.toChunks
 -- revision info and build dependency versions in a human readable
 -- form.  FIXME: this should also include revision control log
 -- entries.
-changelogText :: Buildable -> Maybe DownstreamFingerprint -> Fingerprint -> String
+changelogText :: T.Download a => Buildable a -> Maybe DownstreamFingerprint -> Fingerprint -> String
 changelogText buildable old new = ("  * " ++ T.logText (download buildable) ++ "\n" ++ dependencyChanges old new ++ "\n")
 
 -- |Generate the string of build dependency versions:
@@ -112,7 +112,8 @@ _formatVersions buildDeps =
     "\n"
     where prefix = "\n    "
 
-prepareTargets :: (MonadOS m, MonadRepos m, MonadMask m) => P.CacheRec -> Relations -> [Buildable] -> m [Target]
+prepareTargets :: (MonadOS m, MonadRepos m, MonadMask m, T.Download a) =>
+                  P.CacheRec -> Relations -> [Buildable a] -> m [Target a]
 prepareTargets cache globalBuildDeps targetSpecs =
     do results <- mapM (prepare (length targetSpecs)) (zip [1..] targetSpecs)
        let (failures, targets) = partitionEithers results
@@ -122,7 +123,7 @@ prepareTargets cache globalBuildDeps targetSpecs =
          True -> return targets
          False -> ePutStr msg >> error msg
     where
-      prepare :: (MonadOS m, MonadRepos m, MonadMask m) => Int -> (Int, Buildable) -> m (Either SomeException Target)
+      prepare :: (MonadOS m, MonadRepos m, MonadMask m, T.Download a) => Int -> (Int, Buildable a) -> m (Either SomeException (Target a))
       prepare count (index, tgt) =
           do qPutStrLn (printf "[%2d of %2d] %s in %s" index count (ppDisplay . debianSourcePackageName $ tgt) (T.getTop $ download $ tgt))
              try (prepareTarget cache globalBuildDeps tgt) >>=
@@ -145,8 +146,8 @@ partitionFailing xs =
 -- | Build a set of targets.  When a target build is successful it
 -- is uploaded to the incoming directory of the local repository,
 -- and then the function to process the incoming queue is called.
-buildTargets :: (MonadRepos m, MonadTop m, MonadApt m, MonadMask m) =>
-                P.CacheRec -> EnvRoot -> EnvRoot -> LocalRepository -> [Buildable] -> m (LocalRepository, [Target])
+buildTargets :: (MonadRepos m, MonadTop m, MonadApt m, MonadMask m, T.Download a) =>
+                P.CacheRec -> EnvRoot -> EnvRoot -> LocalRepository -> [Buildable a] -> m (LocalRepository, [Target a])
 buildTargets _ _ _ localRepo [] = return (localRepo, [])
 buildTargets cache dependOS buildOS localRepo !targetSpecs =
     do globalBuildDeps <- evalMonadOS buildEssential dependOS
@@ -158,15 +159,15 @@ buildTargets cache dependOS buildOS localRepo !targetSpecs =
  
 -- Execute the target build loop until all the goals (or everything) is built
 -- FIXME: Use sets instead of lists
-buildLoop :: (MonadRepos m, MonadTop m, MonadApt m, MonadMask m) =>
-             P.CacheRec -> LocalRepository -> EnvRoot -> EnvRoot -> [Target] -> m [Target]
+buildLoop :: (MonadRepos m, MonadTop m, MonadApt m, MonadMask m, T.Download a) =>
+             P.CacheRec -> LocalRepository -> EnvRoot -> EnvRoot -> [Target a] -> m [Target a]
 buildLoop cache localRepo dependOS buildOS !targets =
     Set.toList <$> loop (Set.fromList targets) Set.empty
     where
       -- This loop computes the list of known ready targets and call
       -- loop2 to build them
-      loop :: (MonadRepos m, MonadApt m, MonadTop m, MonadMask m) =>
-              Set.Set Target -> Set.Set Target -> m (Set.Set Target)
+      loop :: (MonadRepos m, MonadApt m, MonadTop m, MonadMask m, T.Download a) =>
+              Set.Set (Target a) -> Set.Set (Target a) -> m (Set.Set (Target a))
       loop unbuilt failed | Set.null unbuilt = return failed
       loop unbuilt failed =
           ePutStrLn "\nComputing ready targets..." >>
@@ -175,11 +176,11 @@ buildLoop cache localRepo dependOS buildOS !targets =
             ready ->
                 do ePutStrLn (makeTable ready)
                    loop2 (Set.difference unbuilt (Set.fromList $ map G.ready ready)) failed ready
-      loop2 :: (MonadRepos m, MonadApt m, MonadTop m, MonadMask m) =>
-               Set.Set Target -- unbuilt: targets which have not been built and are not ready to build
-            -> Set.Set Target -- failed: Targets which either failed to build or were blocked by a target that failed to build
-            -> [G.ReadyTarget Target] -- ready: the list of known buildable targets
-            -> m (Set.Set Target)
+      loop2 :: (MonadRepos m, MonadApt m, MonadTop m, MonadMask m, T.Download a) =>
+               Set.Set (Target a) -- unbuilt: targets which have not been built and are not ready to build
+            -> Set.Set (Target a) -- failed: Targets which either failed to build or were blocked by a target that failed to build
+            -> [G.ReadyTarget (Target a)] -- ready: the list of known buildable targets
+            -> m (Set.Set (Target a))
       loop2 unbuilt failed [] =
           -- Out of ready targets, re-do the dependency computation
           loop unbuilt failed
@@ -259,7 +260,7 @@ makeTable ready =
 -- from the target set, and repeat until all targets are built.  We
 -- can build a graph of the "has build dependency" relation and find
 -- any node that has no inbound arcs and (maybe) build that.
-readyTargets :: P.CacheRec -> {- [SrcPkgName] -> -} [Target] -> [G.ReadyTarget Target]
+readyTargets :: T.Download a => P.CacheRec -> {- [SrcPkgName] -> -} [Target a] -> [G.ReadyTarget (Target a)]
 readyTargets cache targets =
     -- q12 "Choosing next target" $
     -- Compute the list of build dependency groups, each of which
@@ -273,7 +274,7 @@ readyTargets cache targets =
             ready -> ready
     where
       -- We choose the next target using the relaxed dependency set
-      depends :: Target -> Target -> Ordering
+      depends :: T.Download a => Target a -> Target a -> Ordering
       depends target1 target2 = G.compareSource (targetRelaxed (relaxDepends cache (tgt target1)) target1) (targetRelaxed (relaxDepends cache (tgt target2)) target2)
       -- Choose the next target to build.  Look for targets which are
       -- in the goal list, or which block packages in the goal list.
@@ -285,7 +286,7 @@ readyTargets cache targets =
       -- Prefer targets which block more package
       compareReady = flip (compare `on` (length . G.waiting))
 
-cycleMessage :: P.CacheRec -> [(Target, Target)] -> String
+cycleMessage :: T.Download a => P.CacheRec -> [(Target a, Target a)] -> String
 cycleMessage cache arcs =
     "Dependency cycles formed by these edges need to be broken:\n  " ++
     unlines (map (intercalate " ")
@@ -299,14 +300,14 @@ cycleMessage cache arcs =
           [(show (intersect (binaryNames pkg dep) (binaryNamesOfRelations rels))), ppDisplay (debianSourcePackageName dep), " -> ", ppDisplay (debianSourcePackageName pkg)]
       relaxLine :: (BinPkgName, SrcPkgName) -> String
       relaxLine (bin, src) = "Relax-Depends: " ++ unBinPkgName bin ++ " " ++ unSrcPkgName src
-      pairs :: (Target, Target) -> [(BinPkgName, SrcPkgName)]
+      pairs :: T.Download a => (Target a, Target a) -> [(BinPkgName, SrcPkgName)]
       pairs (pkg, dep) =
           map (\ bin -> (bin, G.sourceName (targetDepends pkg))) binaryDependencies
               where binaryDependencies = intersect (binaryNames pkg dep) (binaryNamesOfRelations (targetRelaxed (relaxDepends cache (tgt pkg)) pkg))
       binaryNamesOfRelations :: G.DepInfo -> [BinPkgName]
       binaryNamesOfRelations info =
           concat (map (map (\ (Rel name _ _) -> name)) (G.relations info))
-      binaryNames :: Target -> Target -> [BinPkgName]
+      binaryNames :: T.Download a => Target a -> Target a -> [BinPkgName]
       binaryNames pkg dep = G.binaryNames (targetRelaxed (relaxDepends cache (tgt pkg)) dep)
 
 showTargets :: [(RetrieveMethod, [P.PackageFlag])] -> String
@@ -327,12 +328,12 @@ qError message = qPutStrLn message >> error message
 
 -- Decide whether a target needs to be built and, if so, build it.
 buildTarget ::
-    (MonadRepos m, MonadTop m, MonadApt m, MonadMask m) =>
+    (MonadRepos m, MonadTop m, MonadApt m, MonadMask m, T.Download a) =>
     P.CacheRec ->			-- configuration info
     EnvRoot ->
     EnvRoot ->
     LocalRepository ->			-- ^ The local repository the packages will be uploaded to, this also may already contain packages.
-    Target ->
+    Target a ->
     m (Maybe LocalRepository)	-- The local repository after the upload (if it changed)
 buildTarget cache dependOS buildOS repo !target = do
   -- Get the control file from the clean source and compute the
@@ -372,8 +373,8 @@ buildTarget cache dependOS buildOS repo !target = do
                              return . Just
 
 -- | Build a package and upload it to the local repository.
-buildPackage :: (MonadRepos m, MonadTop m, MonadMask m) =>
-                P.CacheRec -> EnvRoot -> EnvRoot -> Maybe DebianVersion -> Maybe DownstreamFingerprint -> Fingerprint -> Target -> BuildDecision -> LocalRepository -> m LocalRepository
+buildPackage :: (MonadRepos m, MonadTop m, MonadMask m, T.Download a) =>
+                P.CacheRec -> EnvRoot -> EnvRoot -> Maybe DebianVersion -> Maybe DownstreamFingerprint -> Fingerprint -> Target a -> BuildDecision -> LocalRepository -> m LocalRepository
 buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !target decision repo = do
   checkDryRun
   source <- noisier 2 $ prepareBuildTree cache dependOS buildOS newFingerprint target
@@ -477,7 +478,8 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
 -- these operations take place in a different order from other types
 -- of builds.  For lax: dependencies, then image copy, then source
 -- copy.  For other: image copy, then source copy, then dependencies.
-prepareBuildTree :: (MonadTop m, MonadRepos m, MonadMask m) => P.CacheRec -> EnvRoot -> EnvRoot -> Fingerprint -> Target -> m DebianBuildTree
+prepareBuildTree :: (MonadTop m, MonadRepos m, MonadMask m, T.Download a) =>
+                    P.CacheRec -> EnvRoot -> EnvRoot -> Fingerprint -> Target a -> m DebianBuildTree
 prepareBuildTree cache dependOS buildOS sourceFingerprint target = do
   let dependRoot = rootPath dependOS
       buildRoot = rootPath buildOS
@@ -514,7 +516,8 @@ prepareBuildTree cache dependOS buildOS sourceFingerprint target = do
 -- find packages which are simply installed in the environment but not
 -- available from the repositories listed in sources.list (but
 -- currently it does.)
-getReleaseControlInfo :: (MonadOS m, MonadRepos m) => Target -> m (Maybe SourcePackage, SourcePackageStatus, String)
+getReleaseControlInfo :: (MonadOS m, MonadRepos m, T.Download a) =>
+                         Target a -> m (Maybe SourcePackage, SourcePackageStatus, String)
 getReleaseControlInfo target = do
   sourcePackages' <- (sortBy compareVersion . sortSourcePackages [packageName]) <$> osSourcePackages
   binaryPackages' <- sortBinaryPackages (nub . concat . map sourcePackageBinaryNames $ sourcePackages') <$> osBinaryPackages
@@ -591,7 +594,8 @@ data Status = Complete | Missing [BinPkgName]
 -- |Compute a new version number for a package by adding a vendor tag
 -- with a number sufficiently high to trump the newest version in the
 -- dist, and distinct from versions in any other dist.
-computeNewVersion :: (MonadApt m, MonadRepos m, MonadOS m, MonadMask m) => P.CacheRec -> Target -> Maybe SourcePackage -> SourcePackageStatus -> m (Failing DebianVersion)
+computeNewVersion :: (MonadApt m, MonadRepos m, MonadOS m, MonadMask m, T.Download a) =>
+                     P.CacheRec -> Target a -> Maybe SourcePackage -> SourcePackageStatus -> m (Failing DebianVersion)
 computeNewVersion cache target releaseControlInfo _releaseStatus = do
   let current = if buildTrumped then Nothing else releaseControlInfo
       currentVersion = maybe Nothing (Just . parseDebianVersion . T.unpack) (maybe Nothing (fieldValue "Version" . sourceParagraph) current)

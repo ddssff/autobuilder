@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, Rank2Types, ScopedTypeVariables #-}
+{-# LANGUAGE GADTs, OverloadedStrings, Rank2Types, ScopedTypeVariables #-}
 module Debian.AutoBuilder.BuildTarget.Darcs
     ( documentation
     , prepare
@@ -43,7 +43,8 @@ darcsRev tree m =
       path = topdir tree
 -}
 
-prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m T.Download
+prepare :: (MonadRepos m, MonadTop m, T.Download a, a ~ T.Download') =>
+           P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m a
 prepare cache method flags theUri =
     do
       base <- sub "darcs"

@@ -1,5 +1,5 @@
 -- | Copy the target and apply a patch.
-{-# LANGUAGE Rank2Types, ScopedTypeVariables #-}
+{-# LANGUAGE GADTs, Rank2Types, ScopedTypeVariables #-}
 module Debian.AutoBuilder.BuildTarget.Patch where
 
 import qualified Debug.Trace as D
@@ -44,7 +44,7 @@ instance Show Patch where
 documentation :: [String]
 documentation = [ "Patch <target> <patchtext> - Apply the patch to the target." ]
 
-prepare :: (MonadRepos m, MonadTop m) => RetrieveMethod -> [P.PackageFlag] -> B.ByteString -> T.Download -> m T.Download
+prepare :: (MonadRepos m, MonadTop m, T.Download a, T.Download b, b ~ T.Download') => RetrieveMethod -> [P.PackageFlag] -> B.ByteString -> a -> m b
 prepare method flags patch base =
     do copyDir <- sub ("quilt" </> show (md5 (L.pack (show method))))
        baseTree <- liftIO $ findSourceTree (T.getTop base)

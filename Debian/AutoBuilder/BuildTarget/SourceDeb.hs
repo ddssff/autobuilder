@@ -1,6 +1,7 @@
 -- |A SourceDeb target modifies another target to provide an unpacked debian source tree
 -- when a debian source package is found.  A debian source package is a @.dsc@ file, a
 -- @.tar.gz@ file, and an optional @.diff.gz@ file.
+{-# LANGUAGE GADTs #-}
 module Debian.AutoBuilder.BuildTarget.SourceDeb where
 
 import Control.Monad.Trans
@@ -26,7 +27,7 @@ documentation = [ "sourcedeb:<target> - A target of this form unpacks the source
 
 -- |Given the BuildTarget for the base target, prepare a SourceDeb BuildTarget
 -- by unpacking the source deb.
-prepare :: MonadRepos m => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> T.Download -> m T.Download
+prepare :: (MonadRepos m, T.Download a, T.Download b, b ~ T.Download') => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> a -> m b
 prepare _cache method flags base =
     do dscFiles <- liftIO (getDirectoryContents top) >>= return . filter (isSuffixOf ".dsc")
        dscInfo <- mapM (\ name -> liftIO (readFile (top ++ "/" ++ name) >>= return . S.parseControl name)) dscFiles

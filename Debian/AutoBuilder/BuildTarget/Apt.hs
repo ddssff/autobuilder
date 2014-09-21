@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE GADTs, ScopedTypeVariables #-}
 module Debian.AutoBuilder.BuildTarget.Apt where
 
 import Control.Monad (when)
@@ -6,7 +6,7 @@ import Control.Monad.Trans (MonadIO(liftIO))
 import Data.Maybe (mapMaybe)
 import Data.Set (empty, singleton)
 import qualified Debian.AutoBuilder.Types.CacheRec as P (CacheRec(allSources, params))
-import Debian.AutoBuilder.Types.Download (Download(..), download')
+import Debian.AutoBuilder.Types.Download (Download(..), download', Download')
 import qualified Debian.AutoBuilder.Types.Packages as P (PackageFlag, aptPin)
 import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec(flushSource, ifSourcesChanged))
 import Debian.Relation (SrcPkgName)
@@ -25,7 +25,7 @@ documentation = [ "apt:<distribution>:<packagename> - a target of this form look
                 , "the sources.list named <distribution> and retrieves the package with"
                 , "the given name from that distribution." ]
 
-prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> SrcPkgName -> m Download
+prepare :: (MonadRepos m, MonadTop m, Download a, a ~ Download') => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> SrcPkgName -> m a
 prepare cache method flags dist package =
     withAptImage (P.ifSourcesChanged (P.params cache)) distro $ do
       apt <- aptDir package

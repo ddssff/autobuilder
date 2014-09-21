@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, ScopedTypeVariables #-}
+{-# LANGUAGE CPP, GADTs, ScopedTypeVariables #-}
 module Debian.AutoBuilder.BuildTarget.DebDir
     ( documentation
     , prepare
@@ -22,7 +22,8 @@ documentation = [ "deb-dir:(<target>):(<target>) - A target of this form combine
                 , "where one points to an un-debianized source tree and the other contains"
                 , "a debian subdirectory." ]
 
-prepare :: (MonadRepos m, MonadTop m) => RetrieveMethod -> [P.PackageFlag] -> T.Download -> T.Download -> m T.Download
+prepare :: (MonadRepos m, MonadTop m, T.Download a, T.Download b, T.Download c, c ~ T.Download') =>
+           RetrieveMethod -> [P.PackageFlag] -> a -> b -> m c
 prepare method flags upstream debian =
     sub "deb-dir" >>= \ dir ->
     sub ("deb-dir" </> show (md5 (pack (show method)))) >>= \ dest ->

@@ -20,7 +20,7 @@ import qualified Data.Map as Map
 import qualified Data.Set as Set
 import qualified Debian.AutoBuilder.Types.CacheRec as C
 import qualified Debian.AutoBuilder.Types.Download as T
-import Debian.AutoBuilder.Types.Download (Download'(..))
+import Debian.AutoBuilder.Types.Download (Download(..))
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as R
 import Debian.AutoBuilder.Types.Packages (foldPackages)
@@ -62,21 +62,21 @@ instance Monad Failing where
 
 -- | A replacement for the BuildTarget class and the BuildTarget.* types.  The method code
 -- moves into the function that turns a RetrieveMethod into a BuildTarget.
-data Buildable
+data Buildable download
     = Buildable
-      { download :: T.Download
+      { download :: download
       , debianSourceTree :: DebianSourceTree
       -- ^ Return the debian source tree.  Every target must have
       -- this, since this program only builds debian packages.
       }
 
-instance HasDebianControl Buildable where
+instance HasDebianControl (Buildable download) where
     debianControl = control' . debianSourceTree
 
 -- | Try to turn a Download into a Target.  First look for a debianization in the
 -- top directory, then for debianizations in subdirectory.  This will throw an
 -- exception if we can't find any, or we find too many.
-asBuildable :: T.Download -> IO Buildable
+asBuildable :: (T.Download a) => a -> IO (Buildable a)
 asBuildable x =
     try (findSourceTree (getTop x)) >>=
             either (\ (_ :: SomeException) ->
@@ -95,7 +95,7 @@ asBuildable x =
 -- example, @Relax-Depends: ghc6 hscolour@ means \"even if ghc6
 -- is rebuilt, don't rebuild hscolour even though ghc6 is one of
 -- its build dependencies.\"
-relaxDepends :: C.CacheRec -> Buildable -> G.OldRelaxInfo
+relaxDepends :: (T.Download a) => C.CacheRec -> Buildable a -> G.OldRelaxInfo
 relaxDepends cache@(C.CacheRec {C.params = p}) x =
     let srcPkg = debianSourcePackageName x in
     G.RelaxInfo $ map (\ target -> (BinPkgName target, Nothing)) (globalRelaxInfo (C.params cache)) ++
@@ -111,22 +111,22 @@ _makeRelaxInfo (G.RelaxInfo xs) srcPkgName binPkgName =
       f (b, Nothing) (global', mp') = (Set.insert b global', mp')
 
 -- | Information collected from the build tree for a Tgt.
-data Target
-    = Target { tgt :: Buildable			-- ^ The instance of BuildTarget
+data Target download
+    = Target { tgt :: Buildable download	-- ^ The instance of BuildTarget
              , cleanSource :: DebianBuildTree	-- ^ The source code stripped of SCCS info
              , targetDepends :: G.DepInfo	-- ^ The dependency info parsed from the control file
              }
 
-instance HasDebianControl Target where
+instance HasDebianControl (Target download) where
     debianControl = debianControl . tgt
 
-instance Eq Target where
+instance Eq (Target download) where
     a == b = debianSourcePackageName a == debianSourcePackageName b
 
 -- |Prepare a target for building in the given environment.  At this
 -- point, the target needs to be a DebianSourceTree or a
 -- DebianBuildTree.
-prepareTarget :: (MonadOS m, MonadIO m, MonadMask m) => C.CacheRec -> Relations -> Buildable -> m Target
+prepareTarget :: (MonadOS m, MonadIO m, MonadMask m, T.Download a) => C.CacheRec -> Relations -> Buildable a -> m (Target a)
 prepareTarget cache globalBuildDeps source =
     prepareBuild cache (download source) >>= \ tree ->
     liftIO (getTargetDependencyInfo globalBuildDeps tree) >>= \ deps ->
@@ -138,7 +138,7 @@ prepareTarget cache globalBuildDeps source =
 -- revision control files.  This ensures that the tarball and\/or the
 -- .diff.gz file in the deb don't contain extra junk.  It also makes
 -- sure that debian\/rules is executable.
-prepareBuild :: (MonadOS m, MonadIO m, MonadMask m) => C.CacheRec -> T.Download -> m DebianBuildTree
+prepareBuild :: (MonadOS m, MonadIO m, MonadMask m, T.Download a) => C.CacheRec -> a -> m DebianBuildTree
 prepareBuild _cache target =
     liftIO (try (findSourceTree (T.getTop target))) >>=
     either (\ (_ :: SomeException) ->
@@ -255,7 +255,7 @@ getRelaxedDependencyInfo globalBuildDeps relaxInfo tree =
     do deps <- getTargetDependencyInfo globalBuildDeps tree
        return (deps, head (G.oldRelaxDeps relaxInfo [deps]))
 
-targetRelaxed :: G.OldRelaxInfo -> Target -> G.DepInfo
+targetRelaxed :: (T.Download a) => G.OldRelaxInfo -> Target a -> G.DepInfo
 targetRelaxed relaxInfo target = head $ G.oldRelaxDeps relaxInfo [targetDepends target]
 
 -- |Retrieve the dependency information for a single target

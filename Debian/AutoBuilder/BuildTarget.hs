@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, PackageImports, RankNTypes, ScopedTypeVariables #-}
+{-# LANGUAGE GADTs, OverloadedStrings, PackageImports, RankNTypes, ScopedTypeVariables #-}
 module Debian.AutoBuilder.BuildTarget
     ( retrieve
     , targetDocumentation
@@ -40,8 +40,8 @@ import Debian.Repo.Top (MonadTop)
 import System.FilePath ((</>))
 
 -- | Given a RetrieveMethod, perform the retrieval and return the result.
-retrieve :: forall m. (MonadOS m, MonadRepos m, MonadTop m, MonadCatch m) =>
-            DebT IO () -> C.CacheRec -> P.RetrieveMethod -> [P.PackageFlag] -> m Download
+retrieve :: forall m a. (MonadOS m, MonadRepos m, MonadTop m, MonadCatch m, Download a, a ~ Download') =>
+            DebT IO () -> C.CacheRec -> P.RetrieveMethod -> [P.PackageFlag] -> m a
 retrieve defaultAtoms cache method flags =
     case method of
       P.Apt dist package -> Apt.prepare cache method flags dist (SrcPkgName package)

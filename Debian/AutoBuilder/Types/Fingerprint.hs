@@ -29,7 +29,7 @@ import Debian.Repo.PackageID (PackageID(PackageID, packageName, packageVersion))
 import Debian.Repo.PackageIndex (BinaryPackage(packageID))
 import Debian.Version (prettyDebianVersion)
 
-targetFingerprint :: Target -> [BinaryPackage] -> Fingerprint
+targetFingerprint :: T.Download a => Target a -> [BinaryPackage] -> Fingerprint
 targetFingerprint target buildDependencySolution =
     Fingerprint { method = sourceRevision
                 , upstreamVersion = sourceVersion
@@ -59,8 +59,9 @@ makeVersion package =
 -- is different from the revision of the uploaded source, or if any of
 -- the build dependencies are newer than the versions which were
 -- encoded into the uploaded version's control file.
-buildDecision :: P.CacheRec
-              -> Target
+buildDecision :: T.Download a =>
+                 P.CacheRec
+              -> Target a
               -> Maybe DownstreamFingerprint -- ^ The fingerprint of the most recent build
               -> Fingerprint -- ^ The fingerprint of the source package
               -> SourcePackageStatus -- ^ The status of the version in the repository with respect

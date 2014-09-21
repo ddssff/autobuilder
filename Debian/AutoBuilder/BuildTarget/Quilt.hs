@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, PackageImports, ScopedTypeVariables #-}
+{-# LANGUAGE GADTs, OverloadedStrings, PackageImports, ScopedTypeVariables #-}
 -- | The quilt target takes two other targets, one a base source
 -- directory and another a quilt-style patch directory, and creates
 -- a build target with the patches applied to the source directory.
@@ -52,7 +52,7 @@ getEntry (Patch x) = x
 
 quiltPatchesDir = "quilt-patches"
 
-makeQuiltTree :: (MonadRepos m, MonadTop m) => RetrieveMethod -> T.Download -> T.Download -> m (SourceTree, FilePath)
+makeQuiltTree :: (MonadRepos m, MonadTop m, T.Download a, T.Download b) => RetrieveMethod -> a -> b -> m (SourceTree, FilePath)
 makeQuiltTree m base patch =
     do qPutStrLn $ "Quilt base: " ++ T.getTop base
        qPutStrLn $ "Quilt patch: " ++ T.getTop patch
@@ -84,7 +84,7 @@ makeQuiltTree m base patch =
 failing f _ (Failure x) = f x
 failing _ s (Success x) = s x
 
-prepare :: (MonadRepos m, MonadTop m) => RetrieveMethod -> [P.PackageFlag] -> T.Download -> T.Download -> m T.Download
+prepare :: (MonadRepos m, MonadTop m, T.Download a, T.Download b, T.Download c, c ~ T.Download') => RetrieveMethod -> [P.PackageFlag] -> a -> b -> m c
 prepare method flags base patch = do
     qPutStrLn "Preparing quilt target"
     makeQuiltTree method base patch >>= liftIO . withUpstreamQuiltHidden make
@@ -96,7 +96,7 @@ prepare method flags base patch = do
                 pc = (quiltDir ++ "/.pc")
                 pch = (quiltDir ++ "/.pc.hide")
                 rmrf d = readProcFailing (shell ("rm -rf '"  ++ d ++ "'")) ""
-      make :: (SourceTree, FilePath) -> IO T.Download
+      make :: (T.Download a, a ~ T.Download') => (SourceTree, FilePath) -> IO a
       make (quiltTree, quiltDir) =
           do applied <- readProcFailing (shell cmd1a) "" >>= qMessage "Checking for applied patches" >>= return . collectProcessTriple
              case applied of

@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, Rank2Types, ScopedTypeVariables #-}
+{-# LANGUAGE GADTs, OverloadedStrings, Rank2Types, ScopedTypeVariables #-}
 module Debian.AutoBuilder.BuildTarget.Git where
 
 import Control.Exception (try, SomeException)
@@ -43,7 +43,7 @@ darcsRev tree m =
 
 showCmd = showCmdSpecForUser
 
-prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> [GitSpec] -> m T.Download
+prepare :: (MonadRepos m, MonadTop m, T.Download a, a ~ T.Download') => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> [GitSpec] -> m a
 prepare cache method flags theUri gitspecs =
     sub "git" >>= \ base ->
     sub ("git" </> sum) >>= \ dir -> liftIO $

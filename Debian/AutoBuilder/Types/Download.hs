@@ -1,9 +1,9 @@
 {-# LANGUAGE PackageImports, RankNTypes, TypeFamilies #-}
 {-# OPTIONS -fwarn-unused-imports #-}
 module Debian.AutoBuilder.Types.Download
-    ( Download -- (..)
+    ( Download' -- (..)
     , download'
-    , Download'(..)
+    , Download(..)
     ) where
 
 import Control.Monad.Catch (MonadMask)
@@ -17,7 +17,7 @@ import Debian.Repo.Fingerprint (RetrieveMethod(..), RetrieveAttribute(..))
 import Debian.Repo.MonadOS (MonadOS)
 import System.Process.ListLike (Chunk)
 
-data Download
+data Download'
     = Download
       { method' :: RetrieveMethod
       -- ^ The method used to retrieve this target.
@@ -43,7 +43,7 @@ data Download
       -- methods
       }
 
-class Download' a where
+class Download a where
     method :: a -> RetrieveMethod
     -- ^ The method used to retrieve this target.
     flags :: a -> [PackageFlag]
@@ -67,7 +67,7 @@ class Download' a where
     -- ^ Attributes collected from performing the various retrieve
     -- methods
 
-instance Download' Download where
+instance Download Download' where
     method = method'
     flags = flags'
     getTop = getTop'

@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings, ScopedTypeVariables, TypeFamilies #-}
 module Debian.AutoBuilder.BuildTarget.Svn 
     ( prepare
     , documentation
@@ -45,7 +45,7 @@ password userInfo =
     then []
     else ["--password",unEscapeString pw]
 
-prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m T.Download
+prepare :: (MonadRepos m, MonadTop m, T.Download a, a ~ T.Download') => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m a
 prepare cache method flags uri =
     do dir <- sub ("svn" </> show (md5 (L.pack (maybe "" uriRegName (uriAuthority uri') ++ (uriPath uri')))))
        when (P.flushSource (P.params cache)) (liftIO (removeRecursiveSafely dir))

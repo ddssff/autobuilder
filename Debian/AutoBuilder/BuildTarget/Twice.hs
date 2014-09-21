@@ -11,7 +11,7 @@ documentation = [ "twice:<target> - A target of this form modifies another targe
                 , "the first time.  For some reason, certain packages are designed"
                 , "to fail the first time to prevent fully automated builds."]
 
-prepare :: MonadRepos m => RetrieveMethod -> [P.PackageFlag] -> T.Download -> m T.Download
+prepare :: (MonadRepos m, T.Download a) => RetrieveMethod -> [P.PackageFlag] -> a -> m T.Download'
 prepare method flags base =
     do return $ T.download'
                   {-  T.method = -} method
