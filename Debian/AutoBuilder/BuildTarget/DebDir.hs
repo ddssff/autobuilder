@@ -22,8 +22,8 @@ documentation = [ "deb-dir:(<target>):(<target>) - A target of this form combine
                 , "where one points to an un-debianized source tree and the other contains"
                 , "a debian subdirectory." ]
 
-prepare :: (MonadRepos m, MonadTop m, T.Download a, T.Download b, T.Download c, c ~ T.Download') =>
-           RetrieveMethod -> [P.PackageFlag] -> a -> b -> m c
+prepare :: (MonadRepos m, MonadTop m, T.Download a, T.Download b) =>
+           RetrieveMethod -> [P.PackageFlag] -> a -> b -> m SomeDownload
 prepare method flags upstream debian =
     sub "deb-dir" >>= \ dir ->
     sub ("deb-dir" </> show (md5 (pack (show method)))) >>= \ dest ->
@@ -44,11 +44,11 @@ prepare method flags upstream debian =
               in
     -- The upstream and downstream versions must match after the epoch and revision is stripped.
     case T.mVersion upstream of
-      Nothing -> return tgt
+      Nothing -> return $ SomeDownload tgt
       Just upstreamV ->
           let debianV = logVersion (entry tree) in
           case compare (version debianV) (showVersion upstreamV) of
             -- If the debian version is too old it needs to be bumped, this ensures we notice
             -- when a new upstream appears.  We should just modify the changelog directly.
             LT -> error $ show method ++ ": version in Debian changelog (" ++ version debianV ++ ") is too old for the upstream (" ++ showVersion upstreamV ++ ")"
-            _ -> return tgt
+            _ -> return $ SomeDownload tgt

@@ -45,13 +45,13 @@ password userInfo =
     then []
     else ["--password",unEscapeString pw]
 
-prepare :: (MonadRepos m, MonadTop m, T.Download a, a ~ T.Download') => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m a
+prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m T.SomeDownload
 prepare cache method flags uri =
     do dir <- sub ("svn" </> show (md5 (L.pack (maybe "" uriRegName (uriAuthority uri') ++ (uriPath uri')))))
        when (P.flushSource (P.params cache)) (liftIO (removeRecursiveSafely dir))
        exists <- liftIO $ doesDirectoryExist dir
        tree <- liftIO $ if exists then verifySource dir else createSource dir
-       return $ T.download'{-  T.method = -} method
+       return $ T.SomeDownload $ T.download'{-  T.method = -} method
                            {- , T.flags = -} flags
                            {- , T.getTop = -} (topdir tree)
                            {- , T.logText = -}  ("SVN revision: " ++ show method)

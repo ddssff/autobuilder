@@ -43,7 +43,7 @@ darcsRev tree m =
 
 showCmd = showCmdSpecForUser
 
-prepare :: (MonadRepos m, MonadTop m, T.Download a, a ~ T.Download') => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> [GitSpec] -> m a
+prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> [GitSpec] -> m T.SomeDownload
 prepare cache method flags theUri gitspecs =
     sub "git" >>= \ base ->
     sub ("git" </> sum) >>= \ dir -> liftIO $
@@ -57,7 +57,7 @@ prepare cache method flags theUri gitspecs =
       commit <- case code of
                   ExitSuccess -> return . head . lines $ out
                   _ -> error $ displayCreateProcess p ++ " -> " ++ show code
-      return $ T.download' {- T.method = -} method
+      return $ T.SomeDownload $ T.download' {- T.method = -} method
                           {- , T.flags = -} flags
                           {- , T.getTop = -} (topdir tree)
                           {- , T.logText = -}  ("git revision: " ++ show method)

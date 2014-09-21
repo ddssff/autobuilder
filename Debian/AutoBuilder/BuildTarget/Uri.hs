@@ -41,11 +41,11 @@ documentation = [ "uri:<string>:<md5sum> - A target of this form retrieves the f
 -- | A URI that returns a tarball, with an optional md5sum which must
 -- match if given.  The purpose of the md5sum is to be able to block
 -- changes to the tarball on the remote host.
-prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> String -> m T.Download'
+prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> String -> m T.SomeDownload
 prepare c method flags u s =
     do (uri, sum, tree) <- checkTarget >>= downloadTarget >> validateTarget >>= unpackTarget
        tar <- tarball (uriToString' uri) sum
-       return $ T.download' {- T.method = -} method
+       return $ T.SomeDownload $ T.download' {- T.method = -} method
                             {- T.flags = -} flags
                             {- T.getTop = -} (R.topdir tree)
                             {- T.logText = -} ("Built from URI download " ++ (uriToString' uri))

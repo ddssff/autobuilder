@@ -22,14 +22,14 @@ documentation :: [String]
 documentation = [ "tla:<revision> - A target of this form retrieves the a TLA archive with the"
                 , "given revision name." ]
 
-prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m T.Download'
+prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m T.SomeDownload
 prepare cache method flags version =
     do
       dir <- sub ("tla" </> version)
       when (P.flushSource (P.params cache)) (liftIO (removeRecursiveSafely dir))
       exists <- liftIO $ doesDirectoryExist dir
       tree <- liftIO $ if exists then verifySource dir else createSource dir
-      return $ T.download'{-   T.method = -} method
+      return $ T.SomeDownload $ T.download'{-   T.method = -} method
                           {- , T.flags = -} flags
                           {- , T.getTop = -} (topdir tree)
                           {- , T.logText = -}  ("TLA revision: " ++ show method)

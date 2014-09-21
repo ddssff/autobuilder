@@ -24,7 +24,7 @@ import Debian.AutoBuilder.BuildTarget (retrieve)
 import qualified Debian.AutoBuilder.Params as P (computeTopDir, buildCache, baseRelease, findSlice)
 import Debian.AutoBuilder.Target (buildTargets, showTargets)
 import Debian.AutoBuilder.Types.Buildable (Target, Buildable(debianSourceTree), asBuildable)
-import Debian.AutoBuilder.Types.Download (Download, Download')
+import Debian.AutoBuilder.Types.Download (SomeDownload(..))
 import qualified Debian.AutoBuilder.Types.CacheRec as C
 import qualified Debian.AutoBuilder.Types.Packages as P (foldPackages, spec, flags, PackageFlag(CabalPin))
 import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec, getParams, doHelp, usage, verbosity, showParams, showSources, flushAll, doSSHExport, uploadURI, report, buildRelease, ifSourcesChanged, requiredVersion, prettyPrint, doUpload, doNewDist, newDistProgram, createRelease, buildPackages)
@@ -165,7 +165,7 @@ runParameterSet init cache =
                         liftIO . newDist)
     where
       notZero x = null (listify (\ x -> case x of P.Zero -> True; _ -> False) x)
-      retrieveTarget :: (MonadReposCached m, Download a, a ~ Download') => EnvRoot -> Int -> Int -> (P.RetrieveMethod, [P.PackageFlag]) -> m (Either String (Buildable a))
+      retrieveTarget :: (MonadReposCached m) => EnvRoot -> Int -> Int -> (P.RetrieveMethod, [P.PackageFlag]) -> m (Either String (Buildable SomeDownload))
       retrieveTarget buildOS count index (method, flags) = do
             liftIO (hPutStr stderr (printf "[%2d of %2d]" index count))
             res <- (Right <$> evalMonadOS (do download <- retrieve init cache method flags
@@ -213,7 +213,7 @@ runParameterSet init cache =
                True -> return ()
                False -> do qPutStr "You must be superuser to run the autobuilder (to use chroot environments.)"
                            liftIO $ exitWith (ExitFailure 1)
-      upload :: (MonadRepos m, Download a) => (LocalRepository, [Target a]) -> m [Failing ([Chunk L.ByteString], NominalDiffTime)]
+      upload :: MonadRepos m => (LocalRepository, [Target SomeDownload]) -> m [Failing ([Chunk L.ByteString], NominalDiffTime)]
       upload (repo, [])
           | P.doUpload params =
               case P.uploadURI params of
@@ -273,7 +273,7 @@ doVerifyBuildRepo cache =
       g = return . repoReleaseInfo
       params = C.params cache
 
-handleRetrieveException :: (MonadReposCached m, Download a) => P.RetrieveMethod -> SomeException -> m (Either String (Buildable a))
+handleRetrieveException :: MonadReposCached m => P.RetrieveMethod -> SomeException -> m (Either String (Buildable SomeDownload))
 handleRetrieveException method e =
           case (fromException (toException e) :: Maybe AsyncException) of
             Just UserInterrupt ->

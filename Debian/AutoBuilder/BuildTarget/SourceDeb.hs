@@ -27,7 +27,7 @@ documentation = [ "sourcedeb:<target> - A target of this form unpacks the source
 
 -- |Given the BuildTarget for the base target, prepare a SourceDeb BuildTarget
 -- by unpacking the source deb.
-prepare :: (MonadRepos m, T.Download a, T.Download b, b ~ T.Download') => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> a -> m b
+prepare :: (MonadRepos m, T.Download a) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> a -> m T.SomeDownload
 prepare _cache method flags base =
     do dscFiles <- liftIO (getDirectoryContents top) >>= return . filter (isSuffixOf ".dsc")
        dscInfo <- mapM (\ name -> liftIO (readFile (top ++ "/" ++ name) >>= return . S.parseControl name)) dscFiles
@@ -44,7 +44,7 @@ prepare _cache method flags base =
           case (S.fieldValue "Source" dscInfo, maybe Nothing (Just . V.parseDebianVersion)
                      (S.fieldValue "Version" dscInfo)) of
             (Just _package, Just _version) ->
-                return $ T.download'
+                return $ T.SomeDownload $ T.download'
                            {-   T.method = -} method
                            {- , T.flags = -} flags
                            {- , T.getTop = -} top

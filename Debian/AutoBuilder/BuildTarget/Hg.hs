@@ -23,14 +23,14 @@ documentation :: [String]
 documentation = [ "hg:<string> - A target of this form target obtains the source"
                 , "code by running the Mercurial command 'hg clone <string>'." ]
 
-prepare :: (MonadRepos m, MonadTop m, T.Download a, a ~ T.Download') => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m a
+prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m T.SomeDownload
 prepare cache method flags archive =
     do
       dir <- sub ("hg" </> archive)
       when (P.flushSource (P.params cache)) (liftIO $ removeRecursiveSafely dir)
       exists <- liftIO $ doesDirectoryExist dir
       tree <- liftIO $ if exists then verifySource dir else createSource dir
-      return $ T.download' {- T.method = -} method
+      return $ T.SomeDownload $ T.download' {- T.method = -} method
                           {- , T.flags = -} flags
                           {- , T.getTop = -} (topdir tree)
                           {- , T.logText = -}  ("Hg revision: " ++ show method)

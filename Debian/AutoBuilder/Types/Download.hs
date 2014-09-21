@@ -1,9 +1,10 @@
-{-# LANGUAGE PackageImports, RankNTypes, TypeFamilies #-}
+{-# LANGUAGE ExistentialQuantification, PackageImports, RankNTypes, TypeFamilies #-}
 {-# OPTIONS -fwarn-unused-imports #-}
 module Debian.AutoBuilder.Types.Download
     ( Download' -- (..)
     , download'
     , Download(..)
+    , SomeDownload(SomeDownload)
     ) where
 
 import Control.Monad.Catch (MonadMask)
@@ -80,3 +81,17 @@ instance Download Download' where
 
 -- Temporary constructor
 download' = Download
+
+-- Existential type (but still fixed to Download')
+data SomeDownload = forall a. (Download a, a ~ Download') => SomeDownload {unSomeDownload :: a}
+
+instance Download SomeDownload where
+    method (SomeDownload x) = method' x
+    flags (SomeDownload x) = flags' x
+    getTop (SomeDownload x) = getTop' x
+    logText (SomeDownload x) = logText' x
+    mVersion (SomeDownload x) = mVersion' x
+    origTarball (SomeDownload x) = origTarball' x
+    cleanTarget (SomeDownload x) = cleanTarget' x
+    buildWrapper (SomeDownload x) = buildWrapper' x
+    attrs (SomeDownload x) = attrs' x

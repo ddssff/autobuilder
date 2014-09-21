@@ -84,10 +84,10 @@ makeQuiltTree m base patch =
 failing f _ (Failure x) = f x
 failing _ s (Success x) = s x
 
-prepare :: (MonadRepos m, MonadTop m, T.Download a, T.Download b, T.Download c, c ~ T.Download') => RetrieveMethod -> [P.PackageFlag] -> a -> b -> m c
+prepare :: (MonadRepos m, MonadTop m, T.Download a, T.Download b) => RetrieveMethod -> [P.PackageFlag] -> a -> b -> m T.SomeDownload
 prepare method flags base patch = do
     qPutStrLn "Preparing quilt target"
-    makeQuiltTree method base patch >>= liftIO . withUpstreamQuiltHidden make
+    T.SomeDownload <$> (makeQuiltTree method base patch >>= liftIO . withUpstreamQuiltHidden make)
     where
       withUpstreamQuiltHidden make (quiltTree, quiltDir) =
           hide >> make (quiltTree, quiltDir) >>= unhide

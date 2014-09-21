@@ -10,7 +10,7 @@ import Data.Digest.Pure.MD5 (md5)
 import Data.List
 import Data.Set (empty)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
-import Debian.AutoBuilder.Types.Download (Download(..), Download', download')
+import Debian.AutoBuilder.Types.Download (Download(..), Download', download', SomeDownload(..))
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Repo
@@ -27,14 +27,14 @@ documentation :: [String]
 documentation = [ "bzr:<revision> - A target of this form retrieves the a Bazaar archive with the"
                 , "given revision name." ]
 
-prepare :: (MonadRepos m, MonadTop m, Download a, a ~ Download') => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m a
+prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m SomeDownload
 prepare cache method flags version =
   do
     dir <- askTop >>= \ top -> return $ top </> "bzr" </> show (md5 (L.pack (maybe "" uriRegName (uriAuthority uri) ++ (uriPath uri))))
     when (P.flushSource (P.params cache)) (liftIO (removeRecursiveSafely dir))
     exists <- liftIO $ doesDirectoryExist dir
     tree <- liftIO $ if exists then updateSource dir else createSource dir
-    return $ download'
+    return $ SomeDownload $ download'
                {- { method = -} method
                {- , flags = -} flags
                {- , getTop = -} (topdir tree)

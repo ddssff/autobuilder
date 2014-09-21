@@ -27,7 +27,7 @@ import qualified Debian.AutoBuilder.BuildTarget.Bzr as Bzr
 import qualified Debian.AutoBuilder.BuildTarget.Uri as Uri
 import qualified Debian.AutoBuilder.BuildTarget.Twice as Twice
 import qualified Debian.AutoBuilder.Types.CacheRec as C
-import Debian.AutoBuilder.Types.Download (Download(..), Download'(..), download')
+import Debian.AutoBuilder.Types.Download (Download(..), Download', download', SomeDownload(..))
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Debianize (DebT)
@@ -40,8 +40,8 @@ import Debian.Repo.Top (MonadTop)
 import System.FilePath ((</>))
 
 -- | Given a RetrieveMethod, perform the retrieval and return the result.
-retrieve :: forall m a. (MonadOS m, MonadRepos m, MonadTop m, MonadCatch m, Download a, a ~ Download') =>
-            DebT IO () -> C.CacheRec -> P.RetrieveMethod -> [P.PackageFlag] -> m a
+retrieve :: forall m. (MonadOS m, MonadRepos m, MonadTop m, MonadCatch m) =>
+            DebT IO () -> C.CacheRec -> P.RetrieveMethod -> [P.PackageFlag] -> m SomeDownload
 retrieve defaultAtoms cache method flags =
     case method of
       P.Apt dist package -> Apt.prepare cache method flags dist (SrcPkgName package)
@@ -49,7 +49,7 @@ retrieve defaultAtoms cache method flags =
 
       P.Cd dir spec' ->
           retrieve defaultAtoms cache spec' flags >>= \ target' ->
-          return $ download' {- T.method = -} method
+          return $ SomeDownload $ download' {- T.method = -} method
                             {- , T.flags = -} flags
                             {- , T.getTop = -} (getTop target' </> dir)
                             {- , T.logText = -} (logText target' ++ " (in subdirectory " ++ dir ++ ")")
@@ -84,7 +84,7 @@ retrieve defaultAtoms cache method flags =
       -- of BuildTarget.
       P.Dir path ->
           do tree <- liftIO (findSourceTree path :: IO SourceTree)
-             return $ download' {- { T.method = -} method
+             return $ SomeDownload $ download' {- { T.method = -} method
                                  {- , T.flags = -} flags
                                  {- , T.getTop = -} (topdir tree)
                                  {- , T.logText = -}  ("Built from local directory " ++ show method)
@@ -103,7 +103,7 @@ retrieve defaultAtoms cache method flags =
 
       P.Proc spec' ->
           retrieve defaultAtoms cache spec' flags >>= \ base ->
-          return $ download'
+          return $ SomeDownload $ download'
                      {-   T.method = -} method
                      {- , T.flags = -} flags
                      {- , T.getTop = -} (T.getTop base)
@@ -125,7 +125,7 @@ retrieve defaultAtoms cache method flags =
       P.Twice base -> retrieve defaultAtoms cache base flags >>=
                       Twice.prepare method flags
       P.Uri uri sum -> Uri.prepare cache method flags uri sum
-      P.Zero -> return $ download' P.Zero mempty mempty mempty Nothing mempty undefined undefined mempty
+      P.Zero -> return $ SomeDownload $ download' P.Zero mempty mempty mempty Nothing mempty undefined undefined mempty
 
 {-
 -- | Perform an IO operation with /proc mounted

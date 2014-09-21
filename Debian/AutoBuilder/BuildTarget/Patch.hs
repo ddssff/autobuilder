@@ -44,7 +44,7 @@ instance Show Patch where
 documentation :: [String]
 documentation = [ "Patch <target> <patchtext> - Apply the patch to the target." ]
 
-prepare :: (MonadRepos m, MonadTop m, T.Download a, T.Download b, b ~ T.Download') => RetrieveMethod -> [P.PackageFlag] -> B.ByteString -> a -> m b
+prepare :: (MonadRepos m, MonadTop m, T.Download a) => RetrieveMethod -> [P.PackageFlag] -> B.ByteString -> a -> m T.SomeDownload
 prepare method flags patch base =
     do copyDir <- sub ("quilt" </> show (md5 (L.pack (show method))))
        baseTree <- liftIO $ findSourceTree (T.getTop base)
@@ -59,7 +59,7 @@ prepare method flags patch base =
                                  "\nstderr:\n" ++ indent (B.unpack err) ++
                                  "\npatch:\n" ++ indent (B.unpack patch))
          ExitSuccess ->
-             return $ T.download'
+             return $ T.SomeDownload $ T.download'
                         {-   T.method = -} method
                         {- , T.flags = -} flags
                         {- , T.getTop = -} (dir' tree)

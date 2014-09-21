@@ -41,7 +41,7 @@ documentation = [ "debianize:<name> or debianize:<name>=<version> - a target of 
                 , "(currently) retrieves source code from http://hackage.haskell.org and runs"
                 , "cabal-debian to create the debianization." ]
 
-prepare :: (MonadRepos m, MonadTop m, T.Download a, a ~ T.Download') => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m a
+prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m T.SomeDownload
 prepare cache method flags name =
     do let server = P.hackageServer (P.params cache) -- typically "hackage.haskell.org"
        version <- liftIO $ maybe (getVersion' server name) (return . readVersion) versionString
@@ -49,7 +49,7 @@ prepare cache method flags name =
        liftIO $ when (P.flushSource (P.params cache)) (removeRecursiveSafely tar)
        unp <- downloadCached server name version
        tree <- liftIO $ (findSourceTree unp :: IO SourceTree)
-       return $ T.download'{- T.method = -} method
+       return $ T.SomeDownload $ T.download'{- T.method = -} method
                            {- , T.flags = -} flags
                            {- , T.getTop = -} (topdir tree)
                            {- , T.logText = -}  ("Built from hackage, revision: " ++ show method)

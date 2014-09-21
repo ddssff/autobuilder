@@ -43,8 +43,8 @@ darcsRev tree m =
       path = topdir tree
 -}
 
-prepare :: (MonadRepos m, MonadTop m, T.Download a, a ~ T.Download') =>
-           P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m a
+prepare :: (MonadRepos m, MonadTop m) =>
+           P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m T.SomeDownload
 prepare cache method flags theUri =
     do
       base <- sub "darcs"
@@ -54,7 +54,7 @@ prepare cache method flags theUri =
       tree <- liftIO $ if exists then verifySource dir else createSource dir
       attr <- liftIO $ readProcFailing ((proc "darcs" ["log", "--xml-output"]) {cwd = Just dir}) "" >>=  return . show . md5 . collectProcessOutput
       _output <- liftIO $ fixLink base
-      return $ T.download' {- T.method = -} method
+      return $ T.SomeDownload $ T.download' {- T.method = -} method
                           {- , T.flags = -} flags
                           {- , T.getTop = -} (topdir tree)
                           {- , T.logText = -}  ("Darcs revision: " ++ show method)
