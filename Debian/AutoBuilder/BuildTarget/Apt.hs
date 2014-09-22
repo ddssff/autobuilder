@@ -18,7 +18,7 @@ import Debian.Repo.SourceTree (topdir, DebianBuildTree, entry, debTree')
 import Debian.Repo.Internal.Repos (MonadRepos)
 import Debian.Repo.State.AptImage (withAptImage, prepareSource)
 import Debian.Repo.Top (MonadTop)
-import Debian.Version (parseDebianVersion)
+import Debian.Version (parseDebianVersion, prettyDebianVersion)
 import System.Unix.Directory (removeRecursiveSafely)
 
 documentation = [ "apt:<distribution>:<packagename> - a target of this form looks up"
@@ -49,7 +49,7 @@ instance Download AptDL where
                 [] -> Nothing
                 a -> error $ ("Multiple sources.lists found for " ++ relName dist ++ ": " ++ show (map (relName . sliceListName) a))
     flushSource x = liftIO $ removeRecursiveSafely $ apt x
-    attrs = singleton . AptVersion . logVersion . entry . debTree' . tree
+    attrs = singleton . AptVersion . show . prettyDebianVersion . logVersion . entry . debTree' . tree
 
 prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> SrcPkgName -> m SomeDownload
 prepare cache method flags dist package =
