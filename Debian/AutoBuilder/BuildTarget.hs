@@ -39,14 +39,14 @@ import Debian.Repo.Internal.Repos (MonadRepos)
 import Debian.Repo.Top (MonadTop)
 import System.FilePath ((</>))
 
-data CdDL
+data Download a => CdDL a
     = CdDL { cd :: P.RetrieveMethod
            , fs :: [P.PackageFlag]
            , dir :: FilePath
-           , parent :: SomeDownload
+           , parent :: a
            }
 
-instance Download CdDL where
+instance Download a => Download (CdDL a) where
     method = cd
     flags = fs
     getTop x = getTop (parent x) </> dir x
@@ -54,13 +54,13 @@ instance Download CdDL where
     cleanTarget x = cleanTarget (parent x)
     attrs = attrs . parent
 
-data ProcDL
+data Download a => ProcDL a
     = ProcDL { procMethod :: P.RetrieveMethod
              , procFlags :: [P.PackageFlag]
-             , base :: SomeDownload
+             , base :: a
              }
 
-instance Download ProcDL where
+instance Download a => Download (ProcDL a) where
     method = procMethod
     flags = procFlags
     getTop = getTop . base

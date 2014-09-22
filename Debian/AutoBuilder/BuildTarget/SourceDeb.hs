@@ -25,12 +25,12 @@ documentation = [ "sourcedeb:<target> - A target of this form unpacks the source
                 , "directory containing a .dsc file, a .tar.gz, and an optional"
                 , ".diff.gz file." ]
 
-data SourceDebDL
+data T.Download a => SourceDebDL a
     = SourceDebDL { method :: RetrieveMethod
                   , flags :: [P.PackageFlag]
-                  , base :: T.SomeDownload }
+                  , base :: a }
 
-instance T.Download SourceDebDL where
+instance T.Download a => T.Download (SourceDebDL a) where
     method = method
     flags = flags
     getTop = T.getTop . base

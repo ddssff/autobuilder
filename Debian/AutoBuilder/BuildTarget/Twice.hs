@@ -11,12 +11,12 @@ documentation = [ "twice:<target> - A target of this form modifies another targe
                 , "the first time.  For some reason, certain packages are designed"
                 , "to fail the first time to prevent fully automated builds."]
 
-data TwiceDL
+data T.Download a => TwiceDL a
     = TwiceDL { method :: RetrieveMethod
               , flags :: [P.PackageFlag]
-              , base :: T.SomeDownload }
+              , base :: a }
 
-instance T.Download TwiceDL where
+instance T.Download a => T.Download (TwiceDL a) where
     method = method
     flags = flags
     getTop = T.getTop . base

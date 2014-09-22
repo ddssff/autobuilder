@@ -44,14 +44,14 @@ instance Show Patch where
 documentation :: [String]
 documentation = [ "Patch <target> <patchtext> - Apply the patch to the target." ]
 
-data PatchDL
+data T.Download a => PatchDL a
     = PatchDL { method :: RetrieveMethod
               , flags :: [P.PackageFlag]
               , patch :: B.ByteString
-              , base :: T.SomeDownload
+              , base :: a
               , tree :: SourceTree }
 
-instance T.Download PatchDL where
+instance T.Download a => T.Download (PatchDL a) where
     method = method
     flags = flags
     getTop = dir' . tree

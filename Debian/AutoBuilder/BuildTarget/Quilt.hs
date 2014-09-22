@@ -84,16 +84,16 @@ makeQuiltTree m base patch =
 failing f _ (Failure x) = f x
 failing _ s (Success x) = s x
 
-data QuiltDL
+data (T.Download a, T.Download b) => QuiltDL a b
     = QuiltDL
       { method :: RetrieveMethod
       , flags :: [P.PackageFlag]
-      , base :: T.SomeDownload
-      , patch :: T.SomeDownload
+      , base :: a
+      , patch :: b
       , tree :: SourceTree
       }
 
-instance T.Download QuiltDL where
+instance (T.Download a, T.Download b) => T.Download (QuiltDL a b) where
     method = method
     flags = flags
     getTop = topdir . tree

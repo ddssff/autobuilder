@@ -39,16 +39,16 @@ documentation :: [String]
 documentation = [ "hackage:<name> or hackage:<name>=<version> - a target of this form"
                 , "retrieves source code from http://hackage.haskell.org." ]
 
-data DebianizeDL
+data T.Download a => DebianizeDL a
     = DebianizeDL { def :: DebT IO ()
                   , cache :: P.CacheRec
                   , method :: RetrieveMethod
                   , debFlags :: [P.PackageFlag]
-                  , target :: T.SomeDownload
+                  , target :: a
                   , version :: Version
                   , dir :: FilePath }
 
-instance T.Download DebianizeDL where
+instance T.Download a => T.Download (DebianizeDL a) where
     method = method
     flags = debFlags
     getTop = dir
@@ -77,7 +77,7 @@ prepare defaultAtoms cache method flags target =
                                                       , cache = cache
                                                       , method = method
                                                       , debFlags = flags
-                                                      , target = T.SomeDownload target
+                                                      , target = target
                                                       , version = version
                                                       , dir = dir }
          _ -> error $ "Download at " ++ dir ++ ": missing or multiple cabal files"

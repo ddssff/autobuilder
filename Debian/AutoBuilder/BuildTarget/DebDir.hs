@@ -22,14 +22,14 @@ documentation = [ "deb-dir:(<target>):(<target>) - A target of this form combine
                 , "where one points to an un-debianized source tree and the other contains"
                 , "a debian subdirectory." ]
 
-data DebDirDL
+data (Download a, Download b) => DebDirDL a b
     = DebDirDL { ddMethod :: RetrieveMethod
                , ddFlags :: [P.PackageFlag]
-               , upstream :: SomeDownload
-               , debian :: SomeDownload
+               , upstream :: a
+               , debian :: b
                , tree :: DebianSourceTree }
 
-instance Download DebDirDL where
+instance (Download a, Download b) => Download (DebDirDL a b) where
     method = ddMethod
     flags = ddFlags
     getTop = topdir . tree
