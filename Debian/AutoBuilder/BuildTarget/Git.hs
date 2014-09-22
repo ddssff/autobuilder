@@ -2,7 +2,6 @@
 module Debian.AutoBuilder.BuildTarget.Git where
 
 import Control.Exception (try, SomeException)
-import Control.Monad
 import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as B
 import Data.Digest.Pure.MD5 (md5)
@@ -79,7 +78,6 @@ prepare cache method flags theUri gitspecs =
     sub "git" >>= \ base ->
     sub ("git" </> sum) >>= \ dir -> liftIO $
     do
-      when (P.flushSource (P.params cache)) (removeRecursiveSafely dir)
       exists <- doesDirectoryExist dir
       tree <- if exists then verifySource dir else createSource dir
       _output <- fixLink base

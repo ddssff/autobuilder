@@ -3,13 +3,11 @@
 module Debian.AutoBuilder.BuildTarget.Hg where
 
 import Control.Exception (SomeException, try)
-import Control.Monad
 import Control.Monad.Trans
 --import Data.ByteString.Lazy.Char8 (empty)
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
-import qualified Debian.AutoBuilder.Types.ParamRec as P
 import Debian.Repo
 import Debian.Repo.Fingerprint (RetrieveMethod)
 import Debian.Repo.Prelude.Verbosity (timeTask)
@@ -34,6 +32,7 @@ instance T.Download HgDL where
     flags = flags
     getTop = topdir . tree
     logText x = "Hg revision: " ++ show (method x)
+    flushSource _ = error "HgDL flushSource unimplemented"
     cleanTarget x =
         (\ path -> case any P.isKeepRCS (flags x) of
                      False -> let cmd = "rm -rf " ++ path ++ "/.hg" in
@@ -44,7 +43,6 @@ prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.Pack
 prepare cache method flags archive =
     do
       dir <- sub ("hg" </> archive)
-      when (P.flushSource (P.params cache)) (liftIO $ removeRecursiveSafely dir)
       exists <- liftIO $ doesDirectoryExist dir
       tree <- liftIO $ if exists then verifySource dir else createSource dir
       return $ T.SomeDownload $ HgDL { cache = cache

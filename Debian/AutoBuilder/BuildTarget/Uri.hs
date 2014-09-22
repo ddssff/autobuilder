@@ -9,16 +9,13 @@ module Debian.AutoBuilder.BuildTarget.Uri
     ) where
 
 import Control.Exception (SomeException)
-import Control.Monad
 import Control.Monad.Catch (catch)
 import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as B (readFile)
 import Data.Digest.Pure.MD5 (md5)
 import Data.List (isPrefixOf)
 import qualified Debian.AutoBuilder.Types.Download as T
-import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
-import qualified Debian.AutoBuilder.Types.ParamRec as P
 import qualified Debian.Repo as R (readProcFailing, topdir, SourceTree, findSourceTree)
 import Debian.Repo.Fingerprint (RetrieveMethod)
 import Debian.Repo.Internal.Repos (MonadRepos)
@@ -38,8 +35,7 @@ documentation = [ "uri:<string>:<md5sum> - A target of this form retrieves the f
                 , "this checksum.  This prevents builds when the remote tarball has changed." ]
 
 data UriDL
-    = UriDL { flushSource :: Bool
-            , method :: RetrieveMethod
+    = UriDL { method :: RetrieveMethod
             , flags :: [P.PackageFlag]
             , u :: String
             , s :: String
@@ -53,18 +49,18 @@ instance T.Download UriDL where
     method = method
     flags = flags
     getTop = R.topdir . tree
+    flushSource _ = error "UriDL flushSource unimplemented"
     logText x = "Built from URI download " ++ uriToString' (uri x)
     origTarball x = Just (tar x)
 
 -- | A URI that returns a tarball, with an optional md5sum which must
 -- match if given.  The purpose of the md5sum is to be able to block
 -- changes to the tarball on the remote host.
-prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> String -> m UriDL
-prepare c method flags u s =
+prepare :: (MonadRepos m, MonadTop m) => RetrieveMethod -> [P.PackageFlag] -> String -> String -> m UriDL
+prepare method flags u s =
     do (uri, cksum, tree) <- checkTarget >>= downloadTarget >> validateTarget >>= unpackTarget
        tar <- tarball (uriToString' uri) cksum
-       return $ UriDL { flushSource = P.flushSource (P.params c)
-                      , method = method
+       return $ UriDL { method = method
                       , flags = flags
                       , u = u
                       , s = s
@@ -91,7 +87,6 @@ prepare c method flags u s =
       downloadTarget False =
           do sum <- sumDir s
              tar <- tarball u s
-             when (P.flushSource (P.params c)) (liftIO $ removeRecursiveSafely sum)
              liftIO $ createDirectoryIfMissing True sum
              exists <- liftIO $ doesFileExist tar
              _output <-

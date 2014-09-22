@@ -156,7 +156,7 @@ retrieve defaultAtoms cache method flags =
       P.Tla string -> Tla.prepare cache method flags string
       P.Twice base -> retrieve defaultAtoms cache base flags >>=
                       Twice.prepare method flags
-      P.Uri uri sum -> SomeDownload <$> Uri.prepare cache method flags uri sum
+      P.Uri uri sum -> SomeDownload <$> Uri.prepare method flags uri sum
       P.Zero -> return $ SomeDownload ZeroDL
 
 {-

@@ -4,7 +4,6 @@ module Debian.AutoBuilder.BuildTarget.Svn
     , documentation
     ) where
 
-import Control.Monad
 import Control.Monad.Trans
 import qualified Data.ByteString.Lazy.Char8 as L
 import Data.Digest.Pure.MD5 (md5)
@@ -12,7 +11,6 @@ import Data.List
 import Data.Monoid ((<>))
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.CacheRec as P
-import qualified Debian.AutoBuilder.Types.ParamRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Repo
 import Debian.Repo.Fingerprint (RetrieveMethod)
@@ -56,6 +54,7 @@ instance T.Download SvnDL where
     flags = flags
     getTop = topdir . tree
     logText x = "SVN revision: " ++ show (method x)
+    flushSource _ = error "SvnDL flushSource unimplemented"
     cleanTarget x = (\ path ->
                          case any P.isKeepRCS (flags x) of
                            False -> let cmd = "find " ++ path ++ " -name .svn -type d -print0 | xargs -0 -r -n1 rm -rf" in
@@ -65,7 +64,6 @@ instance T.Download SvnDL where
 prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m T.SomeDownload
 prepare cache method flags uri =
     do dir <- sub ("svn" </> show (md5 (L.pack (maybe "" uriRegName (uriAuthority uri') ++ (uriPath uri')))))
-       when (P.flushSource (P.params cache)) (liftIO (removeRecursiveSafely dir))
        exists <- liftIO $ doesDirectoryExist dir
        tree <- liftIO $ if exists then verifySource dir else createSource dir
        return $ T.SomeDownload $ SvnDL { cache = cache

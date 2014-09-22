@@ -1,14 +1,13 @@
 {-# LANGUAGE GADTs, ScopedTypeVariables #-}
 module Debian.AutoBuilder.BuildTarget.Apt where
 
-import Control.Monad (when)
 import Control.Monad.Trans (MonadIO(liftIO))
 import Data.Maybe (mapMaybe)
 import Data.Set (empty, singleton)
 import qualified Debian.AutoBuilder.Types.CacheRec as P (CacheRec(allSources, params))
 import Debian.AutoBuilder.Types.Download (Download(..), SomeDownload(..))
 import qualified Debian.AutoBuilder.Types.Packages as P (PackageFlag, aptPin)
-import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec(flushSource, ifSourcesChanged))
+import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec(ifSourcesChanged))
 import Debian.Relation (SrcPkgName)
 import Debian.Release (ReleaseName(ReleaseName, relName))
 import Debian.Repo.AptImage (aptDir)
@@ -60,7 +59,6 @@ prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.Pack
 prepare cache method flags dist package =
     withAptImage (P.ifSourcesChanged (P.params cache)) distro $ do
       apt <- aptDir package
-      when (P.flushSource (P.params cache)) (liftIO . removeRecursiveSafely $ apt) -- FIXME
       tree <- prepareSource package version'
       return $ SomeDownload $ AptDL { cache = cache
                                     , aptMethod = method

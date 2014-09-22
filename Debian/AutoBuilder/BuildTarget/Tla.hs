@@ -2,12 +2,10 @@
 module Debian.AutoBuilder.BuildTarget.Tla where
 
 import Control.Exception (SomeException, try)
-import Control.Monad
 import Control.Monad.Trans
 --import qualified Data.ByteString.Lazy.Char8 as L
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.CacheRec as P
-import qualified Debian.AutoBuilder.Types.ParamRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Repo
 import Debian.Repo.Fingerprint (RetrieveMethod)
@@ -35,6 +33,7 @@ instance T.Download TlaDL where
     flags = flags
     getTop = topdir . tree
     logText x = "TLA revision: " ++ show (method x)
+    flushSource _ = error "TlaDL flushSource unimplemented"
     cleanTarget x = (\ path ->
                          case any P.isKeepRCS (flags x) of
                            False -> let cmd = "find '" ++ path ++ "' -name '.arch-ids' -o -name '{arch}' -prune | xargs rm -rf" in
@@ -45,7 +44,6 @@ prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.Pack
 prepare cache method flags version =
     do
       dir <- sub ("tla" </> version)
-      when (P.flushSource (P.params cache)) (liftIO (removeRecursiveSafely dir))
       exists <- liftIO $ doesDirectoryExist dir
       tree <- liftIO $ if exists then verifySource dir else createSource dir
       return $ T.SomeDownload $ TlaDL { cache = cache

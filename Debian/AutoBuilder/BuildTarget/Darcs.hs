@@ -4,7 +4,6 @@ module Debian.AutoBuilder.BuildTarget.Darcs
     , prepare
     ) where
 
-import Control.Monad (when)
 import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as B
 import Data.Digest.Pure.MD5 (md5)
@@ -84,7 +83,6 @@ prepare cache method flags theUri =
     do
       base <- sub "darcs"
       let dir = base ++ "/" ++ sum
-      liftIO $ when (P.flushSource (P.params cache)) (removeRecursiveSafely dir) -- FIXME
       exists <- liftIO $ doesDirectoryExist dir
       tree <- liftIO $ if exists then verifySource dir else createSource dir
       attr <- liftIO $ readProcFailing ((proc "darcs" ["log", "--xml-output"]) {cwd = Just dir}) "" >>=  return . show . md5 . collectProcessOutput

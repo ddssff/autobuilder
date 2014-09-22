@@ -24,10 +24,10 @@ import Debian.AutoBuilder.BuildTarget (retrieve)
 import qualified Debian.AutoBuilder.Params as P (computeTopDir, buildCache, baseRelease, findSlice)
 import Debian.AutoBuilder.Target (buildTargets, showTargets)
 import Debian.AutoBuilder.Types.Buildable (Target, Buildable(debianSourceTree), asBuildable)
-import Debian.AutoBuilder.Types.Download (SomeDownload(..))
+import Debian.AutoBuilder.Types.Download (SomeDownload(..), Download(..))
 import qualified Debian.AutoBuilder.Types.CacheRec as C
 import qualified Debian.AutoBuilder.Types.Packages as P (foldPackages, spec, flags, PackageFlag(CabalPin))
-import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec, getParams, doHelp, usage, verbosity, showParams, showSources, flushAll, doSSHExport, uploadURI, report, buildRelease, ifSourcesChanged, requiredVersion, prettyPrint, doUpload, doNewDist, newDistProgram, createRelease, buildPackages)
+import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec, getParams, doHelp, usage, verbosity, showParams, showSources, flushAll, doSSHExport, uploadURI, report, buildRelease, ifSourcesChanged, requiredVersion, prettyPrint, doUpload, doNewDist, newDistProgram, createRelease, buildPackages, flushSource)
 import qualified Debian.AutoBuilder.Version as V
 import Debian.Control.Policy (debianPackageNames, debianSourcePackageName)
 import Debian.Debianize (DebT)
@@ -169,6 +169,7 @@ runParameterSet init cache =
       retrieveTarget buildOS count index (method, flags) = do
             liftIO (hPutStr stderr (printf "[%2d of %2d]" index count))
             res <- (Right <$> evalMonadOS (do download <- retrieve init cache method flags
+                                              when (P.flushSource params) (flushSource download)
                                               buildable <- liftIO (asBuildable download)
                                               let (src, bins) = debianPackageNames (debianSourceTree buildable)
                                               liftIO (hPutStrLn stderr (printf " %s - %s:" (unSrcPkgName src) (limit 100 (show method) :: String)))

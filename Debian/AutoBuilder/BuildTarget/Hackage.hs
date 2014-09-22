@@ -8,7 +8,6 @@ module Debian.AutoBuilder.BuildTarget.Hackage
 import qualified Codec.Archive.Tar as Tar
 import qualified Codec.Compression.GZip as Z
 import Control.Exception (SomeException, throw, evaluate)
-import Control.Monad (when)
 import Control.Monad.Catch (MonadCatch, try)
 import Control.Monad.Trans (MonadIO, liftIO)
 import qualified Data.ByteString.Char8 as B
@@ -58,13 +57,13 @@ instance T.Download HackageDL where
     logText x = "Built from hackage, revision: " ++ show (method x)
     mVersion = Just . version
     origTarball = Just . tar
+    flushSource _ = error "flushSource HackageDL unimplemented"
 
 prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m T.SomeDownload
 prepare cache method flags name =
     do let server = P.hackageServer (P.params cache) -- typically "hackage.haskell.org"
        version <- liftIO $ maybe (getVersion' server name) (return . readVersion) versionString
        tar <- tarball name version
-       liftIO $ when (P.flushSource (P.params cache)) (removeRecursiveSafely tar)
        unp <- downloadCached server name version
        tree <- liftIO $ (findSourceTree unp :: IO SourceTree)
        return $ T.SomeDownload $ HackageDL { server = P.hackageServer (P.params cache)

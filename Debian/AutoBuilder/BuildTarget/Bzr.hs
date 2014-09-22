@@ -2,7 +2,6 @@
 {-# LANGUAGE GADTs, OverloadedStrings, ScopedTypeVariables #-}
 module Debian.AutoBuilder.BuildTarget.Bzr where
 
-import Control.Monad
 import Control.Monad.Error (catchError, throwError)
 import Control.Monad.Trans
 import qualified Data.ByteString.Lazy.Char8 as L
@@ -10,7 +9,6 @@ import Data.Digest.Pure.MD5 (md5)
 import Data.List
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import Debian.AutoBuilder.Types.Download (Download(..), SomeDownload(..))
-import qualified Debian.AutoBuilder.Types.ParamRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Repo
 import Debian.Repo.Fingerprint (RetrieveMethod)
@@ -40,6 +38,7 @@ instance Download BzrDL where
     flags = bzrFlags
     getTop = topdir . bzrTree
     logText x = "Bazaar revision: " ++ show (method x)
+    flushSource _ = error "BzrDL flushSource unimplemented"
     cleanTarget x =
         \ top ->
             do qPutStrLn ("Clean Bazaar target in " ++ top)
@@ -52,7 +51,6 @@ prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.Pack
 prepare cache method flags version =
   do
     dir <- askTop >>= \ top -> return $ top </> "bzr" </> show (md5 (L.pack (maybe "" uriRegName (uriAuthority uri) ++ (uriPath uri))))
-    when (P.flushSource (P.params cache)) (liftIO (removeRecursiveSafely dir))
     exists <- liftIO $ doesDirectoryExist dir
     tree <- liftIO $ if exists then updateSource dir else createSource dir
     return $ SomeDownload $ BzrDL { bzrCache = cache
