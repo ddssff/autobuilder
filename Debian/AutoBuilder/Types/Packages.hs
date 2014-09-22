@@ -270,7 +270,7 @@ datafiles :: RetrieveMethod -> RetrieveMethod -> FilePath -> Package
 datafiles cabal files dest = method (DataFiles cabal files dest)
 
 debianize :: Package -> Package
-debianize p = p { spec = Debianize (spec p) }
+debianize p = p { spec = Debianize (spec p) Nothing }
 
 -- debdir :: String -> RetrieveMethod -> RetrieveMethod -> Packages
 -- debdir name method1 method2 = method name (DebDir method1 method1)

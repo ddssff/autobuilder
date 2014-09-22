@@ -32,7 +32,7 @@ import Distribution.PackageDescription (GenericPackageDescription(..), PackageDe
 import Distribution.PackageDescription.Parse (readPackageDescription)
 import System.Directory (getDirectoryContents, createDirectoryIfMissing, getCurrentDirectory, setCurrentDirectory)
 import System.Environment (withArgs)
-import System.FilePath ((</>), takeFileName, takeDirectory)
+import System.FilePath ((</>), takeDirectory)
 import System.Process (showCommandForUser)
 import System.Unix.Directory (removeRecursiveSafely)
 
@@ -81,7 +81,7 @@ prepare defaultAtoms cache method flags cabal =
                                                       , cabal = cabal
                                                       , version = version
                                                       , dir = debdir }
-         _ -> error $ "Download at " ++ dir ++ ": missing or multiple cabal files"
+         _ -> error $ "Download at " ++ cabdir ++ ": missing or multiple cabal files"
 
 withCurrentDirectory :: (MonadMask m, MonadIO m) => FilePath -> m a -> m a
 withCurrentDirectory new action = bracket (liftIO getCurrentDirectory >>= \ old -> liftIO (setCurrentDirectory new) >> return old) (liftIO . setCurrentDirectory) (\ _ -> action)
