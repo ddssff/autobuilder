@@ -21,7 +21,7 @@ import qualified Debian.AutoBuilder.Types.ParamRec as P (buildRelease)
 import Debian.Debianize as Cabal hiding (verbosity, withCurrentDirectory)
 import Debian.Pretty (ppDisplay)
 import Debian.Relation (SrcPkgName(..))
-import Debian.Repo.Fingerprint (RetrieveMethod)
+import Debian.Repo.Fingerprint (RetrieveMethod, retrieveMethodMD5)
 import Debian.Repo.Internal.Repos (MonadRepos)
 import Debian.Repo.Prelude (rsync)
 import Debian.Repo.Prelude.Verbosity (qPutStrLn)
@@ -62,24 +62,25 @@ instance T.Download a => T.Download (DebianizeDL a) where
 -- | Debianize the download, which is assumed to be a cabal package.
 prepare :: (MonadRepos m, MonadTop m, T.Download a) => DebT IO () -> P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> a -> m T.SomeDownload
 prepare defaultAtoms cache method flags cabal =
-    do dir <- sub ("debianize" </> takeFileName (T.getTop cabal))
-       liftIO $ createDirectoryIfMissing True dir
-       _ <- rsync [] (T.getTop cabal) dir
-       cabfiles <- liftIO $ getDirectoryContents dir >>= return . filter (isSuffixOf ".cabal")
+    do let cabdir = T.getTop cabal
+       debdir <- sub ("debianize" </> retrieveMethodMD5 method)
+       liftIO $ createDirectoryIfMissing True debdir
+       _ <- rsync [] cabdir debdir
+       cabfiles <- liftIO $ getDirectoryContents cabdir >>= return . filter (isSuffixOf ".cabal")
        case cabfiles of
          [cabfile] ->
-             do desc <- liftIO $ readPackageDescription normal (dir </> cabfile)
+             do desc <- liftIO $ readPackageDescription normal (cabdir </> cabfile)
                 -- let (PackageName name) = pkgName . package . packageDescription $ desc
                 let version = pkgVersion . package . Distribution.PackageDescription.packageDescription $ desc
                 -- We want to see the original changelog, so don't remove this
                 -- removeRecursiveSafely (dir </> "debian")
-                liftIO $ autobuilderCabal cache flags dir defaultAtoms
+                liftIO $ autobuilderCabal cache flags debdir defaultAtoms
                 return $ T.SomeDownload $ DebianizeDL { def = defaultAtoms
                                                       , method = method
                                                       , debFlags = flags
                                                       , cabal = cabal
                                                       , version = version
-                                                      , dir = dir }
+                                                      , dir = debdir }
          _ -> error $ "Download at " ++ dir ++ ": missing or multiple cabal files"
 
 withCurrentDirectory :: (MonadMask m, MonadIO m) => FilePath -> m a -> m a
@@ -106,6 +107,10 @@ collectPackageFlags _cache pflags =
        return $ ["--verbose=" ++ show (v :: Int)] ++
                 concatMap asCabalFlags pflags
 
+-- | Run the autobuilder's version of the cabal-debian program.  First
+-- it looks for a debian/Debianize.hs script and tries to run that, if
+-- that doesn't work it runs cabal-debian --native, adding any options
+-- it can infer from the package flags.
 autobuilderCabal :: P.CacheRec -> [P.PackageFlag] -> FilePath -> DebT IO () -> IO ()
 autobuilderCabal cache pflags debianizeDirectory defaultAtoms =
     withCurrentDirectory debianizeDirectory $
