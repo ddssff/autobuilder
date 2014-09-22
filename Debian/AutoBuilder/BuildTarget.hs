@@ -104,7 +104,7 @@ retrieve defaultAtoms cache method flags =
           retrieve defaultAtoms cache spec' flags >>= \ target' ->
           return $ SomeDownload $ CdDL { cd = method, fs = flags, dir = dir, parent = target' }
 
-      P.Darcs uri -> Darcs.prepare cache method flags uri
+      P.Darcs uri -> Darcs.prepare method flags uri
 
       P.DataFiles base files loc ->
           do base' <- retrieve defaultAtoms cache base flags

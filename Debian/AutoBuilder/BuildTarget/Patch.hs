@@ -7,12 +7,10 @@ import qualified Debug.Trace as D
 import Control.Exception (SomeException, try)
 import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Char8 as B
-import qualified Data.ByteString.Lazy.Char8 as L
-import Data.Digest.Pure.MD5 (md5)
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Repo (findSourceTree, copySourceTree, SourceTree(dir'), DebianSourceTree, findDebianSourceTrees, sub, MonadRepos, MonadTop)
-import Debian.Repo.Fingerprint (RetrieveMethod(Apt, Patch))
+import Debian.Repo.Fingerprint (RetrieveMethod(Apt, Patch), retrieveMethodMD5)
 import System.Directory (createDirectoryIfMissing)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure))
 import System.FilePath ((</>))
@@ -62,7 +60,7 @@ instance T.Download a => T.Download (PatchDL a) where
 
 prepare :: (MonadRepos m, MonadTop m, T.Download a) => RetrieveMethod -> [P.PackageFlag] -> B.ByteString -> a -> m T.SomeDownload
 prepare method flags patch base =
-    do copyDir <- sub ("quilt" </> show (md5 (L.pack (show method))))
+    do copyDir <- sub ("quilt" </> retrieveMethodMD5 method)
        baseTree <- liftIO $ findSourceTree (T.getTop base)
        liftIO $ createDirectoryIfMissing True copyDir
        tree <- liftIO $ copySourceTree baseTree copyDir

@@ -5,15 +5,13 @@ module Debian.AutoBuilder.BuildTarget.DebDir
     ) where
 
 import Control.Monad.Trans (liftIO)
-import Data.ByteString.Lazy.Char8 (pack)
-import Data.Digest.Pure.MD5 (md5)
 import Data.Set (union)
 import Data.Version (showVersion)
 import Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Changes (logVersion)
 import Debian.Repo
-import Debian.Repo.Fingerprint (RetrieveMethod)
+import Debian.Repo.Fingerprint (RetrieveMethod, retrieveMethodMD5)
 import Debian.Version (version)
 import System.Directory
 import System.FilePath ((</>))
@@ -42,7 +40,7 @@ prepare :: (MonadRepos m, MonadTop m, T.Download a, T.Download b) =>
            RetrieveMethod -> [P.PackageFlag] -> a -> b -> m SomeDownload
 prepare method flags upstream debian =
     sub "deb-dir" >>= \ dir ->
-    sub ("deb-dir" </> show (md5 (pack (show method)))) >>= \ dest ->
+    sub ("deb-dir" </> retrieveMethodMD5 method) >>= \ dest ->
     liftIO (createDirectoryIfMissing True dir) >>
     rsync [] (T.getTop upstream) dest >>
     rsync [] (T.getTop debian </> "debian") (dest </> "debian") >>

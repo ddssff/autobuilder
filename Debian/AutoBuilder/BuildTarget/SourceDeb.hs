@@ -35,6 +35,7 @@ instance T.Download a => T.Download (SourceDebDL a) where
     flags = flags
     getTop = T.getTop . base
     logText x = "Source Deb: " ++ show (method x)
+    flushSource _ = error "SourceDebDL flushSource unimplemented"
     attrs = T.attrs . base
 
 -- |Given the BuildTarget for the base target, prepare a SourceDeb BuildTarget

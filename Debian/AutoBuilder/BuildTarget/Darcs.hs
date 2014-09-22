@@ -9,10 +9,8 @@ import qualified Data.ByteString.Lazy.Char8 as B
 import Data.Digest.Pure.MD5 (md5)
 import Data.Maybe (mapMaybe)
 import Data.Set (singleton)
-import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
-import qualified Debian.AutoBuilder.Types.ParamRec as P
 import Debian.Repo
 import Debian.Repo.Fingerprint (RetrieveMethod, RetrieveAttribute(DarcsChangesId))
 import Network.URI (URI(..), URIAuth(..), uriToString, parseURI)
@@ -44,8 +42,7 @@ darcsRev tree m =
 
 data DarcsDL
     = DarcsDL
-      { flushSource :: Bool
-      , method :: RetrieveMethod
+      { method :: RetrieveMethod
       , flags :: [P.PackageFlag]
       , uri :: String
       , tree :: SourceTree
@@ -78,8 +75,8 @@ instance T.Download DarcsDL where
     attrs x = singleton (DarcsChangesId (attr x))
 
 prepare :: (MonadRepos m, MonadTop m) =>
-           P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m T.SomeDownload
-prepare cache method flags theUri =
+           RetrieveMethod -> [P.PackageFlag] -> String -> m T.SomeDownload
+prepare method flags theUri =
     do
       base <- sub "darcs"
       let dir = base ++ "/" ++ sum
@@ -87,8 +84,7 @@ prepare cache method flags theUri =
       tree <- liftIO $ if exists then verifySource dir else createSource dir
       attr <- liftIO $ readProcFailing ((proc "darcs" ["log", "--xml-output"]) {cwd = Just dir}) "" >>=  return . show . md5 . collectProcessOutput
       _output <- liftIO $ fixLink base
-      return $ T.SomeDownload $ DarcsDL { flushSource = P.flushSource (P.params cache)
-                                        , method = method
+      return $ T.SomeDownload $ DarcsDL { method = method
                                         , flags = flags
                                         , uri = theUri
                                         , tree = tree

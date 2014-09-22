@@ -26,7 +26,7 @@ documentation = [ "apt:<distribution>:<packagename> - a target of this form look
                 , "the given name from that distribution." ]
 
 data AptDL
-    = AptDL { cache :: P.CacheRec
+    = AptDL { allSources :: [NamedSliceList]
             , aptMethod :: RetrieveMethod
             , aptFlags :: [P.PackageFlag]
             , dist :: String
@@ -41,7 +41,7 @@ instance Download AptDL where
     logText x =
         "Built from " ++ relName (sliceListName distro) ++ " apt pool, apt-revision: " ++ show (method x)
         where
-          distro = maybe (error $ "Invalid dist: " ++ relName dist') id (findRelease (P.allSources (cache x)) dist')
+          distro = maybe (error $ "Invalid dist: " ++ relName dist') id (findRelease (allSources x) dist')
           dist' = ReleaseName (dist x)
           findRelease distros dist =
               case filter ((== dist) . sliceListName) distros of
@@ -56,7 +56,7 @@ prepare cache method flags dist package =
     withAptImage (P.ifSourcesChanged (P.params cache)) distro $ do
       apt <- aptDir package
       tree <- prepareSource package version'
-      return $ SomeDownload $ AptDL { cache = cache
+      return $ SomeDownload $ AptDL { allSources = P.allSources cache
                                     , aptMethod = method
                                     , aptFlags = flags
                                     , dist = dist

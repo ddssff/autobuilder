@@ -9,8 +9,6 @@ import Control.Applicative.Error (Failing(..))
 import Control.Monad (when)
 import Control.Monad.Error (catchError)
 import Control.Monad.Trans
-import qualified Data.ByteString.Lazy.Char8 as L
-import Data.Digest.Pure.MD5 (md5)
 import Data.Either (partitionEithers)
 import Data.List (intercalate, sortBy)
 import Data.Maybe
@@ -23,7 +21,7 @@ import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Changes (ChangeLogEntry(..), parseEntries, parseEntry)
 import Debian.Pretty (ppDisplay)
 import Debian.Repo (HasDebDir(debdir), HasTopDir(topdir), SourceTree, DebianBuildTree, findSourceTree, findOneDebianBuildTree, copySourceTree, sub, MonadRepos, MonadTop, readProcFailing)
-import Debian.Repo.Fingerprint (RetrieveMethod)
+import Debian.Repo.Fingerprint (RetrieveMethod, retrieveMethodMD5)
 import Debian.Version
 import Extra.Files (replaceFile)
 import "Extra" Extra.List ()
@@ -57,7 +55,7 @@ makeQuiltTree m base patch =
     do qPutStrLn $ "Quilt base: " ++ T.getTop base
        qPutStrLn $ "Quilt patch: " ++ T.getTop patch
        -- This will be the top directory of the quilt target
-       copyDir <- sub ("quilt" </> show (md5 (L.pack (show m))))
+       copyDir <- sub ("quilt" </> retrieveMethodMD5 m)
        quilt <- sub "quilt"
        liftIO (createDirectoryIfMissing True quilt)
        baseTree <- liftIO $ findSourceTree (T.getTop base)
@@ -98,6 +96,7 @@ instance (T.Download a, T.Download b) => T.Download (QuiltDL a b) where
     flags = flags
     getTop = topdir . tree
     logText x = "Quilt revision " ++ show (method x)
+    flushSource _ = error "QuiltDB flushSource unimplemented"
     cleanTarget x = (\ top -> T.cleanTarget (base x) top)
     attrs x = union (T.attrs (base x)) (T.attrs (patch x))
 

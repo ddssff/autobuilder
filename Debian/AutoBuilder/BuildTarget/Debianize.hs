@@ -22,8 +22,9 @@ import Debian.Debianize as Cabal hiding (verbosity, withCurrentDirectory)
 import Debian.Pretty (ppDisplay)
 import Debian.Relation (SrcPkgName(..))
 import Debian.Repo.Fingerprint (RetrieveMethod)
-import Debian.Repo.Prelude (rsync)
 import Debian.Repo.Internal.Repos (MonadRepos)
+import Debian.Repo.Prelude (rsync)
+import Debian.Repo.Prelude.Verbosity (qPutStrLn)
 import Debian.Repo.Top (MonadTop, sub, runTopT)
 import Distribution.Verbosity (normal)
 import Distribution.Package (PackageIdentifier(..))
@@ -33,7 +34,7 @@ import System.Directory (getDirectoryContents, createDirectoryIfMissing, getCurr
 import System.Environment (withArgs)
 import System.FilePath ((</>), takeFileName, takeDirectory)
 import System.Process (showCommandForUser)
-import Debian.Repo.Prelude.Verbosity (qPutStrLn)
+import System.Unix.Directory (removeRecursiveSafely)
 
 documentation :: [String]
 documentation = [ "hackage:<name> or hackage:<name>=<version> - a target of this form"
@@ -41,10 +42,9 @@ documentation = [ "hackage:<name> or hackage:<name>=<version> - a target of this
 
 data T.Download a => DebianizeDL a
     = DebianizeDL { def :: DebT IO ()
-                  , cache :: P.CacheRec
                   , method :: RetrieveMethod
                   , debFlags :: [P.PackageFlag]
-                  , target :: a
+                  , cabal :: a
                   , version :: Version
                   , dir :: FilePath }
 
@@ -54,16 +54,17 @@ instance T.Download a => T.Download (DebianizeDL a) where
     getTop = dir
     logText x = "Built from hackage, revision: " ++ show (method x)
     mVersion = Just . version
-    origTarball = T.origTarball . target
-    cleanTarget x = \ top -> T.cleanTarget (target x) top
-    attrs = T.attrs . target
+    origTarball = T.origTarball . cabal
+    flushSource x = T.flushSource (cabal x) >> liftIO (removeRecursiveSafely (dir x))
+    cleanTarget x = \ top -> T.cleanTarget (cabal x) top
+    attrs = T.attrs . cabal
 
 -- | Debianize the download, which is assumed to be a cabal package.
 prepare :: (MonadRepos m, MonadTop m, T.Download a) => DebT IO () -> P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> a -> m T.SomeDownload
-prepare defaultAtoms cache method flags target =
-    do dir <- sub ("debianize" </> takeFileName (T.getTop target))
+prepare defaultAtoms cache method flags cabal =
+    do dir <- sub ("debianize" </> takeFileName (T.getTop cabal))
        liftIO $ createDirectoryIfMissing True dir
-       _ <- rsync [] (T.getTop target) dir
+       _ <- rsync [] (T.getTop cabal) dir
        cabfiles <- liftIO $ getDirectoryContents dir >>= return . filter (isSuffixOf ".cabal")
        case cabfiles of
          [cabfile] ->
@@ -74,10 +75,9 @@ prepare defaultAtoms cache method flags target =
                 -- removeRecursiveSafely (dir </> "debian")
                 liftIO $ autobuilderCabal cache flags dir defaultAtoms
                 return $ T.SomeDownload $ DebianizeDL { def = defaultAtoms
-                                                      , cache = cache
                                                       , method = method
                                                       , debFlags = flags
-                                                      , target = target
+                                                      , cabal = cabal
                                                       , version = version
                                                       , dir = dir }
          _ -> error $ "Download at " ++ dir ++ ": missing or multiple cabal files"
