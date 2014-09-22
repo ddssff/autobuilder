@@ -3,17 +3,18 @@ module Debian.AutoBuilder.BuildTarget.Apt where
 
 import Control.Monad.Trans (MonadIO(liftIO))
 import Data.Maybe (mapMaybe)
-import Data.Set (empty, singleton)
+import Data.Set (singleton)
 import qualified Debian.AutoBuilder.Types.CacheRec as P (CacheRec(allSources, params))
 import Debian.AutoBuilder.Types.Download (Download(..), SomeDownload(..))
 import qualified Debian.AutoBuilder.Types.Packages as P (PackageFlag, aptPin)
 import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec(ifSourcesChanged))
+import Debian.Changes (logVersion)
 import Debian.Relation (SrcPkgName)
 import Debian.Release (ReleaseName(ReleaseName, relName))
 import Debian.Repo.AptImage (aptDir)
 import Debian.Repo.Fingerprint (RetrieveMethod, RetrieveAttribute(AptVersion))
 import Debian.Repo.Slice (NamedSliceList(sliceListName))
-import Debian.Repo.SourceTree (topdir, DebianBuildTree)
+import Debian.Repo.SourceTree (topdir, DebianBuildTree, entry, debTree')
 import Debian.Repo.Internal.Repos (MonadRepos)
 import Debian.Repo.State.AptImage (withAptImage, prepareSource)
 import Debian.Repo.Top (MonadTop)
@@ -48,12 +49,7 @@ instance Download AptDL where
                 [] -> Nothing
                 a -> error $ ("Multiple sources.lists found for " ++ relName dist ++ ": " ++ show (map (relName . sliceListName) a))
     flushSource x = liftIO $ removeRecursiveSafely $ apt x
-    attrs x = (maybe empty (singleton . AptVersion) version')
-        where
-          version' = case mapMaybe P.aptPin (flags x) of
-                       [] -> Nothing
-                       [v] -> Just (parseDebianVersion v)
-                       vs -> error ("Conflicting pin versions for apt-get: " ++ show vs)
+    attrs = singleton . AptVersion . logVersion . entry . debTree' . tree
 
 prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> SrcPkgName -> m SomeDownload
 prepare cache method flags dist package =
