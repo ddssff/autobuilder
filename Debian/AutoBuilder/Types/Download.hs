@@ -14,6 +14,7 @@ import Data.Version (Version)
 import Debian.AutoBuilder.Types.Packages (PackageFlag)
 import Debian.Repo.Fingerprint (RetrieveMethod(..), RetrieveAttribute(..))
 import Debian.Repo.MonadOS (MonadOS)
+import Debian.Repo.Top (MonadTop)
 import System.Process.ListLike (Chunk)
 
 class Download a where
@@ -32,6 +33,8 @@ class Download a where
     origTarball :: a -> Maybe FilePath
     origTarball _ = Nothing
     -- ^ If we have access to an original tarball, this returns its path.
+    flushSource :: (MonadIO m, MonadTop m) => a -> m ()
+    -- ^ Remove any existing data before downloading anew
     cleanTarget :: a -> FilePath -> IO ([Chunk L.ByteString], NominalDiffTime)
     cleanTarget _ = \ _ -> return ([], 0)
     -- ^ Clean version control info out of a target after it has
@@ -46,7 +49,7 @@ class Download a where
     -- methods
 
 -- Existential type
-data SomeDownload = forall a. Download a => SomeDownload {unSomeDownload :: a}
+data SomeDownload = forall a. Download a => SomeDownload a
 
 instance Download SomeDownload where
     method (SomeDownload x) = method x
@@ -55,6 +58,7 @@ instance Download SomeDownload where
     logText (SomeDownload x) = logText x
     mVersion (SomeDownload x) = mVersion x
     origTarball (SomeDownload x) = origTarball x
+    flushSource (SomeDownload x) = flushSource x
     cleanTarget (SomeDownload x) = cleanTarget x
     buildWrapper (SomeDownload x) = buildWrapper x
     attrs (SomeDownload x) = attrs x

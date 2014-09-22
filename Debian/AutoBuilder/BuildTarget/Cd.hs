@@ -25,6 +25,7 @@ instance Download a => Download (CdDL a) where
     flags = cdFlags
     getTop x = getTop (cdParent x) </> subdir x
     logText x = logText (cdParent x) ++ " (in subdirectory " ++ subdir x ++ ")"
+    flushSource = flushSource . cdParent
     cleanTarget = cleanTarget . cdParent
 
 prepare :: (MonadRepos m, Download a) =>

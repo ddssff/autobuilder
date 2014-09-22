@@ -56,6 +56,7 @@ instance T.Download a => T.Download (PatchDL a) where
     flags = flags
     getTop = dir' . tree
     logText x = T.logText (base x) ++ " (with patch applied)"
+    flushSource x = T.flushSource (base x)
     cleanTarget x = T.cleanTarget (base x)
     attrs = T.attrs . base
 

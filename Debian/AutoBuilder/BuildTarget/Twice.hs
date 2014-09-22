@@ -21,6 +21,7 @@ instance T.Download a => T.Download (TwiceDL a) where
     flags = flags
     getTop = T.getTop . base
     logText x = T.logText (base x) ++ " (twice if necessary)"
+    flushSource x = T.flushSource (base x)
     cleanTarget x = T.cleanTarget (base x)
     -- This is a quick and dirty implementation, if you nest this inside another
     -- target type it will have no effect.

@@ -31,6 +31,7 @@ data AptDL
             , aptFlags :: [P.PackageFlag]
             , dist :: String
             , package :: SrcPkgName
+            , apt :: FilePath
             , tree :: DebianBuildTree }
 
 instance Download AptDL where
@@ -47,6 +48,7 @@ instance Download AptDL where
                 [a] -> Just a
                 [] -> Nothing
                 a -> error $ ("Multiple sources.lists found for " ++ relName dist ++ ": " ++ show (map (relName . sliceListName) a))
+    flushSource x = liftIO $ removeRecursiveSafely $ apt x
     attrs x = (maybe empty (singleton . AptVersion) version')
         where
           version' = case mapMaybe P.aptPin (flags x) of
@@ -58,13 +60,14 @@ prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.Pack
 prepare cache method flags dist package =
     withAptImage (P.ifSourcesChanged (P.params cache)) distro $ do
       apt <- aptDir package
-      when (P.flushSource (P.params cache)) (liftIO . removeRecursiveSafely $ apt)
+      when (P.flushSource (P.params cache)) (liftIO . removeRecursiveSafely $ apt) -- FIXME
       tree <- prepareSource package version'
       return $ SomeDownload $ AptDL { cache = cache
                                     , aptMethod = method
                                     , aptFlags = flags
                                     , dist = dist
                                     , package = package
+                                    , apt = apt
                                     , tree = tree }
     where
       distro = maybe (error $ "Invalid dist: " ++ relName dist') id (findRelease (P.allSources cache) dist')

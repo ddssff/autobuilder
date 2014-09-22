@@ -60,6 +60,17 @@ instance T.Download DarcsDL where
     logText x = "Darcs revision: " ++ show (method x)
     mVersion _ = Nothing
     origTarball _ = Nothing
+    flushSource x = do
+      base <- sub "darcs"
+      liftIO $ removeRecursiveSafely (base </> sum)
+        where
+          sum = show (md5 (B.pack uriAndTag))
+          uriAndTag = uriToString id theUri' "" ++ maybe "" (\ tag -> "=" ++ tag) theTag
+          theTag = case mapMaybe P.darcsTag (flags x) of
+                     [] -> Nothing
+                     [x] -> Just x
+                     xs -> error ("Conflicting tags for darcs get of " ++ uri x ++ ": " ++ show xs)
+          theUri' = mustParseURI (uri x)
     cleanTarget x = \ top -> case any P.isKeepRCS (flags x) of
                                False -> let cmd = shell ("find " ++ top ++ " -name '_darcs' -maxdepth 1 -prune | xargs rm -rf") in
                                         timeTask (readProcFailing cmd "")
@@ -73,7 +84,7 @@ prepare cache method flags theUri =
     do
       base <- sub "darcs"
       let dir = base ++ "/" ++ sum
-      liftIO $ when (P.flushSource (P.params cache)) (removeRecursiveSafely dir)
+      liftIO $ when (P.flushSource (P.params cache)) (removeRecursiveSafely dir) -- FIXME
       exists <- liftIO $ doesDirectoryExist dir
       tree <- liftIO $ if exists then verifySource dir else createSource dir
       attr <- liftIO $ readProcFailing ((proc "darcs" ["log", "--xml-output"]) {cwd = Just dir}) "" >>=  return . show . md5 . collectProcessOutput

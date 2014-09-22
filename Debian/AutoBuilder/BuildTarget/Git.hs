@@ -59,6 +59,15 @@ instance T.Download GitDL where
     flags = flags
     getTop = topdir . tree
     logText x = "git revision: " ++ show (method x)
+    flushSource x =
+        let theUri' = mustParseURI (uri x)
+            theBranch = case mapMaybe P.gitBranch (flags x) of
+                          [] -> Nothing
+                          [x] -> Just x
+                          xs -> error ("Conflicting branches for git clone of " ++ uri x ++ ": " ++ show xs)
+            uriAndBranch = uriToString id theUri' "" ++ maybe "" (\ branch -> "=" ++ branch) theBranch
+            sum = show (md5 (B.pack uriAndBranch)) in
+        sub ("git" </> sum) >>= liftIO . removeRecursiveSafely
     cleanTarget x =
         (\ top -> case any P.isKeepRCS (flags x) of
                     False -> let cmd = "find " ++ top ++ " -name '.git' -maxdepth 1 -prune | xargs rm -rf" in timeTask (readProcFailing (shell cmd) "")

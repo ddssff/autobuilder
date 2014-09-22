@@ -35,6 +35,7 @@ instance (Download a, Download b) => Download (DebDirDL a b) where
     getTop = topdir . tree
     logText x = "deb-dir revision: " ++ show (method x)
     origTarball = origTarball . upstream
+    flushSource = flushSource . upstream
     attrs x = union (attrs (upstream x)) (attrs (debian x))
 
 prepare :: (MonadRepos m, MonadTop m, T.Download a, T.Download b) =>

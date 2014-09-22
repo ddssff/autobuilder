@@ -51,6 +51,7 @@ instance Download a => Download (CdDL a) where
     flags = fs
     getTop x = getTop (parent x) </> dir x
     logText x = logText (parent x) ++ " (in subdirectory " ++ dir x ++ ")"
+    flushSource x = flushSource (parent x)
     cleanTarget x = cleanTarget (parent x)
     attrs = attrs . parent
 
@@ -65,6 +66,7 @@ instance Download a => Download (ProcDL a) where
     flags = procFlags
     getTop = getTop . base
     logText x = logText (base x) ++ " (with /proc mounted)"
+    flushSource x = flushSource (base x)
     cleanTarget = cleanTarget . base
     buildWrapper _ = withProc
     attrs = attrs . base
@@ -79,6 +81,7 @@ instance Download DirDL where
     flags = dirFlags
     getTop = topdir . dirTree
     logText x = "Built from local directory " ++ show (method x)
+    flushSource _ = return ()
 
 data ZeroDL = ZeroDL
 
@@ -87,6 +90,7 @@ instance Download ZeroDL where
     flags _ = mempty
     getTop _ = error "getTop Zero"
     logText _ = error "logText Zero"
+    flushSource _ = return ()
 
 -- | Given a RetrieveMethod, perform the retrieval and return the result.
 retrieve :: forall m. (MonadOS m, MonadRepos m, MonadTop m, MonadCatch m) =>
