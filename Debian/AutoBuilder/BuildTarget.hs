@@ -118,7 +118,8 @@ retrieve defaultAtoms cache method flags =
           do upstream' <- retrieve defaultAtoms cache upstream flags
              debian' <- retrieve defaultAtoms cache debian flags
              DebDir.prepare method flags upstream' debian'
-      P.Debianize package name ->
+      P.Debianize _ -> error "retrieve - old Debianize constructor"
+      P.Debianize' package _ ->
           retrieve defaultAtoms cache package flags >>=
           Debianize.prepare defaultAtoms cache method flags
 
