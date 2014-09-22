@@ -21,7 +21,7 @@ import qualified Debian.AutoBuilder.Types.ParamRec as P (buildRelease)
 import Debian.Debianize as Cabal hiding (verbosity, withCurrentDirectory)
 import Debian.Pretty (ppDisplay)
 import Debian.Relation (SrcPkgName(..))
-import Debian.Repo.Fingerprint (RetrieveMethod(Debianize'), retrieveMethodMD5)
+import Debian.Repo.Fingerprint (RetrieveMethod(Debianize''), retrieveMethodMD5)
 import Debian.Repo.Internal.Repos (MonadRepos)
 import Debian.Repo.Prelude (rsync)
 import Debian.Repo.Prelude.Verbosity (qPutStrLn)
@@ -61,7 +61,7 @@ instance T.Download a => T.Download (DebianizeDL a) where
 
 -- | Debianize the download, which is assumed to be a cabal package.
 prepare :: (MonadRepos m, MonadTop m, T.Download a) => DebT IO () -> P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> a -> m T.SomeDownload
-prepare defaultAtoms cache method@(Debian.Repo.Fingerprint.Debianize' _ sourceName) flags cabal =
+prepare defaultAtoms cache method@(Debian.Repo.Fingerprint.Debianize'' _ sourceName) flags cabal =
     do let cabdir = T.getTop cabal
        debdir <- sub ("debianize" </> retrieveMethodMD5 method)
        liftIO $ createDirectoryIfMissing True debdir
