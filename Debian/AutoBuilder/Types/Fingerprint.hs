@@ -94,7 +94,8 @@ buildDecision _ target _ _ _
 buildDecision _ _ Nothing (Fingerprint {upstreamVersion = sourceVersion}) _ =
     Yes ("Initial build of version " ++ show (prettyDebianVersion sourceVersion))
 buildDecision _ _ (Just (DownstreamFingerprint {upstreamFingerprint = Fingerprint {retrievedAttributes = oldAttrs}})) (Fingerprint {retrievedAttributes = newAttrs}) _
-    | oldAttrs /= newAttrs = Yes ("Package attributes changed: " ++ show oldAttrs ++ " -> " ++ show newAttrs)
+    | oldAttrs /= newAttrs && not (specialAptVersionCase (toList oldAttrs) (toList newAttrs)) =
+        Yes ("Package attributes changed: " ++ show oldAttrs ++ " -> " ++ show newAttrs)
 {-
 buildDecision _ _ (Just (DownstreamFingerprint {upstreamFingerprint = Fingerprint {method = oldMethod}})) (Fingerprint {method = newMethod}) _
     -- This doesn't make sense the retrieve method is the package
@@ -180,3 +181,10 @@ buildDecision cache target (Just (DownstreamFingerprint { upstreamFingerprint =
       -- All the package names mentioned in a dependency list
       packageNames :: G.DepInfo -> [BinPkgName]
       packageNames info {-(_, deps, _)-} = nub (List.map (\ (Rel name _ _) -> name) (concat (G.relations info)))
+
+-- Special case - if all that changed is that an AptVersion attribute
+-- was added, do not build.  Debian version number changes currently
+-- trigger builds anyway through other mechanisms.  Right now I just
+-- don't want to rebuild ghc.
+specialAptVersionCase [] [AptVersion _] = True
+specialAptVersionCase _ _ = False
