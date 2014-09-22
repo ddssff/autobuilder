@@ -118,7 +118,7 @@ retrieve defaultAtoms cache method flags =
           do upstream' <- retrieve defaultAtoms cache upstream flags
              debian' <- retrieve defaultAtoms cache debian flags
              DebDir.prepare method flags upstream' debian'
-      P.Debianize package _ ->
+      P.Debianize package name ->
           retrieve defaultAtoms cache package flags >>=
           Debianize.prepare defaultAtoms cache method flags
 
@@ -133,7 +133,7 @@ retrieve defaultAtoms cache method flags =
                                            , dirFlags = flags
                                            , dirTree = tree }
 
-      P.Git uri specs -> Git.prepare cache method flags uri specs
+      P.Git uri specs -> Git.prepare method flags uri specs
       P.Hackage package -> Hackage.prepare cache method flags package
       P.Hg string -> Hg.prepare cache method flags string
       P.Patch base patch ->

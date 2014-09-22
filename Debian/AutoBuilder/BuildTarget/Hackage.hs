@@ -41,8 +41,7 @@ documentation = [ "debianize:<name> or debianize:<name>=<version> - a target of 
 
 data HackageDL
     = HackageDL
-      { server :: String
-      , flushSource :: Bool
+      { server :: String -- ^ Hackage server name
       , method :: RetrieveMethod
       , flags :: [P.PackageFlag]
       , tree :: SourceTree
@@ -67,7 +66,6 @@ prepare cache method flags name =
        unp <- downloadCached server name version
        tree <- liftIO $ (findSourceTree unp :: IO SourceTree)
        return $ T.SomeDownload $ HackageDL { server = P.hackageServer (P.params cache)
-                                           , flushSource = P.flushSource (P.params cache)
                                            , method = method
                                            , flags = flags
                                            , tree = tree

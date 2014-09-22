@@ -8,10 +8,8 @@ import Data.Digest.Pure.MD5 (md5)
 import Data.Maybe (mapMaybe)
 import Data.Monoid (mempty)
 import Data.Set (singleton)
-import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
-import qualified Debian.AutoBuilder.Types.ParamRec as P
 import Debian.Repo (SourceTree, topdir, MonadRepos, MonadTop, sub, findSourceTree)
 import Debian.Repo.Fingerprint (RetrieveMethod, RetrieveAttribute(GitCommit), GitSpec(Branch, Commit))
 import Debian.Repo.Prelude.Verbosity (readProcFailing, timeTask)
@@ -44,8 +42,7 @@ showCmd = showCmdSpecForUser
 
 data GitDL
     = GitDL
-      { flushSource :: Bool
-      , method :: RetrieveMethod
+      { method :: RetrieveMethod
       , flags :: [P.PackageFlag]
       , uri :: String
       , gitspecs :: [GitSpec]
@@ -73,8 +70,8 @@ instance T.Download GitDL where
                     True -> return ([], 0))
     attrs x = singleton $ GitCommit $ latestCommit x
 
-prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> [GitSpec] -> m T.SomeDownload
-prepare cache method flags theUri gitspecs =
+prepare :: (MonadRepos m, MonadTop m) => RetrieveMethod -> [P.PackageFlag] -> String -> [GitSpec] -> m T.SomeDownload
+prepare method flags theUri gitspecs =
     sub "git" >>= \ base ->
     sub ("git" </> sum) >>= \ dir -> liftIO $
     do
@@ -86,8 +83,7 @@ prepare cache method flags theUri gitspecs =
       commit <- case code of
                   ExitSuccess -> return . head . lines $ out
                   _ -> error $ displayCreateProcess p ++ " -> " ++ show code
-      return $ T.SomeDownload $ GitDL { flushSource = P.flushSource (P.params cache)
-                                      , method = method
+      return $ T.SomeDownload $ GitDL { method = method
                                       , flags = flags
                                       , uri = theUri
                                       , gitspecs = gitspecs

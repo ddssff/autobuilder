@@ -207,8 +207,6 @@ data PackageFlag
     -- added to the cabal version to get the debian version.  By
     -- default this is -1~hackage1.  Debian policy says this should
     -- either be empty or begin with a dash.
-    | SourceDebName String
-    -- ^ Use this string for the source deb name when debianizing.
     | Epoch String Int
     -- ^ Set the epoch number in the debian version number generated
     -- for the given cabal package

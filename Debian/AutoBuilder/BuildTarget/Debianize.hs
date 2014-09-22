@@ -21,7 +21,7 @@ import qualified Debian.AutoBuilder.Types.ParamRec as P (buildRelease)
 import Debian.Debianize as Cabal hiding (verbosity, withCurrentDirectory)
 import Debian.Pretty (ppDisplay)
 import Debian.Relation (SrcPkgName(..))
-import Debian.Repo.Fingerprint (RetrieveMethod, retrieveMethodMD5)
+import Debian.Repo.Fingerprint (RetrieveMethod(Debianize), retrieveMethodMD5)
 import Debian.Repo.Internal.Repos (MonadRepos)
 import Debian.Repo.Prelude (rsync)
 import Debian.Repo.Prelude.Verbosity (qPutStrLn)
@@ -61,7 +61,7 @@ instance T.Download a => T.Download (DebianizeDL a) where
 
 -- | Debianize the download, which is assumed to be a cabal package.
 prepare :: (MonadRepos m, MonadTop m, T.Download a) => DebT IO () -> P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> a -> m T.SomeDownload
-prepare defaultAtoms cache method flags cabal =
+prepare defaultAtoms cache method@(Debian.Repo.Fingerprint.Debianize _ sourceName) flags cabal =
     do let cabdir = T.getTop cabal
        debdir <- sub ("debianize" </> retrieveMethodMD5 method)
        liftIO $ createDirectoryIfMissing True debdir
@@ -74,7 +74,7 @@ prepare defaultAtoms cache method flags cabal =
                 let version = pkgVersion . package . Distribution.PackageDescription.packageDescription $ desc
                 -- We want to see the original changelog, so don't remove this
                 -- removeRecursiveSafely (dir </> "debian")
-                liftIO $ autobuilderCabal cache flags debdir defaultAtoms
+                liftIO $ autobuilderCabal cache flags sourceName debdir defaultAtoms
                 return $ T.SomeDownload $ DebianizeDL { def = defaultAtoms
                                                       , method = method
                                                       , debFlags = flags
@@ -82,6 +82,7 @@ prepare defaultAtoms cache method flags cabal =
                                                       , version = version
                                                       , dir = debdir }
          _ -> error $ "Download at " ++ cabdir ++ ": missing or multiple cabal files"
+prepare _ _ method _ _ = error $ "Unexpected method passed to Debianize.prepare: " ++ show method
 
 withCurrentDirectory :: (MonadMask m, MonadIO m) => FilePath -> m a -> m a
 withCurrentDirectory new action = bracket (liftIO getCurrentDirectory >>= \ old -> liftIO (setCurrentDirectory new) >> return old) (liftIO . setCurrentDirectory) (\ _ -> action)
@@ -111,8 +112,8 @@ collectPackageFlags _cache pflags =
 -- it looks for a debian/Debianize.hs script and tries to run that, if
 -- that doesn't work it runs cabal-debian --native, adding any options
 -- it can infer from the package flags.
-autobuilderCabal :: P.CacheRec -> [P.PackageFlag] -> FilePath -> DebT IO () -> IO ()
-autobuilderCabal cache pflags debianizeDirectory defaultAtoms =
+autobuilderCabal :: P.CacheRec -> [P.PackageFlag] -> Maybe String -> FilePath -> DebT IO () -> IO ()
+autobuilderCabal cache pflags sourceName debianizeDirectory defaultAtoms =
     withCurrentDirectory debianizeDirectory $
     do let rel = P.buildRelease $ P.params cache
        top <- computeTopDir (P.params cache)
@@ -125,8 +126,12 @@ autobuilderCabal cache pflags debianizeDirectory defaultAtoms =
          True -> qPutStrLn (showCommandForUser "runhaskell" ("debian/Debianize.hs" : args'))
          False -> withArgs [] $ Cabal.evalDebT (do -- We don't actually run the cabal-debian command here, we use
                                                    -- the library API and build and print the equivalent command.
-                                                   qPutStrLn (showCommandForUser "cabal-debian" (["--native"] ++ concatMap asCabalFlags pflags))
+                                                   qPutStrLn (showCommandForUser "cabal-debian"
+                                                                 (["--native"] ++
+                                                                  maybe [] (\ name -> ["--source-package-name", name]) sourceName ++
+                                                                  concatMap asCabalFlags pflags))
                                                    sourceFormat ~?= Just Native3
+                                                   sourcePackageName ~?= fmap SrcPkgName sourceName
                                                    debianization defaultAtoms (mapM_ applyPackageFlag pflags)
                                                    writeDebianization)
                                                (makeAtoms eset)
@@ -139,7 +144,6 @@ class CabalFlags a where
     asCabalFlags :: a -> [String]
 
 instance CabalFlags P.PackageFlag where
-    asCabalFlags (P.SourceDebName name) = ["--source-package-name", unSrcPkgName (SrcPkgName name)]
     asCabalFlags (P.Maintainer s) = ["--maintainer", s]
     asCabalFlags (P.BuildDep s) = ["--build-dep", s]
     asCabalFlags (P.DevelDep s) = ["--build-dep", s, "--dev-dep", s]
