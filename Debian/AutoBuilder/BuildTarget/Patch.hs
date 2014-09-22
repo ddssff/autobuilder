@@ -44,6 +44,21 @@ instance Show Patch where
 documentation :: [String]
 documentation = [ "Patch <target> <patchtext> - Apply the patch to the target." ]
 
+data PatchDL
+    = PatchDL { method :: RetrieveMethod
+              , flags :: [P.PackageFlag]
+              , patch :: B.ByteString
+              , base :: T.SomeDownload
+              , tree :: SourceTree }
+
+instance T.Download PatchDL where
+    method = method
+    flags = flags
+    getTop = dir' . tree
+    logText x = T.logText (base x) ++ " (with patch applied)"
+    cleanTarget x = T.cleanTarget (base x)
+    attrs = T.attrs . base
+
 prepare :: (MonadRepos m, MonadTop m, T.Download a) => RetrieveMethod -> [P.PackageFlag] -> B.ByteString -> a -> m T.SomeDownload
 prepare method flags patch base =
     do copyDir <- sub ("quilt" </> show (md5 (L.pack (show method))))
@@ -59,16 +74,7 @@ prepare method flags patch base =
                                  "\nstderr:\n" ++ indent (B.unpack err) ++
                                  "\npatch:\n" ++ indent (B.unpack patch))
          ExitSuccess ->
-             return $ T.SomeDownload $ T.download'
-                        {-   T.method = -} method
-                        {- , T.flags = -} flags
-                        {- , T.getTop = -} (dir' tree)
-                        {- , T.logText = -} (T.logText base ++ " (with patch applied)")
-                        {- , T.mVersion = -} Nothing
-                        {- , T.origTarball = -} Nothing
-                        {- , T.cleanTarget = -} (T.cleanTarget base)
-                        {- , T.buildWrapper = -} id
-                        {- , T.attrs = -} (T.attrs base)
+             return $ T.SomeDownload $ PatchDL {method = method, flags = flags, patch = patch, base = T.SomeDownload base, tree = tree}
     where
       cmd = "/usr/bin/patch"
       args = ["-p1"]

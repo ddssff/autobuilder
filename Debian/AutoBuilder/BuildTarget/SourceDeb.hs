@@ -25,6 +25,18 @@ documentation = [ "sourcedeb:<target> - A target of this form unpacks the source
                 , "directory containing a .dsc file, a .tar.gz, and an optional"
                 , ".diff.gz file." ]
 
+data SourceDebDL
+    = SourceDebDL { method :: RetrieveMethod
+                  , flags :: [P.PackageFlag]
+                  , base :: T.SomeDownload }
+
+instance T.Download SourceDebDL where
+    method = method
+    flags = flags
+    getTop = T.getTop . base
+    logText x = "Source Deb: " ++ show (method x)
+    attrs = T.attrs . base
+
 -- |Given the BuildTarget for the base target, prepare a SourceDeb BuildTarget
 -- by unpacking the source deb.
 prepare :: (MonadRepos m, T.Download a) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> a -> m T.SomeDownload
@@ -44,16 +56,9 @@ prepare _cache method flags base =
           case (S.fieldValue "Source" dscInfo, maybe Nothing (Just . V.parseDebianVersion)
                      (S.fieldValue "Version" dscInfo)) of
             (Just _package, Just _version) ->
-                return $ T.SomeDownload $ T.download'
-                           {-   T.method = -} method
-                           {- , T.flags = -} flags
-                           {- , T.getTop = -} top
-                           {- , T.logText = -} ("Source Deb: " ++ show method)
-                           {- , T.mVersion = -} Nothing
-                           {- , T.origTarball = -} Nothing
-                           {- , T.cleanTarget = -} (\ _ -> return ([], 0))
-                           {- , T.buildWrapper = -} id
-                           {- , T.attrs = -} (T.attrs base)
+                return $ T.SomeDownload $ SourceDebDL { method = method
+                                                      , flags = flags
+                                                      , base = T.SomeDownload base }
             _ -> error $ "Invalid .dsc file: " ++ dscName
       -- unpack top dscName = "cd " ++ top ++ " && dpkg-source -x " ++ dscName
       unpack top dscName = (proc "dpkg-source" ["-x", dscName]) {cwd = Just top}

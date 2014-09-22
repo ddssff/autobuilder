@@ -22,6 +22,21 @@ documentation = [ "deb-dir:(<target>):(<target>) - A target of this form combine
                 , "where one points to an un-debianized source tree and the other contains"
                 , "a debian subdirectory." ]
 
+data DebDirDL
+    = DebDirDL { ddMethod :: RetrieveMethod
+               , ddFlags :: [P.PackageFlag]
+               , upstream :: SomeDownload
+               , debian :: SomeDownload
+               , tree :: DebianSourceTree }
+
+instance Download DebDirDL where
+    method = ddMethod
+    flags = ddFlags
+    getTop = topdir . tree
+    logText x = "deb-dir revision: " ++ show (method x)
+    origTarball = origTarball . upstream
+    attrs x = union (attrs (upstream x)) (attrs (debian x))
+
 prepare :: (MonadRepos m, MonadTop m, T.Download a, T.Download b) =>
            RetrieveMethod -> [P.PackageFlag] -> a -> b -> m SomeDownload
 prepare method flags upstream debian =
@@ -31,17 +46,8 @@ prepare method flags upstream debian =
     rsync [] (T.getTop upstream) dest >>
     rsync [] (T.getTop debian </> "debian") (dest </> "debian") >>
     liftIO (findSourceTree dest :: IO DebianSourceTree) >>= \ tree ->
-    let tgt = T.download'
-              {-  T.method = -} method
-              {- , T.flags = -} flags
-              {- , T.getTop = -} (topdir tree)
-              {- , T.logText = -} ("deb-dir revision: " ++ show method)
-              {- , T.mVersion = -} Nothing
-              {- , T.origTarball = -} (T.origTarball upstream)
-              {- , T.cleanTarget = -} (\ _ -> return ([], 0))
-              {- , T.buildWrapper = -} id
-              {- , T.attrs = -} (union (T.attrs upstream) (T.attrs debian))
-              in
+
+    let tgt = DebDirDL {ddMethod = method, ddFlags = flags, upstream = SomeDownload upstream, debian = SomeDownload debian, tree = tree} in
     -- The upstream and downstream versions must match after the epoch and revision is stripped.
     case T.mVersion upstream of
       Nothing -> return $ SomeDownload tgt

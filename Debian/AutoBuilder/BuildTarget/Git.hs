@@ -43,6 +43,28 @@ darcsRev tree m =
 
 showCmd = showCmdSpecForUser
 
+data GitDL
+    = GitDL
+      { flushSource :: Bool
+      , method :: RetrieveMethod
+      , flags :: [P.PackageFlag]
+      , uri :: String
+      , gitspecs :: [GitSpec]
+      , tree :: SourceTree
+      , latestCommit :: String
+      }
+
+instance T.Download GitDL where
+    method = method
+    flags = flags
+    getTop = topdir . tree
+    logText x = "git revision: " ++ show (method x)
+    cleanTarget x =
+        (\ top -> case any P.isKeepRCS (flags x) of
+                    False -> let cmd = "find " ++ top ++ " -name '.git' -maxdepth 1 -prune | xargs rm -rf" in timeTask (readProcFailing (shell cmd) "")
+                    True -> return ([], 0))
+    attrs x = singleton $ GitCommit $ latestCommit x
+
 prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> [GitSpec] -> m T.SomeDownload
 prepare cache method flags theUri gitspecs =
     sub "git" >>= \ base ->
@@ -57,18 +79,13 @@ prepare cache method flags theUri gitspecs =
       commit <- case code of
                   ExitSuccess -> return . head . lines $ out
                   _ -> error $ displayCreateProcess p ++ " -> " ++ show code
-      return $ T.SomeDownload $ T.download' {- T.method = -} method
-                          {- , T.flags = -} flags
-                          {- , T.getTop = -} (topdir tree)
-                          {- , T.logText = -}  ("git revision: " ++ show method)
-                          {- , T.mVersion = -} Nothing
-                          {- , T.origTarball = -} Nothing
-                          {- , T.cleanTarget = -}
-                              (\ top -> case any P.isKeepRCS flags of
-                                         False -> let cmd = "find " ++ top ++ " -name '.git' -maxdepth 1 -prune | xargs rm -rf" in timeTask (readProcFailing (shell cmd) "")
-                                         True -> return ([], 0))
-                          {- , T.buildWrapper = -} id
-                          {- , T.attrs = -} (singleton (GitCommit commit))
+      return $ T.SomeDownload $ GitDL { flushSource = P.flushSource (P.params cache)
+                                      , method = method
+                                      , flags = flags
+                                      , uri = theUri
+                                      , gitspecs = gitspecs
+                                      , tree = tree
+                                      , latestCommit = commit }
     where
       verifySource :: FilePath -> IO SourceTree
       verifySource dir =

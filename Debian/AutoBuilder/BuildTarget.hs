@@ -4,11 +4,11 @@ module Debian.AutoBuilder.BuildTarget
     , targetDocumentation
     ) where
 
+import Control.Applicative ((<$>))
 import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans (liftIO)
 import Data.List (intersperse)
 import Data.Monoid (mempty)
-import Data.Set (empty)
 import qualified Debian.AutoBuilder.BuildTarget.Apt as Apt
 import qualified Debian.AutoBuilder.BuildTarget.Cd as Cd
 import qualified Debian.AutoBuilder.BuildTarget.Darcs as Darcs
@@ -27,7 +27,7 @@ import qualified Debian.AutoBuilder.BuildTarget.Bzr as Bzr
 import qualified Debian.AutoBuilder.BuildTarget.Uri as Uri
 import qualified Debian.AutoBuilder.BuildTarget.Twice as Twice
 import qualified Debian.AutoBuilder.Types.CacheRec as C
-import Debian.AutoBuilder.Types.Download (Download(..), Download', download', SomeDownload(..))
+import Debian.AutoBuilder.Types.Download (Download(..), SomeDownload(..))
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Debianize (DebT)
@@ -39,6 +39,55 @@ import Debian.Repo.Internal.Repos (MonadRepos)
 import Debian.Repo.Top (MonadTop)
 import System.FilePath ((</>))
 
+data CdDL
+    = CdDL { cd :: P.RetrieveMethod
+           , fs :: [P.PackageFlag]
+           , dir :: FilePath
+           , parent :: SomeDownload
+           }
+
+instance Download CdDL where
+    method = cd
+    flags = fs
+    getTop x = getTop (parent x) </> dir x
+    logText x = logText (parent x) ++ " (in subdirectory " ++ dir x ++ ")"
+    cleanTarget x = cleanTarget (parent x)
+    attrs = attrs . parent
+
+data ProcDL
+    = ProcDL { procMethod :: P.RetrieveMethod
+             , procFlags :: [P.PackageFlag]
+             , base :: SomeDownload
+             }
+
+instance Download ProcDL where
+    method = procMethod
+    flags = procFlags
+    getTop = getTop . base
+    logText x = logText (base x) ++ " (with /proc mounted)"
+    cleanTarget = cleanTarget . base
+    buildWrapper _ = withProc
+    attrs = attrs . base
+
+data DirDL
+    = DirDL { dirMethod :: P.RetrieveMethod
+            , dirFlags :: [P.PackageFlag]
+            , dirTree :: SourceTree }
+
+instance Download DirDL where
+    method = dirMethod
+    flags = dirFlags
+    getTop = topdir . dirTree
+    logText x = "Built from local directory " ++ show (method x)
+
+data ZeroDL = ZeroDL
+
+instance Download ZeroDL where
+    method _ = P.Zero
+    flags _ = mempty
+    getTop _ = error "getTop Zero"
+    logText _ = error "logText Zero"
+
 -- | Given a RetrieveMethod, perform the retrieval and return the result.
 retrieve :: forall m. (MonadOS m, MonadRepos m, MonadTop m, MonadCatch m) =>
             DebT IO () -> C.CacheRec -> P.RetrieveMethod -> [P.PackageFlag] -> m SomeDownload
@@ -49,15 +98,7 @@ retrieve defaultAtoms cache method flags =
 
       P.Cd dir spec' ->
           retrieve defaultAtoms cache spec' flags >>= \ target' ->
-          return $ SomeDownload $ download' {- T.method = -} method
-                            {- , T.flags = -} flags
-                            {- , T.getTop = -} (getTop target' </> dir)
-                            {- , T.logText = -} (logText target' ++ " (in subdirectory " ++ dir ++ ")")
-                            {- , T.mVersion = -} Nothing
-                            {- , T.origTarball = -} Nothing
-                            {- , T.cleanTarget = -} (cleanTarget target')
-                            {- , T.buildWrapper = -} id
-                            {- , T.attrs = -} (T.attrs target')
+          return $ SomeDownload $ CdDL { cd = method, fs = flags, dir = dir, parent = target' }
 
       P.Darcs uri -> Darcs.prepare cache method flags uri
 
@@ -84,15 +125,9 @@ retrieve defaultAtoms cache method flags =
       -- of BuildTarget.
       P.Dir path ->
           do tree <- liftIO (findSourceTree path :: IO SourceTree)
-             return $ SomeDownload $ download' {- { T.method = -} method
-                                 {- , T.flags = -} flags
-                                 {- , T.getTop = -} (topdir tree)
-                                 {- , T.logText = -}  ("Built from local directory " ++ show method)
-                                 {- , T.mVersion = -} Nothing
-                                 {- , T.origTarball = -} Nothing
-                                 {- , T.cleanTarget = -} (\ _ -> return ([], 0))
-                                 {- , T.buildWrapper = -} id
-                                 {- , T.attrs = -} empty
+             return $ SomeDownload $ DirDL { dirMethod = method
+                                           , dirFlags = flags
+                                           , dirTree = tree }
 
       P.Git uri specs -> Git.prepare cache method flags uri specs
       P.Hackage package -> Hackage.prepare cache method flags package
@@ -103,16 +138,9 @@ retrieve defaultAtoms cache method flags =
 
       P.Proc spec' ->
           retrieve defaultAtoms cache spec' flags >>= \ base ->
-          return $ SomeDownload $ download'
-                     {-   T.method = -} method
-                     {- , T.flags = -} flags
-                     {- , T.getTop = -} (T.getTop base)
-                     {- , T.logText = -} (T.logText base ++ " (with /proc mounted)")
-                     {- , T.mVersion = -} Nothing
-                     {- , T.origTarball = -} Nothing
-                     {- , T.cleanTarget = -} (T.cleanTarget base)
-                     {- , T.buildWrapper = -} withProc
-                     {- , T.attrs = -} (T.attrs base)
+          return $ SomeDownload $ ProcDL { procMethod = method
+                                         , procFlags = flags
+                                         , base = base }
       P.Quilt base patches ->
           do base' <- retrieve defaultAtoms cache base flags
              patches' <- retrieve defaultAtoms cache patches flags
@@ -124,8 +152,8 @@ retrieve defaultAtoms cache method flags =
       P.Tla string -> Tla.prepare cache method flags string
       P.Twice base -> retrieve defaultAtoms cache base flags >>=
                       Twice.prepare method flags
-      P.Uri uri sum -> Uri.prepare cache method flags uri sum
-      P.Zero -> return $ SomeDownload $ download' P.Zero mempty mempty mempty Nothing mempty undefined undefined mempty
+      P.Uri uri sum -> SomeDownload <$> Uri.prepare cache method flags uri sum
+      P.Zero -> return $ SomeDownload ZeroDL
 
 {-
 -- | Perform an IO operation with /proc mounted

@@ -43,6 +43,30 @@ darcsRev tree m =
       path = topdir tree
 -}
 
+data DarcsDL
+    = DarcsDL
+      { flushSource :: Bool
+      , method :: RetrieveMethod
+      , flags :: [P.PackageFlag]
+      , uri :: String
+      , tree :: SourceTree
+      , attr :: String
+      }
+
+instance T.Download DarcsDL where
+    method = method
+    flags = flags
+    getTop = topdir . tree
+    logText x = "Darcs revision: " ++ show (method x)
+    mVersion _ = Nothing
+    origTarball _ = Nothing
+    cleanTarget x = \ top -> case any P.isKeepRCS (flags x) of
+                               False -> let cmd = shell ("find " ++ top ++ " -name '_darcs' -maxdepth 1 -prune | xargs rm -rf") in
+                                        timeTask (readProcFailing cmd "")
+                               True -> return ([], 0)
+    buildWrapper _ = id
+    attrs x = singleton (DarcsChangesId (attr x))
+
 prepare :: (MonadRepos m, MonadTop m) =>
            P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m T.SomeDownload
 prepare cache method flags theUri =
@@ -54,19 +78,12 @@ prepare cache method flags theUri =
       tree <- liftIO $ if exists then verifySource dir else createSource dir
       attr <- liftIO $ readProcFailing ((proc "darcs" ["log", "--xml-output"]) {cwd = Just dir}) "" >>=  return . show . md5 . collectProcessOutput
       _output <- liftIO $ fixLink base
-      return $ T.SomeDownload $ T.download' {- T.method = -} method
-                          {- , T.flags = -} flags
-                          {- , T.getTop = -} (topdir tree)
-                          {- , T.logText = -}  ("Darcs revision: " ++ show method)
-                          {- , T.mVersion = -} Nothing
-                          {- , T.origTarball = -} Nothing
-                          {- , T.cleanTarget = -}
-                              (\ top -> case any P.isKeepRCS flags of
-                                         False -> let cmd = shell ("find " ++ top ++ " -name '_darcs' -maxdepth 1 -prune | xargs rm -rf") in
-                                                  timeTask (readProcFailing cmd "")
-                                         True -> return ([], 0))
-                          {- , T.buildWrapper = -} id
-                          {- , T.attrs = -} (singleton (DarcsChangesId attr))
+      return $ T.SomeDownload $ DarcsDL { flushSource = P.flushSource (P.params cache)
+                                        , method = method
+                                        , flags = flags
+                                        , uri = theUri
+                                        , tree = tree
+                                        , attr = attr }
     where
       verifySource :: FilePath -> IO SourceTree
       verifySource dir =

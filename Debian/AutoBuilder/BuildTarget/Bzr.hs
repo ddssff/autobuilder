@@ -8,9 +8,8 @@ import Control.Monad.Trans
 import qualified Data.ByteString.Lazy.Char8 as L
 import Data.Digest.Pure.MD5 (md5)
 import Data.List
-import Data.Set (empty)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
-import Debian.AutoBuilder.Types.Download (Download(..), Download', download', SomeDownload(..))
+import Debian.AutoBuilder.Types.Download (Download(..), SomeDownload(..))
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Repo
@@ -27,6 +26,28 @@ documentation :: [String]
 documentation = [ "bzr:<revision> - A target of this form retrieves the a Bazaar archive with the"
                 , "given revision name." ]
 
+data BzrDL
+    = BzrDL
+      { bzrCache :: P.CacheRec
+      , bzrMethod :: RetrieveMethod
+      , bzrFlags :: [P.PackageFlag]
+      , bzrVersion :: String
+      , bzrTree :: SourceTree
+      }
+
+instance Download BzrDL where
+    method = bzrMethod
+    flags = bzrFlags
+    getTop = topdir . bzrTree
+    logText x = "Bazaar revision: " ++ show (method x)
+    cleanTarget x =
+        \ top ->
+            do qPutStrLn ("Clean Bazaar target in " ++ top)
+               case any P.isKeepRCS (flags x) of
+                 False -> let cmd = "find '" ++ top ++ "' -name '.bzr' -prune | xargs rm -rf" in
+                          timeTask (readProcFailing (shell cmd) "")
+                 True -> return ([], 0)
+
 prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m SomeDownload
 prepare cache method flags version =
   do
@@ -34,21 +55,11 @@ prepare cache method flags version =
     when (P.flushSource (P.params cache)) (liftIO (removeRecursiveSafely dir))
     exists <- liftIO $ doesDirectoryExist dir
     tree <- liftIO $ if exists then updateSource dir else createSource dir
-    return $ SomeDownload $ download'
-               {- { method = -} method
-               {- , flags = -} flags
-               {- , getTop = -} (topdir tree)
-               {- , logText = -} ("Bazaar revision: " ++ show method)
-               {- , mVersion = -} Nothing
-               {- , origTarball = -} Nothing
-               {- , cleanTarget = -} (\ top ->
-                   do qPutStrLn ("Clean Bazaar target in " ++ top)
-                      case any P.isKeepRCS flags of
-                        False -> let cmd = "find '" ++ top ++ "' -name '.bzr' -prune | xargs rm -rf" in
-                                 timeTask (readProcFailing (shell cmd) "")
-                        True -> return ([], 0))
-               {- , buildWrapper = -} id
-               {- , attrs = -} empty
+    return $ SomeDownload $ BzrDL { bzrCache = cache
+                                  , bzrMethod = method
+                                  , bzrFlags = flags
+                                  , bzrVersion = version
+                                  , bzrTree = tree }
     where
         -- Tries to update a pre-existant bazaar source tree
         updateSource dir =

@@ -15,7 +15,6 @@ import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as L
 import Data.List (isPrefixOf, tails, intercalate)
 import Data.Maybe (mapMaybe)
-import Data.Set (empty)
 --import Data.Text as T (empty, unpack)
 import Data.Version (Version, showVersion, parseVersion)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
@@ -41,6 +40,25 @@ documentation = [ "debianize:<name> or debianize:<name>=<version> - a target of 
                 , "(currently) retrieves source code from http://hackage.haskell.org and runs"
                 , "cabal-debian to create the debianization." ]
 
+data HackageDL
+    = HackageDL
+      { server :: String
+      , flushSource :: Bool
+      , method :: RetrieveMethod
+      , flags :: [P.PackageFlag]
+      , tree :: SourceTree
+      , version :: Version
+      , tar :: FilePath
+      }
+
+instance T.Download HackageDL where
+    method = method
+    flags = flags
+    getTop = topdir . tree
+    logText x = "Built from hackage, revision: " ++ show (method x)
+    mVersion = Just . version
+    origTarball = Just . tar
+
 prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m T.SomeDownload
 prepare cache method flags name =
     do let server = P.hackageServer (P.params cache) -- typically "hackage.haskell.org"
@@ -49,15 +67,13 @@ prepare cache method flags name =
        liftIO $ when (P.flushSource (P.params cache)) (removeRecursiveSafely tar)
        unp <- downloadCached server name version
        tree <- liftIO $ (findSourceTree unp :: IO SourceTree)
-       return $ T.SomeDownload $ T.download'{- T.method = -} method
-                           {- , T.flags = -} flags
-                           {- , T.getTop = -} (topdir tree)
-                           {- , T.logText = -}  ("Built from hackage, revision: " ++ show method)
-                           {- , T.mVersion = -} (Just version)
-                           {- , T.origTarball = -} (Just tar)
-                           {- , T.cleanTarget = -} (\ _ -> return ([], 0))
-                           {- , T.buildWrapper = -} id
-                           {- , T.attrs = -} Data.Set.empty
+       return $ T.SomeDownload $ HackageDL { server = P.hackageServer (P.params cache)
+                                           , flushSource = P.flushSource (P.params cache)
+                                           , method = method
+                                           , flags = flags
+                                           , tree = tree
+                                           , version = version
+                                           , tar = tar }
     where
       versionString = case mapMaybe P.cabalPin flags of
                         [] -> Nothing

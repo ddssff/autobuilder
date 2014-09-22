@@ -11,6 +11,7 @@ import Control.Monad.State (modify)
 import Control.Monad.Catch (MonadMask, bracket)
 import Control.Monad.Trans (MonadIO, liftIO)
 import Data.List (isSuffixOf)
+import Data.Version (Version)
 import Debian.AutoBuilder.BuildEnv (envSet)
 import Debian.AutoBuilder.Params (computeTopDir)
 import qualified Debian.AutoBuilder.Types.CacheRec as P (CacheRec(params))
@@ -38,6 +39,25 @@ documentation :: [String]
 documentation = [ "hackage:<name> or hackage:<name>=<version> - a target of this form"
                 , "retrieves source code from http://hackage.haskell.org." ]
 
+data DebianizeDL
+    = DebianizeDL { def :: DebT IO ()
+                  , cache :: P.CacheRec
+                  , method :: RetrieveMethod
+                  , debFlags :: [P.PackageFlag]
+                  , target :: T.SomeDownload
+                  , version :: Version
+                  , dir :: FilePath }
+
+instance T.Download DebianizeDL where
+    method = method
+    flags = debFlags
+    getTop = dir
+    logText x = "Built from hackage, revision: " ++ show (method x)
+    mVersion = Just . version
+    origTarball = T.origTarball . target
+    cleanTarget x = \ top -> T.cleanTarget (target x) top
+    attrs = T.attrs . target
+
 -- | Debianize the download, which is assumed to be a cabal package.
 prepare :: (MonadRepos m, MonadTop m, T.Download a) => DebT IO () -> P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> a -> m T.SomeDownload
 prepare defaultAtoms cache method flags target =
@@ -53,15 +73,13 @@ prepare defaultAtoms cache method flags target =
                 -- We want to see the original changelog, so don't remove this
                 -- removeRecursiveSafely (dir </> "debian")
                 liftIO $ autobuilderCabal cache flags dir defaultAtoms
-                return $ T.SomeDownload $ T.download' {- T.method = -} method
-                                    {- , T.flags = -} flags
-                                    {- , T.getTop = -} dir
-                                    {- , T.logText = -}  ("Built from hackage, revision: " ++ show method)
-                                    {- , T.mVersion = -} (Just version)
-                                    {- , T.origTarball = -} (T.origTarball target)
-                                    {- , T.cleanTarget = -} (\ top -> T.cleanTarget target top)
-                                    {- , T.buildWrapper = -} id
-                                    {- , T.attrs = -} (T.attrs target)
+                return $ T.SomeDownload $ DebianizeDL { def = defaultAtoms
+                                                      , cache = cache
+                                                      , method = method
+                                                      , debFlags = flags
+                                                      , target = T.SomeDownload target
+                                                      , version = version
+                                                      , dir = dir }
          _ -> error $ "Download at " ++ dir ++ ": missing or multiple cabal files"
 
 withCurrentDirectory :: (MonadMask m, MonadIO m) => FilePath -> m a -> m a

@@ -15,7 +15,6 @@ import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as B (readFile)
 import Data.Digest.Pure.MD5 (md5)
 import Data.List (isPrefixOf)
-import Data.Set (empty)
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
@@ -23,13 +22,13 @@ import qualified Debian.AutoBuilder.Types.ParamRec as P
 import qualified Debian.Repo as R (readProcFailing, topdir, SourceTree, findSourceTree)
 import Debian.Repo.Fingerprint (RetrieveMethod)
 import Debian.Repo.Internal.Repos (MonadRepos)
+import Debian.Repo.Prelude.Verbosity (timeTask)
 import Debian.Repo.Top (MonadTop, sub)
 import Debian.URI
 import Magic
 import System.FilePath (splitFileName, (</>))
 import System.Directory
 import System.Process (shell)
-import Debian.Repo.Prelude.Verbosity (timeTask)
 import System.Unix.Directory
 
 documentation :: [String]
@@ -38,22 +37,41 @@ documentation = [ "uri:<string>:<md5sum> - A target of this form retrieves the f
                 , "suffix causes the build to fail if the downloaded file does not match"
                 , "this checksum.  This prevents builds when the remote tarball has changed." ]
 
+data UriDL
+    = UriDL { flushSource :: Bool
+            , method :: RetrieveMethod
+            , flags :: [P.PackageFlag]
+            , u :: String
+            , s :: String
+            , uri :: URI
+            , cksum :: FilePath
+            , tree :: R.SourceTree
+            , tar :: FilePath
+            }
+
+instance T.Download UriDL where
+    method = method
+    flags = flags
+    getTop = R.topdir . tree
+    logText x = "Built from URI download " ++ uriToString' (uri x)
+    origTarball x = Just (tar x)
+
 -- | A URI that returns a tarball, with an optional md5sum which must
 -- match if given.  The purpose of the md5sum is to be able to block
 -- changes to the tarball on the remote host.
-prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> String -> m T.SomeDownload
+prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> String -> m UriDL
 prepare c method flags u s =
-    do (uri, sum, tree) <- checkTarget >>= downloadTarget >> validateTarget >>= unpackTarget
-       tar <- tarball (uriToString' uri) sum
-       return $ T.SomeDownload $ T.download' {- T.method = -} method
-                            {- T.flags = -} flags
-                            {- T.getTop = -} (R.topdir tree)
-                            {- T.logText = -} ("Built from URI download " ++ (uriToString' uri))
-                            {- T.mVersion = -} Nothing
-                            {- T.origTarball = -} (Just tar)
-                            {- T.cleanTarget = -} (\ _ -> return ([], 0))
-                            {- T.buildWrapper = -} id
-                            {- T.attrs = -} empty
+    do (uri, cksum, tree) <- checkTarget >>= downloadTarget >> validateTarget >>= unpackTarget
+       tar <- tarball (uriToString' uri) cksum
+       return $ UriDL { flushSource = P.flushSource (P.params c)
+                      , method = method
+                      , flags = flags
+                      , u = u
+                      , s = s
+                      , uri = uri
+                      , cksum = cksum
+                      , tree = tree
+                      , tar = tar }
     where
       checkTarget :: (MonadRepos m, MonadTop m) => m Bool
       checkTarget =

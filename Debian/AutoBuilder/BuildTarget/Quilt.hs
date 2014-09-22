@@ -84,6 +84,23 @@ makeQuiltTree m base patch =
 failing f _ (Failure x) = f x
 failing _ s (Success x) = s x
 
+data QuiltDL
+    = QuiltDL
+      { method :: RetrieveMethod
+      , flags :: [P.PackageFlag]
+      , base :: T.SomeDownload
+      , patch :: T.SomeDownload
+      , tree :: SourceTree
+      }
+
+instance T.Download QuiltDL where
+    method = method
+    flags = flags
+    getTop = topdir . tree
+    logText x = "Quilt revision " ++ show (method x)
+    cleanTarget x = (\ top -> T.cleanTarget (base x) top)
+    attrs x = union (T.attrs (base x)) (T.attrs (patch x))
+
 prepare :: (MonadRepos m, MonadTop m, T.Download a, T.Download b) => RetrieveMethod -> [P.PackageFlag] -> a -> b -> m T.SomeDownload
 prepare method flags base patch = do
     qPutStrLn "Preparing quilt target"
@@ -96,7 +113,7 @@ prepare method flags base patch = do
                 pc = (quiltDir ++ "/.pc")
                 pch = (quiltDir ++ "/.pc.hide")
                 rmrf d = readProcFailing (shell ("rm -rf '"  ++ d ++ "'")) ""
-      make :: (T.Download a, a ~ T.Download') => (SourceTree, FilePath) -> IO a
+      make :: (SourceTree, FilePath) -> IO T.SomeDownload
       make (quiltTree, quiltDir) =
           do applied <- readProcFailing (shell cmd1a) "" >>= qMessage "Checking for applied patches" >>= return . collectProcessTriple
              case applied of
@@ -129,16 +146,11 @@ prepare method flags base patch = do
                                      (ExitSuccess, _, _) ->
                                          do tree <- findSourceTree (topdir quiltTree) :: IO SourceTree
                                             -- return $ Quilt base patch tree m
-                                            return $ T.download'
-                                                       {-   T.method = -} method
-                                                       {- , T.flags = -} flags
-                                                       {- , T.getTop = -} (topdir tree)
-                                                       {- , T.logText = -} ("Quilt revision " ++ show method)
-                                                       {- , T.mVersion = -} Nothing
-                                                       {- , T.origTarball = -} Nothing
-                                                       {- , T.cleanTarget = -} (\ top -> T.cleanTarget base top)
-                                                       {- , T.buildWrapper = -} id
-                                                       {- , T.attrs = -} (union (T.attrs base) (T.attrs patch))
+                                            return $ T.SomeDownload $ QuiltDL { method = method
+                                                                              , flags = flags
+                                                                              , base = T.SomeDownload base
+                                                                              , patch = T.SomeDownload patch
+                                                                              , tree = tree }
                                      _ -> fail $ target ++ " - Failure removing quilt directory: " ++ cmd3
                (ExitFailure _, _, err) -> fail $ target ++ " - Unexpected output from quilt applied: " ++ decode err
                (_, _, _) -> fail $ target ++ " - Unexpected result code (ExitSuccess) from " ++ show cmd1a

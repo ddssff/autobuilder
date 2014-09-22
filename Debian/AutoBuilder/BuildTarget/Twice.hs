@@ -11,17 +11,22 @@ documentation = [ "twice:<target> - A target of this form modifies another targe
                 , "the first time.  For some reason, certain packages are designed"
                 , "to fail the first time to prevent fully automated builds."]
 
+data TwiceDL
+    = TwiceDL { method :: RetrieveMethod
+              , flags :: [P.PackageFlag]
+              , base :: T.SomeDownload }
+
+instance T.Download TwiceDL where
+    method = method
+    flags = flags
+    getTop = T.getTop . base
+    logText x = T.logText (base x) ++ " (twice if necessary)"
+    cleanTarget x = T.cleanTarget (base x)
+    -- This is a quick and dirty implementation, if you nest this inside another
+    -- target type it will have no effect.
+    buildWrapper _ = (\ action -> action >> action)
+    attrs = T.attrs . base
+
 prepare :: (MonadRepos m, T.Download a) => RetrieveMethod -> [P.PackageFlag] -> a -> m T.SomeDownload
 prepare method flags base =
-    do return $ T.SomeDownload $ T.download'
-                  {-  T.method = -} method
-                  {- , T.flags = -} flags
-                  {- , T.getTop = -} (T.getTop base)
-                  {- , T.logText = -} (T.logText base ++ " (twice if necessary)")
-                  {- , T.mVersion = -} Nothing
-                  {- , T.origTarball = -} Nothing
-                  {- , T.cleanTarget = -} (T.cleanTarget base)
-                  -- This is a quick and dirty implementation, if you nest this inside another
-                  -- target type it will have no effect.
-                  {- , T.buildWrapper = -} (\ action -> action >> action)
-                  {- , T.attrs = -} (T.attrs base)
+    do return $ T.SomeDownload $ TwiceDL {method = method, flags = flags, base = T.SomeDownload base}
