@@ -6,9 +6,9 @@ module Debian.AutoBuilder.Main
     ( main
     ) where
 
---import Control.Arrow (first)
+import Control.Arrow (first)
 import Control.Applicative ((<$>))
-import Control.Applicative.Error (Failing(..))
+import Control.Applicative.Error (Failing(..), ErrorMsg)
 import Control.Exception(SomeException, AsyncException(UserInterrupt), fromException, toException, try)
 import Control.Monad(foldM, when)
 import Control.Monad.Catch (MonadMask, catch, throwM)
@@ -17,7 +17,9 @@ import qualified Data.ByteString.Lazy as L
 import Data.Either (partitionEithers)
 import Data.Generics (listify)
 import Data.List as List (intercalate, null, nub)
-import Data.Monoid ((<>))
+import Data.Monoid ((<>), mconcat)
+import Data.Text as LT (unpack)
+import Data.Text.Encoding (decodeUtf8)
 import Data.Time(NominalDiffTime)
 import Debian.AutoBuilder.BuildEnv (prepareDependOS, prepareBuildOS)
 import Debian.AutoBuilder.BuildTarget (retrieve)
@@ -62,7 +64,7 @@ import System.Exit(ExitCode(..), exitWith)
 import System.FilePath ((</>))
 import System.IO as IO
 import System.Process (proc)
-import System.Process.ListLike (Chunk, showCmdSpecForUser, cmdspec)
+import System.Process.ListLike (Chunk, showCmdSpecForUser, cmdspec, readProcessInterleaved, indentChunks, collectOutputAndError)
 import Debian.Repo.Prelude.Verbosity (timeTask, ePutStrLn, ePutStr, qPutStrLn, qPutStr, withModifiedVerbosity, defaultVerbosity, noisier)
 -- import System.Process.Read.Verbosity (defaultVerbosity, withModifiedVerbosity, withModifiedVerbosity)
 import System.Unix.Directory(removeRecursiveSafely)
@@ -159,11 +161,18 @@ runParameterSet init cache =
       let poolSources = NamedSliceList { sliceListName = ReleaseName (relName (sliceListName buildRelease) ++ "-all")
                                        , sliceList = appendSliceLists [buildRepoSources, localSources] }
 
-      withAptImage (P.ifSourcesChanged params) poolSources
-                       (buildTargets cache dependOS buildOS local targets >>=
-                        noisier 1 . upload >>=
-                        liftIO . newDist)
+      withAptImage (P.ifSourcesChanged params) poolSources $ do
+        buildResult <- buildTargets cache dependOS buildOS local targets
+        uploadResult <- noisier 1 $ upload buildResult
+        liftIO $ newDist (partitionFailing uploadResult)
     where
+      partitionFailing :: [Failing a] -> ([ErrorMsg], [a])
+      partitionFailing xs =
+          first concat $
+          partitionEithers $
+          map (\ x -> case x of
+                        (Failure ms) -> Left ms
+                        (Success a) -> Right a) xs
       notZero x = null (listify (\ x -> case x of P.Zero -> True; _ -> False) x)
       retrieveTarget :: (MonadReposCached m) => EnvRoot -> Int -> Int -> (P.RetrieveMethod, [P.PackageFlag]) -> m (Either String (Buildable SomeDownload))
       retrieveTarget buildOS count index (method, flags) = do
@@ -228,8 +237,8 @@ runParameterSet init cache =
                True -> qPutStrLn "Skipping upload."
                False -> return ()
              error msg
-      newDist :: [Failing ([Chunk L.ByteString], NominalDiffTime)] -> IO (Failing ([Chunk L.ByteString], NominalDiffTime))
-      newDist _results
+      newDist :: ([ErrorMsg], [([Chunk L.ByteString], NominalDiffTime)]) -> IO (Failing ([Chunk L.ByteString], NominalDiffTime))
+      newDist ([], _)
           | P.doNewDist params =
               case P.uploadURI params of
                 Just uri ->
@@ -245,9 +254,18 @@ runParameterSet init cache =
                                          args = ["--sign", "--root", uriPath uri] in
                                      (proc cmd args)
                        qPutStrLn (showCmdSpecForUser (cmdspec p))
-                       try (timeTask (readProcFailing p "")) >>= return . either (\ (e :: SomeException) -> Failure [show e]) Success
+                       result <- try (timeTask (readProcessInterleaved (\ _ -> return ()) p "")) >>= return . either (\ (e :: SomeException) -> Failure [show e]) testOutput
+                       case result of
+                         (Success _) -> return result
+                         (Failure msgs) -> ePutStrLn (intercalate "\n " ("newdist failed:" : msgs)) >> return result
+                       return result
                 _ -> error "Missing Upload-URI parameter"
           | True = return (Success ([], (fromInteger 0)))
+      newDist (errors, _) = return $ Failure errors
+
+      testOutput :: ((ExitCode, [Chunk L.ByteString]), NominalDiffTime) -> Failing ([Chunk L.ByteString], NominalDiffTime)
+      testOutput ((ExitSuccess, xs), t) = Success (xs, t)
+      testOutput ((code, xs), t) = Failure [show code <> "\n" <> LT.unpack (decodeUtf8 (mconcat (L.toChunks (collectOutputAndError (indentChunks " 1> " " 2> " xs :: [Chunk L.ByteString])))))]
 
 -- | Make sure the build release ("P.buildRelease params") - the
 -- release and repository to which we intend to upload the packages
