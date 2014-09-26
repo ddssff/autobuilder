@@ -62,7 +62,7 @@ import System.Exit(ExitCode(..), exitWith)
 import System.FilePath ((</>))
 import System.IO as IO
 import System.Process (proc)
-import System.Process.ListLike (Chunk)
+import System.Process.ListLike (Chunk, showCmdSpecForUser, cmdspec)
 import Debian.Repo.Prelude.Verbosity (timeTask, ePutStrLn, ePutStr, qPutStrLn, qPutStr, withModifiedVerbosity, defaultVerbosity, noisier)
 -- import System.Process.Read.Verbosity (defaultVerbosity, withModifiedVerbosity, withModifiedVerbosity)
 import System.Unix.Directory(removeRecursiveSafely)
@@ -233,19 +233,19 @@ runParameterSet init cache =
           | P.doNewDist params =
               case P.uploadURI params of
                 Just uri ->
-                    case uriAuthority uri of
-                         Just auth ->
-                             let cmd = "ssh"
-                                 args = [uriUserInfo auth ++ uriRegName auth, P.newDistProgram params,
-                                         "--sign", "--root", uriPath uri] ++
-                                        (concat . map (\ rel -> ["--create", rel]) . P.createRelease $ params) in
-                             qPutStrLn "Running newdist on remote repository" >>
-                             try (timeTask (readProcFailing (proc cmd args) "")) >>= return . either (\ (e :: SomeException) -> Failure [show e]) Success
-                         Nothing ->
-                             let cmd = P.newDistProgram params
-                                 args = ["--sign", "--root", uriPath uri] in
-                             qPutStr "Running newdist on a local repository" >>
-                             try (timeTask (readProcFailing (proc cmd args) "")) >>= return . either (\ (e :: SomeException) -> Failure [show e]) Success
+                    do let p = case uriAuthority uri of
+                                 Just auth ->
+                                     let cmd = "ssh"
+                                         args = [uriUserInfo auth ++ uriRegName auth, P.newDistProgram params,
+                                                 "--sign", "--root", uriPath uri] ++
+                                                (concat . map (\ rel -> ["--create", rel]) . P.createRelease $ params) in
+                                     (proc cmd args)
+                                 _ ->
+                                     let cmd = P.newDistProgram params
+                                         args = ["--sign", "--root", uriPath uri] in
+                                     (proc cmd args)
+                       qPutStrLn (showCmdSpecForUser (cmdspec p))
+                       try (timeTask (readProcFailing p "")) >>= return . either (\ (e :: SomeException) -> Failure [show e]) Success
                 _ -> error "Missing Upload-URI parameter"
           | True = return (Success ([], (fromInteger 0)))
 
