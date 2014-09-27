@@ -12,7 +12,7 @@ module Debian.AutoBuilder.Types.ParamRec
 
 import Control.Arrow (first)
 import Data.Generics (listify, geq)
-import Data.List as List (map)
+import Data.List as List (map, isInfixOf)
 import Data.Monoid (mempty, mappend)
 import Data.Set as Set (Set, insert, toList)
 import Debian.Arch (Arch)
@@ -79,7 +79,7 @@ data ParamRec =
     -- changed.  some methods for obtaining the source code of a
     -- package to be built.  See "Debian.AutoBuilder.BuildTarget" for
     -- information about the available target types.
-    , patterns :: [RetrieveMethod]
+    , patterns :: [String]
     -- ^ Targets will be retrieved from the global list based on
     -- whether they contain any of these RetrieveMethod values:
     -- e.g. Hackage "pureMD5"
@@ -395,8 +395,8 @@ optSpecs =
                , "or was flushed from the local repository without being uploaded."])
     , Option [] ["target", "group"] (ReqArg (\ s -> (Right (\ p -> p {targets = addTarget (GroupName s) p}))) "GROUP NAME")
       "Add a target to the target list."
-    , Option [] ["pattern"] (ReqArg (\ s -> (Right (\ p -> p {patterns = readPattern s ++ patterns p}))) "EXPRESSION")
-      "Find targets by pattern matching"
+    , Option [] ["pattern"] (ReqArg (\ s -> (Right (\ p -> p {patterns = s : patterns p}))) "STRING")
+      "Find targets that contain this text"
     , Option [] ["discard"] (ReqArg (\ s -> (Right (\ p -> p {discard = Set.insert (SrcPkgName s) (discard p)}))) "PACKAGE")
       (unlines [ "Add a target to the discard list, packages which we discard as soon"
                , "as they are ready to build, along with any packages that depend on them." ])
@@ -521,7 +521,7 @@ buildPackages :: ParamRec -> Packages
 buildPackages params =
     case targets params of
       TargetSpec {allTargets = True} -> knownPackages params
-      TargetSpec {groups = names} -> Packages {list = map findByName (toList names) ++ map APackage (concatMap findByPattern (patterns params))}
+      TargetSpec {groups = names} -> Packages {list = map findByName (toList names) ++ map APackage (findByPattern (patterns params))}
     where
       findByName :: GroupName -> Packages
       findByName s =
@@ -535,7 +535,10 @@ buildPackages params =
             h r = r
       -- Filter the singleton packages by whether its RetrieveMethod
       -- contains pat.
-      findByPattern  :: RetrieveMethod -> [Package]
-      findByPattern pat = foldPackages (\ p r -> case listify (geq pat) (spec p) of
-                                                   [] -> r
-                                                   _ -> p : r) (knownPackages params) []
+      findByPattern :: [String] -> [Package]
+      findByPattern pats =
+          foldPackages (\ p r -> case testPatterns pats p of
+                                   False -> r
+                                   True -> p : r) (knownPackages params) []
+      testPatterns :: [String] -> Package -> Bool
+      testPatterns pats p = any (\ s -> not $ null $ listify (isInfixOf s) p) pats
