@@ -80,7 +80,7 @@ Library
       , parsec
       , prettyclass
       , process
-      , process-listlike >= 1
+      , process-listlike >= 1.3
       , pureMD5
       , regex-compat
       , regex-posix

@@ -254,7 +254,7 @@ runParameterSet init cache =
                                          args = ["--sign", "--root", uriPath uri] in
                                      (proc cmd args)
                        qPutStrLn (showCmdSpecForUser (cmdspec p))
-                       result <- try (timeTask (readProcessInterleaved (\ _ -> return ()) p "")) >>= return . either (\ (e :: SomeException) -> Failure [show e]) testOutput
+                       result <- try (timeTask (readProcessInterleaved p L.empty)) >>= return . either (\ (e :: SomeException) -> Failure [show e]) testOutput
                        case result of
                          (Success _) -> return result
                          (Failure msgs) -> ePutStrLn (intercalate "\n " ("newdist failed:" : msgs)) >> return result
