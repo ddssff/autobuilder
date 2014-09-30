@@ -75,8 +75,8 @@ import System.IO (hPutStrLn, stderr)
 import System.Posix.Files (fileSize, getFileStatus)
 import System.Process (CreateProcess(cwd), proc, readProcessWithExitCode, shell, showCommandForUser)
 import Debian.Repo.Prelude.Verbosity (ePutStrLn, noisier, qPutStrLn, quieter, ePutStr, readProcFailing, modifyProcessEnv)
-import System.Process.ListLike (collectProcessTriple, collectProcessOutput', collectOutputAndError')
-import System.Process.ByteString (readProcessChunks)
+import System.Process.Chunks (collectProcessTriple, collectProcessOutput)
+import System.Process.ByteString (readCreateProcess)
 import System.Unix.Chroot (useEnv)
 import Text.Printf (printf)
 import Text.Regex (matchRegex, mkRegex)
@@ -413,9 +413,9 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
              _ <- liftIO $ useEnv' root (\ _ -> return ())
                              (-- Get the version number of dpkg-dev in the build environment
                               let p = shell ("dpkg -s dpkg-dev | sed -n 's/^Version: //p'") in
-                              readProcFailing p "" >>= collectProcessOutput' p >>= return . head . words . L.unpack >>= \ installed ->
+                              readProcFailing p "" >>= (\ (_, out, _) -> return out) . collectProcessTriple >>= return . head . words . L.unpack >>= \ installed ->
                               -- If it is >= 1.16.1 we may need to run dpkg-source --commit.
-                              readProcessChunks (shell ("dpkg --compare-versions '" ++ installed ++ "' ge 1.16.1")) "" >>= return . collectProcessTriple >>= \ (result, _, _) -> return (result == ExitSuccess) >>= \ newer ->
+                              readCreateProcess (shell ("dpkg --compare-versions '" ++ installed ++ "' ge 1.16.1")) "" >>= return . collectProcessTriple >>= \ (result, _, _) -> return (result == ExitSuccess) >>= \ newer ->
                               when newer (doesDirectoryExist (path' </> "debian/patches") >>= doDpkgSource)
                               {- when newer (do createDirectoryIfMissing True (path' </> "debian/patches")
                                              -- Create the patch if there are any changes
@@ -716,10 +716,10 @@ updateChangesFile elapsed changes = do
 {-    autobuilderVersion <- processOutput "dpkg -s autobuilder | sed -n 's/^Version: //p'" >>=
                             return . either (const Nothing) Just >>=
                             return . maybe Nothing (listToMaybe . lines) -}
-      hostname <- let p = shell "hostname" in readProcFailing p "" >>= collectProcessOutput' p >>= return . listToMaybe . lines . L.unpack
+      hostname <- let p = shell "hostname" in readProcFailing p "" >>= (\ (_, out, _) -> return out) . collectProcessTriple >>= return . listToMaybe . lines . L.unpack
       cpuInfo <- parseProcCpuinfo
       memInfo <- parseProcMeminfo
-      machine <- let p = shell "uname -m" in readProcFailing p "" >>= collectProcessOutput' p >>= return . listToMaybe . lines . L.unpack
+      machine <- let p = shell "uname -m" in readProcFailing p "" >>= (\ (_, out, _) -> return out) . collectProcessTriple >>= return . listToMaybe . lines . L.unpack
       date <- getCurrentLocalRFC822Time
       let buildInfo = ["Autobuilder-Version: " ++ V.autoBuilderVersion] ++
                       ["Time: " ++ show elapsed] ++
@@ -774,7 +774,7 @@ buildDependencies downloadOnly source extra sourceFingerprint =
        if downloadOnly then (qPutStrLn $ "Dependency packages:\n " ++ intercalate "\n  " (showDependencies' sourceFingerprint)) else return ()
        qPutStrLn $ (if downloadOnly then "Downloading" else "Installing") ++ " build dependencies into " ++ root
        out <- withProc (liftIO (useEnv' root forceList (noisier 2 (readProcFailing command "")) >>=
-                                collectOutputAndError' command))
+                                return . snd . collectProcessOutput))
        return $ decode out
 
 -- | This should probably be what the real useEnv does.

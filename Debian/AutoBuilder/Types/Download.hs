@@ -15,7 +15,7 @@ import Debian.AutoBuilder.Types.Packages (PackageFlag)
 import Debian.Repo.Fingerprint (RetrieveMethod(..), RetrieveAttribute(..))
 import Debian.Repo.MonadOS (MonadOS)
 import Debian.Repo.Top (MonadTop)
-import System.Process.ListLike (Chunk)
+import System.Process.Chunks (Chunk)
 
 class Download a where
     method :: a -> RetrieveMethod

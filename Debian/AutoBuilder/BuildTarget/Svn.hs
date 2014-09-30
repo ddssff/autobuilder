@@ -19,7 +19,7 @@ import System.Directory
 import System.Exit
 import System.FilePath (splitFileName, (</>))
 import System.Process (shell, proc)
-import System.Process.ListLike (Chunk, collectProcessTriple)
+import System.Process.Chunks (Chunk, collectProcessTriple)
 import Debian.Repo.Prelude.Verbosity (timeTask)
 import System.Unix.Directory
 

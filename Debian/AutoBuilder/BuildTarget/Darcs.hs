@@ -18,8 +18,8 @@ import System.Directory
 import System.Exit (ExitCode(..))
 import System.FilePath
 import System.Process (shell, proc, CreateProcess(cwd))
-import System.Process.ListLike (collectProcessTriple, collectProcessOutput)
-import System.Process.String (readProcessChunks)
+import System.Process.Chunks (collectProcessTriple)
+import System.Process.ListLike (readCreateProcess)
 import Debian.Repo.Prelude.Verbosity (timeTask)
 import System.Unix.Directory
 
@@ -82,7 +82,7 @@ prepare method flags theUri =
       let dir = base ++ "/" ++ sum
       exists <- liftIO $ doesDirectoryExist dir
       tree <- liftIO $ if exists then verifySource dir else createSource dir
-      attr <- liftIO $ readProcFailing ((proc "darcs" ["log", "--xml-output"]) {cwd = Just dir}) "" >>=  return . show . md5 . collectProcessOutput
+      attr <- liftIO $ readProcFailing ((proc "darcs" ["log", "--xml-output"]) {cwd = Just dir}) "" >>=  return . show . md5 . (\ (_, x, _) -> x) . collectProcessTriple
       _output <- liftIO $ fixLink base
       return $ T.SomeDownload $ DarcsDL { method = method
                                         , flags = flags
@@ -93,7 +93,7 @@ prepare method flags theUri =
       verifySource :: FilePath -> IO SourceTree
       verifySource dir =
           -- Note that this logic is the opposite of 'tla changes'
-          do (result, _, _) <- readProcessChunks ((proc "darcs" ["whatsnew"]) {cwd = Just dir}) "" >>= return . collectProcessTriple
+          do (result, _, _) <- readCreateProcess ((proc "darcs" ["whatsnew"]) {cwd = Just dir}) ("" :: String) >>= return . collectProcessTriple
              case result of
                ExitSuccess -> removeSource dir >> createSource dir		-- Yes changes
                _ -> updateSource dir				-- No Changes!

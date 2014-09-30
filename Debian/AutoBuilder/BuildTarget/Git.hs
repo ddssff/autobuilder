@@ -18,7 +18,8 @@ import System.Directory
 import System.Exit (ExitCode(..))
 import System.FilePath
 import System.Process (proc, shell, CreateProcess(cwd, cmdspec))
-import System.Process.String (readCreateProcessWithExitCode, collectProcessTriple, collectProcessOutput', showCmdSpecForUser, displayCreateProcess)
+import System.Process.Chunks (collectProcessTriple, showCmdSpecForUser, showCreateProcessForUser)
+import System.Process.String (readCreateProcessWithExitCode)
 import System.Unix.Directory
 import Text.Regex
 
@@ -30,7 +31,7 @@ documentation = [ "darcs:<string> - a target of this form obtains the source cod
 
 darcsRev :: SourceTree -> RetrieveMethod -> IO (Either SomeException String)
 darcsRev tree m =
-    try (readProcFailing (cmd {cwd = Just path}) mempty >>= collectProcessOutput' cmd >>=
+    try (readProcFailing (cmd {cwd = Just path}) mempty >>= (\ (_, out, _) -> return out) . collectProcessTriple >>=
          return . matchRegex (mkRegex "hash='([^']*)'") . B.unpack) >>=
     return . either Left (maybe (fail $ "could not find hash field in output of '" ++ showCmdSpecForUser (cmdspec cmd) ++ "'")
                                 (\ rev -> Right (show m ++ "=" ++ head rev)))
@@ -82,7 +83,7 @@ prepare method flags theUri gitspecs =
       (code, out, _) <- readCreateProcessWithExitCode p ""
       commit <- case code of
                   ExitSuccess -> return . head . lines $ out
-                  _ -> error $ displayCreateProcess p ++ " -> " ++ show code
+                  _ -> error $ showCreateProcessForUser p ++ " -> " ++ show code
       return $ T.SomeDownload $ GitDL { method = method
                                       , flags = flags
                                       , uri = theUri
@@ -121,7 +122,7 @@ prepare method flags theUri gitspecs =
              let p = proc "git" (["clone", renderForGit theUri'] ++ concat (map (\ x -> case x of (Branch s) -> ["--branch", s]; _ -> []) gitspecs) ++ [dir])
              (code, _, _) <- readProcFailing p "" >>= return . collectProcessTriple
              case (code, mapMaybe (\ x -> case x of (Commit s) -> Just s; _ -> Nothing) gitspecs) of
-                    (ExitFailure _, _) -> error $ "Git failed: " ++ displayCreateProcess p ++ " -> " ++ show code
+                    (ExitFailure _, _) -> error $ "Git failed: " ++ showCreateProcessForUser p ++ " -> " ++ show code
                     (_, []) -> return ()
                     (_, [commit]) -> do
                       (code2, _, _) <- readProcFailing ((proc "git" ["reset", "--hard", commit]) {cwd = Just dir}) "" >>= return . collectProcessTriple

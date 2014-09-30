@@ -52,7 +52,6 @@ import Debian.Repo.State.Slice (repoSources, updateCacheSources)
 import Debian.Repo.Top (MonadTop(askTop))
 import Debian.Repo.EnvPath (EnvPath(..))
 import Debian.Repo.LocalRepository (LocalRepository, repoRoot)
-import Debian.Repo.Prelude (readProcFailing)
 import Debian.URI(URI(uriPath, uriAuthority), URIAuth(uriUserInfo, uriRegName, uriPort), parseURI)
 import Debian.Version(DebianVersion, parseDebianVersion, prettyDebianVersion)
 import Extra.Lock(withLock)
@@ -63,8 +62,9 @@ import System.Directory(createDirectoryIfMissing)
 import System.Exit(ExitCode(..), exitWith)
 import System.FilePath ((</>))
 import System.IO as IO
-import System.Process (proc)
-import System.Process.ListLike (Chunk, showCmdSpecForUser, cmdspec, readProcessInterleaved, indentChunks, collectOutputAndError)
+import System.Process (proc, cmdspec)
+import System.Process.Chunks (Chunk, showCmdSpecForUser, indentChunks, collectProcessOutput)
+import System.Process.ListLike (readCreateProcess)
 import Debian.Repo.Prelude.Verbosity (timeTask, ePutStrLn, ePutStr, qPutStrLn, qPutStr, withModifiedVerbosity, defaultVerbosity, noisier)
 -- import System.Process.Read.Verbosity (defaultVerbosity, withModifiedVerbosity, withModifiedVerbosity)
 import System.Unix.Directory(removeRecursiveSafely)
@@ -254,7 +254,7 @@ runParameterSet init cache =
                                          args = ["--sign", "--root", uriPath uri] in
                                      (proc cmd args)
                        qPutStrLn (showCmdSpecForUser (cmdspec p))
-                       result <- try (timeTask (readProcessInterleaved p L.empty)) >>= return . either (\ (e :: SomeException) -> Failure [show e]) testOutput
+                       result <- try (timeTask (readCreateProcess p L.empty)) >>= return . either (\ (e :: SomeException) -> Failure [show e]) testOutput
                        case result of
                          (Success _) -> return result
                          (Failure msgs) -> ePutStrLn (intercalate "\n " ("newdist failed:" : msgs)) >> return result
@@ -265,7 +265,8 @@ runParameterSet init cache =
 
       testOutput :: ((ExitCode, [Chunk L.ByteString]), NominalDiffTime) -> Failing ([Chunk L.ByteString], NominalDiffTime)
       testOutput ((ExitSuccess, xs), t) = Success (xs, t)
-      testOutput ((code, xs), t) = Failure [show code <> "\n" <> LT.unpack (decodeUtf8 (mconcat (L.toChunks (collectOutputAndError (indentChunks " 1> " " 2> " xs :: [Chunk L.ByteString])))))]
+      testOutput ((code, xs), t) =
+          Failure [show code <> "\n" <> (LT.unpack $ decodeUtf8 $ mconcat $ L.toChunks $ snd $ collectProcessOutput $ indentChunks " 1> " " 2> " (xs :: [Chunk L.ByteString]))]
 
 -- | Make sure the build release ("P.buildRelease params") - the
 -- release and repository to which we intend to upload the packages
