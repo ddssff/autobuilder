@@ -7,6 +7,7 @@ module Debian.AutoBuilder.BuildTarget.Darcs
 import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as B
 import Data.Digest.Pure.MD5 (md5)
+import Data.List (sort)
 import Data.Maybe (mapMaybe)
 import Data.Set (singleton)
 import qualified Debian.AutoBuilder.Types.Download as T
@@ -82,7 +83,10 @@ prepare method flags theUri =
       let dir = base ++ "/" ++ sum
       exists <- liftIO $ doesDirectoryExist dir
       tree <- liftIO $ if exists then verifySource dir else createSource dir
-      attr <- liftIO $ readProcFailing ((proc "darcs" ["log", "--xml-output"]) {cwd = Just dir}) "" >>=  return . show . md5 . (\ (_, x, _) -> x) . collectProcessTriple
+      -- Filter out the patch hash values, sort them because darcs
+      -- patches don't have a total ordering, and then return the
+      -- checksum.
+      attr <- liftIO $ readProcFailing ((proc "darcs" ["log"]) {cwd = Just dir}) "" >>= return . show . md5 . B.unlines . sort . filter (B.isPrefixOf "patch ") . B.lines . (\ (_, x, _) -> x) . collectProcessTriple
       _output <- liftIO $ fixLink base
       return $ T.SomeDownload $ DarcsDL { method = method
                                         , flags = flags
