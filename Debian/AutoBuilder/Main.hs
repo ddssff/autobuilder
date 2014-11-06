@@ -63,7 +63,7 @@ import System.Exit(ExitCode(..), exitWith)
 import System.FilePath ((</>))
 import System.IO as IO
 import System.Process (proc, cmdspec)
-import System.Process.Chunks (Chunk, showCmdSpecForUser, indentChunks, collectProcessOutput)
+import System.Process.ChunkE (Chunk, showCmdSpecForUser, indentChunks, collectProcessOutput)
 import System.Process.ListLike (readCreateProcess)
 import Debian.Repo.Prelude.Process (timeTask)
 import Debian.Repo.Prelude.Verbosity (ePutStrLn, ePutStr, qPutStrLn, qPutStr, withModifiedVerbosity, noisier)

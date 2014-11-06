@@ -18,7 +18,7 @@ import System.Directory
 import System.Exit (ExitCode(..))
 import System.FilePath
 import System.Process (proc, shell, CreateProcess(cwd, cmdspec))
-import System.Process.Chunks (collectProcessTriple, showCmdSpecForUser, showCreateProcessForUser)
+import System.Process.ChunkE (collectProcessTriple, showCmdSpecForUser, showCreateProcessForUser)
 import System.Process.String (readCreateProcessWithExitCode)
 import System.Unix.Directory
 import Text.Regex

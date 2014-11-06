@@ -19,7 +19,7 @@ import System.Process (shell)
 import Debian.Repo.Prelude.Process (timeTask)
 import Debian.Repo.Prelude.Verbosity (qPutStrLn)
 import System.Directory
-import System.Process.Chunks (collectProcessTriple)
+import System.Process.ChunkE (collectProcessTriple)
 
 documentation :: [String]
 documentation = [ "bzr:<revision> - A target of this form retrieves the a Bazaar archive with the"

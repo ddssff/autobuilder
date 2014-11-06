@@ -19,8 +19,8 @@ import System.Directory
 import System.Exit (ExitCode(..))
 import System.FilePath
 import System.Process (shell, proc, CreateProcess(cwd))
-import System.Process.Chunks (collectProcessTriple)
-import System.Process.ListLike (readCreateProcess)
+import System.Process.ChunkE (collectProcessTriple)
+import System.Process.ListLike (readCreateProcess, StdoutWrapper(StdoutWrapper))
 import Debian.Repo.Prelude.Process (timeTask)
 import System.Unix.Directory
 
@@ -86,7 +86,7 @@ prepare method flags theUri =
       -- Filter out the patch hash values, sort them because darcs
       -- patches don't have a total ordering, and then return the
       -- checksum.
-      attr <- liftIO $ readProcFailing ((proc "darcs" ["log"]) {cwd = Just dir}) "" >>= return . show . md5 . B.unlines . sort . filter (B.isPrefixOf "patch ") . B.lines . (\ (_, x, _) -> x) . collectProcessTriple
+      attr <- liftIO $ readCreateProcess ((proc "darcs" ["log"]) {cwd = Just dir}) B.empty >>= \ (StdoutWrapper b) -> return $ darcsLogChecksum b
       _output <- liftIO $ fixLink base
       return $ T.SomeDownload $ DarcsDL { method = method
                                         , flags = flags
@@ -94,6 +94,11 @@ prepare method flags theUri =
                                         , tree = tree
                                         , attr = attr }
     where
+      -- Collect all the checksum lines, sort them, and checksum the
+      -- result.  The resulting checksum should map one to one with
+      -- the state of the darcs repo.
+      darcsLogChecksum :: B.ByteString -> String
+      darcsLogChecksum = show . md5 . B.unlines . sort . filter (B.isPrefixOf "patch ") . B.lines
       verifySource :: FilePath -> IO SourceTree
       verifySource dir =
           -- Note that this logic is the opposite of 'tla changes'
