@@ -21,7 +21,7 @@ import System.FilePath
 import System.Process (shell, proc, CreateProcess(cwd))
 import System.Process.Chunks (collectProcessTriple)
 import System.Process.ListLike (readCreateProcess)
-import Debian.Repo.Prelude.Verbosity (timeTask)
+import Debian.Repo.Prelude.Process (timeTask)
 import System.Unix.Directory
 
 documentation :: [String]

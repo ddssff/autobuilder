@@ -16,7 +16,8 @@ import Debian.URI
 import System.FilePath (splitFileName, (</>))
 import System.Unix.Directory
 import System.Process (shell)
-import Debian.Repo.Prelude.Verbosity (timeTask, qPutStrLn)
+import Debian.Repo.Prelude.Process (timeTask)
+import Debian.Repo.Prelude.Verbosity (qPutStrLn)
 import System.Directory
 import System.Process.Chunks (collectProcessTriple)
 

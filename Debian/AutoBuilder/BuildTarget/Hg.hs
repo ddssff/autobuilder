@@ -10,7 +10,7 @@ import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Repo
 import Debian.Repo.Fingerprint (RetrieveMethod)
-import Debian.Repo.Prelude.Verbosity (timeTask)
+import Debian.Repo.Prelude.Process (timeTask)
 import System.Directory
 import System.FilePath (splitFileName, (</>))
 import System.Process (shell)

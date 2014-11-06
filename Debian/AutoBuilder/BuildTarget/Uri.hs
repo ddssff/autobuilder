@@ -19,7 +19,7 @@ import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.Repo as R (readProcFailing, topdir, SourceTree, findSourceTree)
 import Debian.Repo.Fingerprint (RetrieveMethod)
 import Debian.Repo.Internal.Repos (MonadRepos)
-import Debian.Repo.Prelude.Verbosity (timeTask)
+import Debian.Repo.Prelude.Process (timeTask)
 import Debian.Repo.Top (MonadTop, sub)
 import Debian.URI
 import Magic
