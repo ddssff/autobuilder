@@ -66,7 +66,7 @@ import System.Process (proc, cmdspec)
 import System.Process.Chunks (Chunk, showCmdSpecForUser, indentChunks, collectProcessOutput)
 import System.Process.ListLike (readCreateProcess)
 import Debian.Repo.Prelude.Process (timeTask)
-import Debian.Repo.Prelude.Verbosity (ePutStrLn, ePutStr, qPutStrLn, qPutStr, withModifiedVerbosity, defaultVerbosity, noisier)
+import Debian.Repo.Prelude.Verbosity (ePutStrLn, ePutStr, qPutStrLn, qPutStr, withModifiedVerbosity, noisier)
 -- import System.Process.Read.Verbosity (defaultVerbosity, withModifiedVerbosity, withModifiedVerbosity)
 import System.Unix.Directory(removeRecursiveSafely)
 import Text.Printf ( printf )
@@ -138,8 +138,8 @@ runParameterSet init cache =
       top <- askTop
       liftIO doRequiredVersion
       doVerifyBuildRepo cache
-      when (P.showParams params) (withModifiedVerbosity (const defaultVerbosity) (liftIO doShowParams))
-      when (P.showSources params) (withModifiedVerbosity (const defaultVerbosity) (liftIO doShowSources))
+      when (P.showParams params) (withModifiedVerbosity (const 1) (liftIO doShowParams))
+      when (P.showSources params) (withModifiedVerbosity (const 1) (liftIO doShowSources))
       when (P.flushAll params) (liftIO $ doFlush top)
       liftIO checkPermissions
       maybe (return ()) (verifyUploadURI (P.doSSHExport $ params)) (P.uploadURI params)
