@@ -148,6 +148,6 @@ Executable autobuilder-tests
     Build-Depends: cabal-debian >= 4.16
 
   if flag (local-debian)
-    Hs-Source-Dirs: ../haskell-debian
+    Hs-Source-Dirs: ../debian-haskell
   else
     Build-Depends: debian >= 3.84
