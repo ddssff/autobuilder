@@ -45,12 +45,12 @@ Library
 
   if flag (local-cabal-debian)
     Hs-Source-Dirs: ../cabal-debian/src
-    Build-Depends: Diff, set-extra, hsemail, memoize, syb
+    Build-Depends: Diff, set-extra, hsemail, memoize, pretty, syb
   else
     Build-Depends: cabal-debian >= 4.16, deepseq, data-lens-template
 
   if flag (local-debian)
-    Hs-Source-Dirs: ../haskell-debian
+    Hs-Source-Dirs: ../debian-haskell
     Build-Depends: ListLike
   else
     Build-Depends: debian >= 3.84
