@@ -7,7 +7,7 @@ module Debian.AutoBuilder.Main
     ) where
 
 import Control.Arrow (first)
-import Control.Applicative ((<$>))
+import Control.Applicative (Applicative, (<$>))
 import Control.Applicative.Error (Failing(..), ErrorMsg)
 import Control.Exception(SomeException, AsyncException(UserInterrupt), fromException, toException, try)
 import Control.Monad(foldM, when)
@@ -111,7 +111,7 @@ isFailure _ = False
 
 -- |Process one set of parameters.  Usually there is only one, but there
 -- can be several which are run sequentially.  Stop on first failure.
-doParameterSet :: (MonadReposCached m, MonadMask m) => DebT IO () -> [Failing ([Chunk L.ByteString], NominalDiffTime)] -> P.ParamRec -> m [Failing ([Chunk L.ByteString], NominalDiffTime)]
+doParameterSet :: (Applicative m, MonadReposCached m, MonadMask m) => DebT IO () -> [Failing ([Chunk L.ByteString], NominalDiffTime)] -> P.ParamRec -> m [Failing ([Chunk L.ByteString], NominalDiffTime)]
 -- If one parameter set fails, don't try the rest.  Not sure if
 -- this is the right thing, but it is safe.
 doParameterSet _ results _ | any isFailure results = return results
@@ -132,7 +132,7 @@ getLocalSources = do
     Nothing -> error $ "Invalid local repo root: " ++ show root
     Just uri -> repoSources (Just (envRoot root)) uri
 
-runParameterSet :: (MonadReposCached m, MonadMask m) => DebT IO () -> C.CacheRec -> m (Failing ([Chunk L.ByteString], NominalDiffTime))
+runParameterSet :: (Applicative m, MonadReposCached m, MonadMask m) => DebT IO () -> C.CacheRec -> m (Failing ([Chunk L.ByteString], NominalDiffTime))
 runParameterSet init cache =
     do
       top <- askTop

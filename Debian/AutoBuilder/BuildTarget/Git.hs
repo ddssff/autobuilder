@@ -12,7 +12,7 @@ import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Repo (SourceTree, topdir, MonadRepos, MonadTop, sub, findSourceTree)
 import Debian.Repo.Fingerprint (RetrieveMethod, RetrieveAttribute(GitCommit), GitSpec(Branch, Commit))
-import Debian.Repo.Prelude.Process (readProcFailing, timeTask)
+import Debian.Repo.Prelude.Process (readProcessV, timeTask)
 import Network.URI (URI(..), URIAuth(..), uriToString, parseURI)
 import System.Directory
 import System.Exit (ExitCode(..))
@@ -31,7 +31,7 @@ documentation = [ "darcs:<string> - a target of this form obtains the source cod
 
 darcsRev :: SourceTree -> RetrieveMethod -> IO (Either SomeException String)
 darcsRev tree m =
-    try (readProcFailing (cmd {cwd = Just path}) mempty >>= (\ (_, out, _) -> return out) . collectProcessTriple >>=
+    try (readProcessV (cmd {cwd = Just path}) mempty >>= (\ (_, out, _) -> return out) . collectProcessTriple >>=
          return . matchRegex (mkRegex "hash='([^']*)'") . B.unpack) >>=
     return . either Left (maybe (fail $ "could not find hash field in output of '" ++ showCmdSpecForUser (cmdspec cmd) ++ "'")
                                 (\ rev -> Right (show m ++ "=" ++ head rev)))
@@ -67,7 +67,7 @@ instance T.Download GitDL where
         sub ("git" </> sum) >>= liftIO . removeRecursiveSafely
     cleanTarget x =
         (\ top -> case any P.isKeepRCS (flags x) of
-                    False -> let cmd = "find " ++ top ++ " -name '.git' -maxdepth 1 -prune | xargs rm -rf" in timeTask (readProcFailing (shell cmd) "")
+                    False -> let cmd = "find " ++ top ++ " -name '.git' -maxdepth 1 -prune | xargs rm -rf" in timeTask (readProcessV (shell cmd) "")
                     True -> return ([], 0))
     attrs x = singleton $ GitCommit $ latestCommit x
 
@@ -94,15 +94,15 @@ prepare method flags theUri gitspecs =
       verifySource :: FilePath -> IO SourceTree
       verifySource dir =
           -- Note that this logic is the opposite of 'tla changes'
-          do (result, out, _) <- readProcFailing ((proc "git" ["status", "--porcelain"]) {cwd = Just dir}) mempty >>= return . collectProcessTriple
+          do (result, out, _) <- readProcessV ((proc "git" ["status", "--porcelain"]) {cwd = Just dir}) mempty >>= return . collectProcessTriple
 
       -- CB  No output lines means no changes
       -- CB  git reset --hard    will remove all edits back to the most recent commit
 
       -- The status code does not reflect whether changes were made
              case (result, B.null out) of
-               (ExitSuccess, False) -> removeSource dir >> createSource dir		-- Yes changes
-               (ExitSuccess, True) -> updateSource dir					-- No Changes!
+               (Right ExitSuccess, False) -> removeSource dir >> createSource dir		-- Yes changes
+               (Right ExitSuccess, True) -> updateSource dir					-- No Changes!
                _ -> error $ "git failure"
       removeSource :: FilePath -> IO ()
       removeSource dir = removeRecursiveSafely dir
@@ -110,7 +110,7 @@ prepare method flags theUri gitspecs =
       updateSource :: FilePath -> IO SourceTree
       updateSource dir = do
         let p = (proc "git" ["pull", "--all"]) {cwd = Just dir}
-        _ <- readProcFailing p ""
+        _ <- readProcessV p B.empty
         -- runTaskAndTest (updateStyle (commandTask ("cd " ++ dir ++ " && darcs pull --all " ++ renderForDarcs theUri))) >>
         findSourceTree dir
 
@@ -120,23 +120,23 @@ prepare method flags theUri gitspecs =
              createDirectoryIfMissing True parent
              removeRecursiveSafely dir
              let p = proc "git" (["clone", renderForGit theUri'] ++ concat (map (\ x -> case x of (Branch s) -> ["--branch", s]; _ -> []) gitspecs) ++ [dir])
-             (code, _, _) <- readProcFailing p "" >>= return . collectProcessTriple
+             (code, _, _) <- readProcessV p B.empty >>= return . collectProcessTriple
              case (code, mapMaybe (\ x -> case x of (Commit s) -> Just s; _ -> Nothing) gitspecs) of
-                    (ExitFailure _, _) -> error $ "Git failed: " ++ showCreateProcessForUser p ++ " -> " ++ show code
-                    (_, []) -> return ()
-                    (_, [commit]) -> do
-                      (code2, _, _) <- readProcFailing ((proc "git" ["reset", "--hard", commit]) {cwd = Just dir}) "" >>= return . collectProcessTriple
+                    (Right ExitSuccess, []) -> return ()
+                    (Right ExitSuccess, [commit]) -> do
+                      (code2, _, _) <- readProcessV ((proc "git" ["reset", "--hard", commit]) {cwd = Just dir}) B.empty >>= return . collectProcessTriple
                       case code2 of
-                        ExitFailure _ -> error "git reset failed"
-                        ExitSuccess -> return ()
-                    (_, commits) -> error $ "Git target specifies multiple commits: " ++ show commits
+                        Right ExitSuccess -> return ()
+                        _ -> error "git reset failed"
+                    (Right ExitSuccess, commits) -> error $ "Git target specifies multiple commits: " ++ show commits
+                    result -> error $ "Git failed: " ++ showCreateProcessForUser p ++ " -> " ++ show code
              findSourceTree dir
 
       -- CB  git reset --hard    will remove all edits back to the most recent commit
       fixLink base =
           let link = base </> name in
-          readProcFailing (proc "rm" ["-rf", link]) "" >>
-          readProcFailing (proc "ln" ["-s", sum, link]) ""
+          readProcessV (proc "rm" ["-rf", link]) B.empty >>
+          readProcessV (proc "ln" ["-s", sum, link]) B.empty
       name = snd . splitFileName $ (uriPath theUri')
       sum = show (md5 (B.pack uriAndBranch))
       -- Maybe we should include the "git:" in the string we checksum?  -- DSF

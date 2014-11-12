@@ -10,7 +10,8 @@ module Debian.AutoBuilder.BuildTarget.Debianize
 import Control.Monad.State (modify)
 import Control.Monad.Catch (MonadMask, bracket)
 import Control.Monad.Trans (MonadIO, liftIO)
-import Data.List (isSuffixOf)
+import Data.List (isSuffixOf, intercalate)
+import Data.Monoid ((<>))
 import Data.Version (Version)
 import Debian.AutoBuilder.BuildEnv (envSet)
 import Debian.AutoBuilder.Params (computeTopDir)
@@ -126,7 +127,8 @@ autobuilderCabal cache pflags sourceName debianizeDirectory defaultAtoms =
          True -> qPutStrLn (showCommandForUser "runhaskell" ("debian/Debianize.hs" : args'))
          False -> withArgs [] $ Cabal.evalDebT (do -- We don't actually run the cabal-debian command here, we use
                                                    -- the library API and build and print the equivalent command.
-                                                   qPutStrLn (showCommandForUser "cabal-debian"
+                                                   qPutStrLn (" -> cabal-debian" <>
+                                                                intercalate " "
                                                                  (["--native"] ++
                                                                   maybe [] (\ name -> ["--source-package-name", name]) sourceName ++
                                                                   concatMap asCabalFlags pflags))

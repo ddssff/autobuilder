@@ -43,7 +43,7 @@ cleanEnvOfRelease distro =
     sub ("dists" </> releaseName' distro </> "clean") >>= return . EnvRoot
 -}
 
-prepareDependOS :: (MonadRepos m, MonadTop m, MonadMask m) => P.ParamRec -> NamedSliceList -> m EnvRoot
+prepareDependOS :: (Applicative m, MonadRepos m, MonadTop m, MonadMask m) => P.ParamRec -> NamedSliceList -> m EnvRoot
 prepareDependOS params rel =
     do localRepo <- Local.prepare (P.flushPool params) (P.buildRelease params) (P.archSet params)
        -- release <- prepareRelease repo (P.buildRelease params) [] [parseSection' "main"] (P.archSet params)

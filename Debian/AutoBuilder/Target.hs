@@ -74,7 +74,7 @@ import System.FilePath ((</>))
 import System.IO (hPutStrLn, stderr)
 import System.Posix.Files (fileSize, getFileStatus)
 import System.Process (CreateProcess(cwd), proc, readProcessWithExitCode, shell, showCommandForUser)
-import Debian.Repo.Prelude.Process (readProcFailing, modifyProcessEnv)
+import Debian.Repo.Prelude.Process (readProcessV, modifyProcessEnv)
 import Debian.Repo.Prelude.Verbosity (ePutStrLn, noisier, qPutStrLn, quieter, ePutStr)
 import System.Process.ChunkE (collectProcessTriple, collectProcessOutput)
 import System.Process.ByteString (readCreateProcess)
@@ -340,12 +340,12 @@ buildTarget cache dependOS buildOS repo !target = do
   -- Get the control file from the clean source and compute the
   -- build dependencies
   arch <- evalMonadOS buildArchOfOS dependOS
-  quieter 2 $ qPutStrLn "Looking for build dependency solutions..."
+  -- quieter 2 $ qPutStrLn "Looking for build dependency solutions..."
   soln <- evalMonadOS (buildDepSolution arch (map BinPkgName (P.preferred (P.params cache))) target) dependOS
   case soln of
         Failure excuses -> qError $ intercalate "\n  " ("Couldn't satisfy build dependencies" : excuses)
         Success packages ->
-            do quieter 3 $ qPutStrLn ("Build dependency solution: " ++ show (map prettyBinaryPackage packages))
+            do -- quieter 3 $ qPutStrLn ("Build dependency solution: " ++ show (map prettyBinaryPackage packages))
                -- Get the newest available version of a source package,
                -- along with its status, either Indep or All
                (releaseControlInfo, releaseStatus, _message) <- evalMonadOS (getReleaseControlInfo target) dependOS
@@ -406,17 +406,17 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
              dpkgSource <- liftIO $ modifyProcessEnv [("EDITOR", Just "/bin/true")] ((proc "dpkg-source" ["--commit", ".", "autobuilder.diff"]) {cwd = Just path'})
              let doDpkgSource False = do
                    createDirectoryIfMissing True (path' </> "debian/patches")
-                   _ <- readProcFailing dpkgSource L.empty
+                   _ <- readProcessV dpkgSource L.empty
                    exists <- doesFileExist (path' </> "debian/patches/autobuilder.diff")
                    when (not exists) (removeDirectory (path' </> "debian/patches"))
-                 doDpkgSource True = readProcFailing dpkgSource L.empty >> return ()
+                 doDpkgSource True = readProcessV dpkgSource L.empty >> return ()
                  -- doDpkgSource' = setEnv "EDITOR" "/bin/true" >> readCreateProcess ((proc "dpkg-source" ["--commit", ".", "autobuilder.diff"]) {cwd = Just path'}) L.empty
              _ <- liftIO $ useEnv' root (\ _ -> return ())
                              (-- Get the version number of dpkg-dev in the build environment
                               let p = shell ("dpkg -s dpkg-dev | sed -n 's/^Version: //p'") in
-                              readProcFailing p "" >>= (\ (_, out, _) -> return out) . collectProcessTriple >>= return . head . words . L.unpack >>= \ installed ->
+                              readProcessV p "" >>= (\ (_, out, _) -> return out) . collectProcessTriple >>= return . head . words . L.unpack >>= \ installed ->
                               -- If it is >= 1.16.1 we may need to run dpkg-source --commit.
-                              readCreateProcess (shell ("dpkg --compare-versions '" ++ installed ++ "' ge 1.16.1")) "" >>= return . collectProcessTriple >>= \ (result, _, _) -> return (result == ExitSuccess) >>= \ newer ->
+                              readCreateProcess (shell ("dpkg --compare-versions '" ++ installed ++ "' ge 1.16.1")) "" >>= return . collectProcessTriple >>= \ (result, _, _) -> return (case result of Right ExitSuccess -> True; _ -> False) >>= \ newer ->
                               when newer (doesDirectoryExist (path' </> "debian/patches") >>= doDpkgSource)
                               {- when newer (do createDirectoryIfMissing True (path' </> "debian/patches")
                                              -- Create the patch if there are any changes
@@ -627,7 +627,7 @@ computeNewVersion cache target releaseControlInfo _releaseStatus = do
         -- All the versions that exist in the pool in any dist,
         -- the new version number must not equal any of these.
         available <- sortSourcePackages [G.sourceName (targetDepends target)] <$> aptSourcePackages
-        quieter 3 $ qPutStrLn ("available versions: " ++ show available)
+        -- quieter 3 $ qPutStrLn ("available versions: " ++ show available)
         case parseTag (vendor : oldVendors) sourceVersion of
           (_, Just tag) -> return $
                              Failure ["Error: the version string in the changelog has a vendor tag (" ++ show tag ++
@@ -637,7 +637,7 @@ computeNewVersion cache target releaseControlInfo _releaseStatus = do
                                       " particularly since each distribution may have different auto-generated versions."]
           (_, Nothing) -> do
               let newVersion = setTag aliases vendor oldVendors release extra currentVersion (catMaybes . map getVersion $ available) sourceVersion
-              qPutStrLn ("new version: " ++ show newVersion)
+              -- qPutStrLn ("new version: " ++ show newVersion)
               return $ newVersion >>= checkVersion
     where
       -- Version number in the changelog entry of the checked-out
@@ -717,10 +717,10 @@ updateChangesFile elapsed changes = do
 {-    autobuilderVersion <- processOutput "dpkg -s autobuilder | sed -n 's/^Version: //p'" >>=
                             return . either (const Nothing) Just >>=
                             return . maybe Nothing (listToMaybe . lines) -}
-      hostname <- let p = shell "hostname" in readProcFailing p "" >>= (\ (_, out, _) -> return out) . collectProcessTriple >>= return . listToMaybe . lines . L.unpack
+      hostname <- let p = shell "hostname" in readProcessV p "" >>= (\ (_, out, _) -> return out) . collectProcessTriple >>= return . listToMaybe . lines . L.unpack
       cpuInfo <- parseProcCpuinfo
       memInfo <- parseProcMeminfo
-      machine <- let p = shell "uname -m" in readProcFailing p "" >>= (\ (_, out, _) -> return out) . collectProcessTriple >>= return . listToMaybe . lines . L.unpack
+      machine <- let p = shell "uname -m" in readProcessV p "" >>= (\ (_, out, _) -> return out) . collectProcessTriple >>= return . listToMaybe . lines . L.unpack
       date <- getCurrentLocalRFC822Time
       let buildInfo = ["Autobuilder-Version: " ++ V.autoBuilderVersion] ++
                       ["Time: " ++ show elapsed] ++
@@ -774,7 +774,7 @@ buildDependencies downloadOnly source extra sourceFingerprint =
        command <- liftIO $ modifyProcessEnv [("DEBIAN_FRONTEND", Just "noninteractive")] (if True then aptGetCommand else pbuilderCommand)
        if downloadOnly then (qPutStrLn $ "Dependency packages:\n " ++ intercalate "\n  " (showDependencies' sourceFingerprint)) else return ()
        qPutStrLn $ (if downloadOnly then "Downloading" else "Installing") ++ " build dependencies into " ++ root
-       out <- withProc (liftIO (useEnv' root forceList (noisier 2 (readProcFailing command "")) >>=
+       out <- withProc (liftIO (useEnv' root forceList (noisier 2 (readProcessV command "")) >>=
                                 return . snd . collectProcessOutput))
        return $ decode out
 

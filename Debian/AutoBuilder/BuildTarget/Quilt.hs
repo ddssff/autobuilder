@@ -9,6 +9,7 @@ import Control.Applicative.Error (Failing(..))
 import Control.Monad (when)
 import Control.Monad.Error (catchError)
 import Control.Monad.Trans
+import qualified Data.ByteString.Lazy as L
 import Data.Either (partitionEithers)
 import Data.List (intercalate, sortBy)
 import Data.Maybe
@@ -20,8 +21,9 @@ import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Changes (ChangeLogEntry(..), parseEntries, parseEntry)
 import Debian.Pretty (ppDisplay)
-import Debian.Repo (HasDebDir(debdir), HasTopDir(topdir), SourceTree, DebianBuildTree, findSourceTree, findOneDebianBuildTree, copySourceTree, sub, MonadRepos, MonadTop, readProcFailing)
+import Debian.Repo (HasDebDir(debdir), HasTopDir(topdir), SourceTree, DebianBuildTree, findSourceTree, findOneDebianBuildTree, copySourceTree, sub, MonadRepos, MonadTop)
 import Debian.Repo.Fingerprint (RetrieveMethod, retrieveMethodMD5)
+import Debian.Repo.Prelude.Process (readProcessV)
 import Debian.Version
 import Extra.Files (replaceFile)
 import "Extra" Extra.List ()
@@ -74,7 +76,7 @@ makeQuiltTree m base patch =
        let cmd1 = ("set -x && cd '" ++ quiltDir ++ "' && rm -f '" ++ quiltPatchesDir ++
                    "' && ln -s '" ++ patchDir ++ "' '" ++ quiltPatchesDir ++ "'")
        -- runTaskAndTest (linkStyle (commandTask cmd1))
-       _output <- readProcFailing (shell cmd1) ""
+       _output <- readProcessV (shell cmd1) L.empty
        -- Now we need to have created a DebianSourceTree so
        -- that there is a changelog for us to reconstruct.
        return (copyTree, quiltDir)
@@ -111,23 +113,23 @@ prepare method flags base patch = do
                 unhide x = doesDirectoryExist pch >>= (flip when) (rmrf pc >> renameDirectory pch pc) >> return x
                 pc = (quiltDir ++ "/.pc")
                 pch = (quiltDir ++ "/.pc.hide")
-                rmrf d = readProcFailing (shell ("rm -rf '"  ++ d ++ "'")) ""
+                rmrf d = readProcessV (shell ("rm -rf '"  ++ d ++ "'")) L.empty
       make :: (SourceTree, FilePath) -> IO T.SomeDownload
       make (quiltTree, quiltDir) =
-          do applied <- readProcFailing (shell cmd1a) "" >>= qMessage "Checking for applied patches" >>= return . collectProcessTriple
+          do applied <- readProcessV (shell cmd1a) "" >>= qMessage "Checking for applied patches" >>= return . collectProcessTriple
              case applied of
-               (ExitFailure 1, _, err)
+               (Right (ExitFailure 1), _, err)
                    | decode err == "No patches applied\n" ->
                           findUnapplied >>= apply >> buildLog >> cleanSource
                           where
-                            findUnapplied = do unapplied <- liftIO (readProcFailing (shell cmd1b) "") >>= qMessage "Checking for unapplied patches" . collectProcessTriple
+                            findUnapplied = do unapplied <- liftIO (readProcessV (shell cmd1b) "") >>= qMessage "Checking for unapplied patches" . collectProcessTriple
                                                case unapplied of
-                                                 (ExitSuccess, text, _) -> return (lines (decode text))
+                                                 (Right ExitSuccess, text, _) -> return (lines (decode text))
                                                  _ -> fail $ target ++ " - No patches to apply"
                             apply patches =
-                                do result2 <- liftIO (readProcFailing (shell (cmd2 patches)) "") >>= qMessage "Patching Quilt target" . collectProcessTriple
+                                do result2 <- liftIO (readProcessV (shell (cmd2 patches)) "") >>= qMessage "Patching Quilt target" . collectProcessTriple
                                    case result2 of
-                                     (ExitSuccess, _, _) -> return ()
+                                     (Right ExitSuccess, _, _) -> return ()
                                      (_, _, err) -> fail $ target ++ " - Failed to apply quilt patches: " ++ decode err
                                          -- fail $ target ++ " - Failed to apply quilt patches: " ++ (cmd2 patches) ++ " ->\n" ++ L.unpack err
                             buildLog =
@@ -140,9 +142,9 @@ prepare method flags base patch = do
                                      False -> fail (target ++ "- Missing changelog file: " ++ show (quiltDir ++ "/" ++ quiltPatchesDir ++ "/changelog"))
                                      True -> mergeChangelogs' (quiltDir ++ "/debian/changelog") (quiltDir ++ "/" ++ quiltPatchesDir ++ "/changelog")
                             cleanSource =
-                                do result3 <- liftIO (readProcFailing (shell cmd3) "") >>= qMessage "Cleaning Quilt target" . collectProcessTriple
+                                do result3 <- liftIO (readProcessV (shell cmd3) L.empty) >>= qMessage "Cleaning Quilt target" . collectProcessTriple
                                    case result3 of
-                                     (ExitSuccess, _, _) ->
+                                     (Right ExitSuccess, _, _) ->
                                          do tree <- findSourceTree (topdir quiltTree) :: IO SourceTree
                                             -- return $ Quilt base patch tree m
                                             return $ T.SomeDownload $ QuiltDL { method = method
@@ -151,7 +153,7 @@ prepare method flags base patch = do
                                                                               , patch = T.SomeDownload patch
                                                                               , tree = tree }
                                      _ -> fail $ target ++ " - Failure removing quilt directory: " ++ cmd3
-               (ExitFailure _, _, err) -> fail $ target ++ " - Unexpected output from quilt applied: " ++ decode err
+               (Right (ExitFailure _), _, err) -> fail $ target ++ " - Unexpected output from quilt applied: " ++ decode err
                (_, _, _) -> fail $ target ++ " - Unexpected result code (ExitSuccess) from " ++ show cmd1a
           where
             cmd1a = ("export QUILT_PATCHES=" ++ quiltPatchesDir ++ " && cd '" ++ quiltDir ++ "' && quilt applied")

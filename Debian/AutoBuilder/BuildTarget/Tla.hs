@@ -3,7 +3,7 @@ module Debian.AutoBuilder.BuildTarget.Tla where
 
 import Control.Exception (SomeException, try)
 import Control.Monad.Trans
---import qualified Data.ByteString.Lazy.Char8 as L
+import qualified Data.ByteString.Lazy as B
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
@@ -12,7 +12,7 @@ import Debian.Repo.Fingerprint (RetrieveMethod)
 import System.FilePath (splitFileName, (</>))
 import System.Unix.Directory
 import System.Process (shell)
-import Debian.Repo.Prelude.Process (timeTask)
+import Debian.Repo.Prelude.Process (readProcessV, timeTask)
 import Debian.Repo.Prelude.Verbosity (qPutStrLn)
 import System.Directory
 
@@ -38,7 +38,7 @@ instance T.Download TlaDL where
     cleanTarget x = (\ path ->
                          case any P.isKeepRCS (flags x) of
                            False -> let cmd = "find '" ++ path ++ "' -name '.arch-ids' -o -name '{arch}' -prune | xargs rm -rf" in
-                                    timeTask (readProcFailing (shell cmd) "")
+                                    timeTask (readProcessV (shell cmd) "")
                            True -> (return ([], 0)))
 
 prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m T.SomeDownload
@@ -54,7 +54,7 @@ prepare cache method flags version =
                                       , tree = tree }
     where
       verifySource dir =
-          do result <- try (readProcFailing (shell ("cd " ++ dir ++ " && tla changes")) "")
+          do result <- try (readProcessV (shell ("cd " ++ dir ++ " && tla changes")) B.empty)
              case result of
                Left (e :: SomeException) -> qPutStrLn (show e) >> removeSource dir >> createSource dir -- Failure means there is corruption
                Right _output -> updateSource dir						         -- Success means no changes
@@ -62,7 +62,7 @@ prepare cache method flags version =
       removeSource dir = liftIO $ removeRecursiveSafely dir
 
       updateSource dir =
-          readProcFailing (shell ("cd " ++ dir ++ " && tla update " ++ version)) "" >>
+          readProcessV (shell ("cd " ++ dir ++ " && tla update " ++ version)) B.empty >>
              -- At one point we did a tla undo here.  However, we are
              -- going to assume that the "clean" copies in the cache
              -- directory are clean, since some of the other target
@@ -74,5 +74,5 @@ prepare cache method flags version =
             -- Create parent dir and let tla create dir
             let (parent, _) = splitFileName dir
             liftIO $ createDirectoryIfMissing True parent
-            _output <- readProcFailing (shell ("tla get " ++ version ++ " " ++ dir)) ""
+            _output <- readProcessV (shell ("tla get " ++ version ++ " " ++ dir)) B.empty
             findSourceTree dir

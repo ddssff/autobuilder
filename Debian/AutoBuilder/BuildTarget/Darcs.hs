@@ -14,6 +14,7 @@ import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Repo
 import Debian.Repo.Fingerprint (RetrieveMethod, RetrieveAttribute(DarcsChangesId))
+import Debian.Repo.Prelude.Process (readProcessV)
 import Network.URI (URI(..), URIAuth(..), uriToString, parseURI)
 import System.Directory
 import System.Exit (ExitCode(..))
@@ -70,7 +71,7 @@ instance T.Download DarcsDL where
           theUri' = mustParseURI (uri x)
     cleanTarget x = \ top -> case any P.isKeepRCS (flags x) of
                                False -> let cmd = shell ("find " ++ top ++ " -name '_darcs' -maxdepth 1 -prune | xargs rm -rf") in
-                                        timeTask (readProcFailing cmd "")
+                                        timeTask (readProcessV cmd "")
                                True -> return ([], 0)
     buildWrapper _ = id
     attrs x = singleton (DarcsChangesId (attr x))
@@ -104,7 +105,7 @@ prepare method flags theUri =
           -- Note that this logic is the opposite of 'tla changes'
           do (result, _, _) <- readCreateProcess ((proc "darcs" ["whatsnew"]) {cwd = Just dir}) ("" :: String) >>= return . collectProcessTriple
              case result of
-               ExitSuccess -> removeSource dir >> createSource dir		-- Yes changes
+               Right ExitSuccess -> removeSource dir >> createSource dir		-- Yes changes
                _ -> updateSource dir				-- No Changes!
       removeSource :: FilePath -> IO ()
       removeSource dir = removeRecursiveSafely dir
@@ -112,7 +113,7 @@ prepare method flags theUri =
       updateSource :: FilePath -> IO SourceTree
       updateSource dir = do
           let cmd = (proc "darcs" ["pull", "--all", "--no-allow-conflicts", renderForDarcs theUri']) {cwd = Just dir}
-          _ <- readProcFailing cmd ""
+          _ <- readProcessV cmd B.empty
           -- runTaskAndTest (updateStyle (commandTask ("cd " ++ dir ++ " && darcs pull --all " ++ renderForDarcs theUri))) >>
           findSourceTree dir
 
@@ -120,7 +121,7 @@ prepare method flags theUri =
       createSource dir =
           let (parent, _) = splitFileName dir in
           do createDirectoryIfMissing True parent
-             _output <- readProcFailing cmd ""
+             _output <- readProcessV cmd B.empty
              findSourceTree dir
           where
             cmd = proc "darcs" (["get", renderForDarcs theUri'] ++ maybe [] (\ tag -> [" --tag", tag]) theTag ++ [dir])
@@ -129,8 +130,8 @@ prepare method flags theUri =
           let link = base ++ "/" ++ name
               rm = proc "rm" ["-rf", link]
               ln = proc "ln" ["-s", sum, link]
-          _ <- readProcFailing rm ""
-          readProcFailing ln ""
+          _ <- readProcessV rm B.empty
+          readProcessV ln B.empty
       name = snd . splitFileName $ (uriPath theUri')
       sum = show (md5 (B.pack uriAndTag))
       uriAndTag = uriToString id theUri' "" ++ maybe "" (\ tag -> "=" ++ tag) theTag

@@ -20,7 +20,7 @@ import System.Exit
 import System.FilePath (splitFileName, (</>))
 import System.Process (shell, proc)
 import System.Process.ChunkE (Chunk, collectProcessTriple)
-import Debian.Repo.Prelude.Process (timeTask)
+import Debian.Repo.Prelude.Process (readProcessV, timeTask)
 import System.Unix.Directory
 
 documentation :: [String]
@@ -28,7 +28,7 @@ documentation = [ "svn:<uri> - A target of this form retrieves the source code f
                 , "a subversion repository." ]
 
 svn :: [String] -> IO [Chunk L.ByteString]
-svn args = readProcFailing (proc "svn" args) ""
+svn args = readProcessV (proc "svn" args) ""
 
 username userInfo =
     let un = takeWhile (/= ':') userInfo in
@@ -58,7 +58,7 @@ instance T.Download SvnDL where
     cleanTarget x = (\ path ->
                          case any P.isKeepRCS (flags x) of
                            False -> let cmd = "find " ++ path ++ " -name .svn -type d -print0 | xargs -0 -r -n1 rm -rf" in
-                                    timeTask (readProcFailing (shell cmd) "")
+                                    timeTask (readProcessV (shell cmd) "")
                            True -> return ([], 0))
 
 prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m T.SomeDownload
@@ -96,14 +96,14 @@ prepare cache method flags uri =
           findSourceTree dir :: IO SourceTree
       checkout :: FilePath -> IO (Either String [Chunk L.ByteString])
       --checkout = svn createStyle args
-      checkout dir = readProcFailing (proc "svn" args) "" >>= return . finish
+      checkout dir = readProcessV (proc "svn" args) "" >>= return . finish
           where
             args = ([ "co","--no-auth-cache","--non-interactive"] ++
                     (username userInfo) ++ (password userInfo) ++
                     [ uri, dir ])
             finish output =
                 case collectProcessTriple output of
-                  (ExitSuccess, _, _) -> Right output
+                  (Right ExitSuccess, _, _) -> Right output
                   _ -> Left $ "*** FAILURE: svn " ++ concat (intersperse " " args)
       userInfo = maybe "" uriUserInfo (uriAuthority uri')
 

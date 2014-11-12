@@ -5,7 +5,7 @@
 module Debian.AutoBuilder.BuildTarget.SourceDeb where
 
 import Control.Monad.Trans
---import qualified Data.ByteString.Lazy.Char8 as L
+import qualified Data.ByteString.Lazy as B
 import Data.List
 import Data.Monoid (mempty)
 import qualified Debian.AutoBuilder.Types.Download as T
@@ -14,7 +14,7 @@ import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.Control.String as S
 import Debian.Repo.Fingerprint (RetrieveMethod)
 import Debian.Repo.Internal.Repos (MonadRepos)
-import Debian.Repo.Prelude.Process (readProcFailing)
+import Debian.Repo.Prelude.Process (readProcessV)
 import qualified Debian.Version as V
 import System.Directory
 import System.Process (CreateProcess(cwd), proc)
@@ -48,7 +48,7 @@ prepare _cache method flags base =
          [] -> return $  error ("Invalid sourcedeb base: no .dsc file in " ++ show (T.method base))
          (dscName, Right (S.Control (dscInfo : _))) : _ ->
              let p = unpack top dscName in
-             liftIO (readProcFailing p mempty >>
+             liftIO (readProcessV p B.empty >>
                      makeTarget dscInfo dscName)
          (dscName, _) : _ -> error ("Invalid .dsc file: " ++ dscName)
     where

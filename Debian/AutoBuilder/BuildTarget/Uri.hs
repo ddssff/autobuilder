@@ -11,15 +11,15 @@ module Debian.AutoBuilder.BuildTarget.Uri
 import Control.Exception (SomeException)
 import Control.Monad.Catch (catch)
 import Control.Monad.Trans (liftIO)
-import qualified Data.ByteString.Lazy.Char8 as B (readFile)
+import qualified Data.ByteString.Lazy.Char8 as B (empty, readFile)
 import Data.Digest.Pure.MD5 (md5)
 import Data.List (isPrefixOf)
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
-import qualified Debian.Repo as R (readProcFailing, topdir, SourceTree, findSourceTree)
+import qualified Debian.Repo as R (topdir, SourceTree, findSourceTree)
 import Debian.Repo.Fingerprint (RetrieveMethod)
 import Debian.Repo.Internal.Repos (MonadRepos)
-import Debian.Repo.Prelude.Process (timeTask)
+import Debian.Repo.Prelude.Process (readProcessV, timeTask)
 import Debian.Repo.Top (MonadTop, sub)
 import Debian.URI
 import Magic
@@ -92,7 +92,7 @@ prepare method flags u s =
              _output <-
                  case exists of
                    True -> return []
-                   False -> R.readProcFailing (shell ("curl -s '" ++ uriToString' (mustParseURI u) ++ "' > '" ++ tar ++ "'")) ""
+                   False -> readProcessV (shell ("curl -s '" ++ uriToString' (mustParseURI u) ++ "' > '" ++ tar ++ "'")) B.empty
              -- We should do something with the output
              return ()
       -- Make sure what we just downloaded has the correct checksum
@@ -118,13 +118,13 @@ prepare method flags u s =
                    fileInfo <- liftIO $ magicFile magic tar
                    case () of
                      _ | isPrefixOf "Zip archive data" fileInfo ->
-                           liftIO $ timeTask $ R.readProcFailing (shell ("unzip " ++ tar ++ " -d " ++ src)) ""
+                           liftIO $ timeTask $ readProcessV (shell ("unzip " ++ tar ++ " -d " ++ src)) B.empty
                        | isPrefixOf "gzip" fileInfo ->
-                           liftIO $ timeTask $ R.readProcFailing (shell ("tar xfz " ++ tar ++ " -C " ++ src)) ""
+                           liftIO $ timeTask $ readProcessV (shell ("tar xfz " ++ tar ++ " -C " ++ src)) B.empty
                        | isPrefixOf "bzip2" fileInfo ->
-                           liftIO $ timeTask $ R.readProcFailing (shell ("tar xfj " ++ tar ++ " -C " ++ src)) ""
+                           liftIO $ timeTask $ readProcessV (shell ("tar xfj " ++ tar ++ " -C " ++ src)) B.empty
                        | True ->
-                           liftIO $ timeTask $ R.readProcFailing (shell ("cp " ++ tar ++ " " ++ src ++ "/")) ""
+                           liftIO $ timeTask $ readProcessV (shell ("cp " ++ tar ++ " " ++ src ++ "/")) B.empty
             read (_output, _elapsed) = sourceDir s >>= \ src -> liftIO (getDir src)
             getDir dir = getDirectoryContents dir >>= return . filter (not . flip elem [".", ".."])
             search files = checkContents (filter (not . flip elem [".", ".."]) files)
