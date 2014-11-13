@@ -66,7 +66,7 @@ import System.Process (proc, cmdspec)
 import System.Process.ChunkE (Chunk, showCmdSpecForUser, indentChunks, collectProcessOutput)
 import System.Process.ListLike (readCreateProcess)
 import Debian.Repo.Prelude.Process (timeTask)
-import Debian.Repo.Prelude.Verbosity (ePutStrLn, ePutStr, qPutStrLn, qPutStr, withModifiedVerbosity, noisier)
+import Debian.Repo.Prelude.Verbosity (ePutStrLn, ePutStr, qPutStrLn, qPutStr, withVerbosity, noisier)
 -- import System.Process.Read.Verbosity (defaultVerbosity, withModifiedVerbosity, withModifiedVerbosity)
 import System.Unix.Directory(removeRecursiveSafely)
 import Text.Printf ( printf )
@@ -116,7 +116,7 @@ doParameterSet :: (Applicative m, MonadReposCached m, MonadMask m) => DebT IO ()
 -- this is the right thing, but it is safe.
 doParameterSet _ results _ | any isFailure results = return results
 doParameterSet init results params = do
-  result <- withModifiedVerbosity (const (P.verbosity params))
+  result <- withVerbosity (P.verbosity params)
             (do top <- askTop
                 withLock (top </> "lockfile") (P.buildCache params >>= runParameterSet init))
               `catch` (\ (e :: SomeException) -> return (Failure [show e]))
@@ -138,8 +138,8 @@ runParameterSet init cache =
       top <- askTop
       liftIO doRequiredVersion
       doVerifyBuildRepo cache
-      when (P.showParams params) (withModifiedVerbosity (const 1) (liftIO doShowParams))
-      when (P.showSources params) (withModifiedVerbosity (const 1) (liftIO doShowSources))
+      when (P.showParams params) (withVerbosity 1 (liftIO doShowParams))
+      when (P.showSources params) (withVerbosity 1 (liftIO doShowSources))
       when (P.flushAll params) (liftIO $ doFlush top)
       liftIO checkPermissions
       maybe (return ()) (verifyUploadURI (P.doSSHExport $ params)) (P.uploadURI params)
