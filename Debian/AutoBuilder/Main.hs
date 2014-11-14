@@ -254,7 +254,7 @@ runParameterSet init cache =
                                      let cmd = P.newDistProgram params
                                          args = ["--sign", "--root", uriPath uri] in
                                      (proc cmd args)
-                       qPutStrLn (showCmdSpecForUser (cmdspec p))
+                       qPutStrLn (" -> " ++ showCmdSpecForUser (cmdspec p))
                        result <- try (timeTask (readCreateProcess p L.empty)) >>= return . either (\ (e :: SomeException) -> Failure [show e]) testOutput
                        case result of
                          (Success _) -> return result
