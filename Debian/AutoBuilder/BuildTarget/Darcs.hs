@@ -9,19 +9,18 @@ import qualified Data.ByteString.Lazy.Char8 as B
 import Data.Digest.Pure.MD5 (md5)
 import Data.List (sort)
 import Data.Maybe (mapMaybe)
+import Data.Monoid (mempty)
 import Data.Set (singleton)
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Repo
 import Debian.Repo.Fingerprint (RetrieveMethod, RetrieveAttribute(DarcsChangesId))
-import Debian.Repo.Prelude.Process (readProcessV)
+import Debian.Repo.Prelude.Process (readProcessE, readProcessV)
 import Network.URI (URI(..), URIAuth(..), uriToString, parseURI)
 import System.Directory
 import System.Exit (ExitCode(..))
 import System.FilePath
 import System.Process (shell, proc, CreateProcess(cwd))
-import System.Process.ChunkE (collectProcessTriple)
-import System.Process.ListLike (readCreateProcess, StdoutWrapper(StdoutWrapper))
 import Debian.Repo.Prelude.Process (timeTask)
 import System.Unix.Directory
 
@@ -71,8 +70,8 @@ instance T.Download DarcsDL where
           theUri' = mustParseURI (uri x)
     cleanTarget x = \ top -> case any P.isKeepRCS (flags x) of
                                False -> let cmd = shell ("find " ++ top ++ " -name '_darcs' -maxdepth 1 -prune | xargs rm -rf") in
-                                        timeTask (readProcessV cmd "")
-                               True -> return ([], 0)
+                                        timeTask (readProcessE cmd "")
+                               True -> return ((Right mempty), 0)
     buildWrapper _ = id
     attrs x = singleton (DarcsChangesId (attr x))
 
@@ -87,7 +86,7 @@ prepare method flags theUri =
       -- Filter out the patch hash values, sort them because darcs
       -- patches don't have a total ordering, and then return the
       -- checksum.
-      attr <- liftIO $ readCreateProcess ((proc "darcs" ["log"]) {cwd = Just dir}) B.empty >>= \ (StdoutWrapper b) -> return $ darcsLogChecksum b
+      attr <- liftIO $ readProcessV ((proc "darcs" ["log"]) {cwd = Just dir}) B.empty >>= \ (_, b, _) -> return $ darcsLogChecksum b
       _output <- liftIO $ fixLink base
       return $ T.SomeDownload $ DarcsDL { method = method
                                         , flags = flags
@@ -103,9 +102,9 @@ prepare method flags theUri =
       verifySource :: FilePath -> IO SourceTree
       verifySource dir =
           -- Note that this logic is the opposite of 'tla changes'
-          do (result, _, _) <- readCreateProcess ((proc "darcs" ["whatsnew"]) {cwd = Just dir}) ("" :: String) >>= return . collectProcessTriple
+          do result <- readProcessE ((proc "darcs" ["whatsnew"]) {cwd = Just dir}) ("" :: String)
              case result of
-               Right ExitSuccess -> removeSource dir >> createSource dir		-- Yes changes
+               Right (ExitSuccess, _, _) -> removeSource dir >> createSource dir		-- Yes changes
                _ -> updateSource dir				-- No Changes!
       removeSource :: FilePath -> IO ()
       removeSource dir = removeRecursiveSafely dir

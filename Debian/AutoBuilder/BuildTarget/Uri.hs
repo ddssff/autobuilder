@@ -14,6 +14,7 @@ import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as B (empty, readFile)
 import Data.Digest.Pure.MD5 (md5)
 import Data.List (isPrefixOf)
+import Data.Monoid (mempty)
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.Repo as R (topdir, SourceTree, findSourceTree)
@@ -91,7 +92,7 @@ prepare method flags u s =
              exists <- liftIO $ doesFileExist tar
              _output <-
                  case exists of
-                   True -> return []
+                   True -> return mempty
                    False -> readProcessV (shell ("curl -s '" ++ uriToString' (mustParseURI u) ++ "' > '" ++ tar ++ "'")) B.empty
              -- We should do something with the output
              return ()

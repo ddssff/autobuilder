@@ -2,6 +2,7 @@
 module Debian.AutoBuilder.BuildTarget.Git where
 
 import Control.Exception (try, SomeException)
+import Control.Monad.Error (ErrorT)
 import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as B
 import Data.Digest.Pure.MD5 (md5)
@@ -12,14 +13,13 @@ import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Repo (SourceTree, topdir, MonadRepos, MonadTop, sub, findSourceTree)
 import Debian.Repo.Fingerprint (RetrieveMethod, RetrieveAttribute(GitCommit), GitSpec(Branch, Commit))
-import Debian.Repo.Prelude.Process (readProcessV, timeTask)
+import Debian.Repo.Prelude.Process (readProcessE, readProcessV, timeTask)
 import Network.URI (URI(..), URIAuth(..), uriToString, parseURI)
 import System.Directory
 import System.Exit (ExitCode(..))
 import System.FilePath
 import System.Process (proc, shell, CreateProcess(cwd, cmdspec))
-import System.Process.ChunkE (collectProcessTriple, showCmdSpecForUser, showCreateProcessForUser)
-import System.Process.String (readCreateProcessWithExitCode)
+import System.Process.Extras (readCreateProcessWithExitCode, showCmdSpecForUser, showCreateProcessForUser)
 import System.Unix.Directory
 import Text.Regex
 
@@ -31,7 +31,7 @@ documentation = [ "darcs:<string> - a target of this form obtains the source cod
 
 darcsRev :: SourceTree -> RetrieveMethod -> IO (Either SomeException String)
 darcsRev tree m =
-    try (readProcessV (cmd {cwd = Just path}) mempty >>= (\ (_, out, _) -> return out) . collectProcessTriple >>=
+    try (readProcessV (cmd {cwd = Just path}) mempty >>= (\ (_, out, _) -> return out) >>=
          return . matchRegex (mkRegex "hash='([^']*)'") . B.unpack) >>=
     return . either Left (maybe (fail $ "could not find hash field in output of '" ++ showCmdSpecForUser (cmdspec cmd) ++ "'")
                                 (\ rev -> Right (show m ++ "=" ++ head rev)))
@@ -67,8 +67,8 @@ instance T.Download GitDL where
         sub ("git" </> sum) >>= liftIO . removeRecursiveSafely
     cleanTarget x =
         (\ top -> case any P.isKeepRCS (flags x) of
-                    False -> let cmd = "find " ++ top ++ " -name '.git' -maxdepth 1 -prune | xargs rm -rf" in timeTask (readProcessV (shell cmd) "")
-                    True -> return ([], 0))
+                    False -> let cmd = "find " ++ top ++ " -name '.git' -maxdepth 1 -prune | xargs rm -rf" in timeTask (readProcessE (shell cmd) "")
+                    True -> return (Right mempty, 0))
     attrs x = singleton $ GitCommit $ latestCommit x
 
 prepare :: (MonadRepos m, MonadTop m) => RetrieveMethod -> [P.PackageFlag] -> String -> [GitSpec] -> m T.SomeDownload
@@ -94,15 +94,15 @@ prepare method flags theUri gitspecs =
       verifySource :: FilePath -> IO SourceTree
       verifySource dir =
           -- Note that this logic is the opposite of 'tla changes'
-          do (result, out, _) <- readProcessV ((proc "git" ["status", "--porcelain"]) {cwd = Just dir}) mempty >>= return . collectProcessTriple
+          do result <- readProcessE ((proc "git" ["status", "--porcelain"]) {cwd = Just dir}) mempty
 
       -- CB  No output lines means no changes
       -- CB  git reset --hard    will remove all edits back to the most recent commit
 
       -- The status code does not reflect whether changes were made
-             case (result, B.null out) of
-               (Right ExitSuccess, False) -> removeSource dir >> createSource dir		-- Yes changes
-               (Right ExitSuccess, True) -> updateSource dir					-- No Changes!
+             case result of
+               Right (ExitSuccess, out, _) | B.null out -> updateSource dir -- No Changes!
+               Right (ExitSuccess, out, _) -> removeSource dir >> createSource dir -- Yes changes
                _ -> error $ "git failure"
       removeSource :: FilePath -> IO ()
       removeSource dir = removeRecursiveSafely dir
@@ -110,7 +110,7 @@ prepare method flags theUri gitspecs =
       updateSource :: FilePath -> IO SourceTree
       updateSource dir = do
         let p = (proc "git" ["pull", "--all"]) {cwd = Just dir}
-        _ <- readProcessV p B.empty
+        readProcessV p B.empty
         -- runTaskAndTest (updateStyle (commandTask ("cd " ++ dir ++ " && darcs pull --all " ++ renderForDarcs theUri))) >>
         findSourceTree dir
 
@@ -120,16 +120,16 @@ prepare method flags theUri gitspecs =
              createDirectoryIfMissing True parent
              removeRecursiveSafely dir
              let p = proc "git" (["clone", renderForGit theUri'] ++ concat (map (\ x -> case x of (Branch s) -> ["--branch", s]; _ -> []) gitspecs) ++ [dir])
-             (code, _, _) <- readProcessV p B.empty >>= return . collectProcessTriple
-             case (code, mapMaybe (\ x -> case x of (Commit s) -> Just s; _ -> Nothing) gitspecs) of
-                    (Right ExitSuccess, []) -> return ()
-                    (Right ExitSuccess, [commit]) -> do
-                      (code2, _, _) <- readProcessV ((proc "git" ["reset", "--hard", commit]) {cwd = Just dir}) B.empty >>= return . collectProcessTriple
-                      case code2 of
-                        Right ExitSuccess -> return ()
+             result <- readProcessE p B.empty
+             case (result, mapMaybe (\ x -> case x of (Commit s) -> Just s; _ -> Nothing) gitspecs) of
+                    (Right (ExitSuccess, _, _), []) -> return ()
+                    (Right (ExitSuccess, _, _), [commit]) -> do
+                      result2 <- readProcessE ((proc "git" ["reset", "--hard", commit]) {cwd = Just dir}) B.empty
+                      case result2 of
+                        Right (ExitSuccess, _, _) -> return ()
                         _ -> error "git reset failed"
-                    (Right ExitSuccess, commits) -> error $ "Git target specifies multiple commits: " ++ show commits
-                    result -> error $ "Git failed: " ++ showCreateProcessForUser p ++ " -> " ++ show code
+                    (Right (ExitSuccess, _, _), commits) -> error $ "Git target specifies multiple commits: " ++ show commits
+                    result -> error $ "Git failed: " ++ showCreateProcessForUser p ++ " -> " ++ show result
              findSourceTree dir
 
       -- CB  git reset --hard    will remove all edits back to the most recent commit

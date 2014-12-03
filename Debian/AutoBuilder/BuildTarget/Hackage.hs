@@ -14,7 +14,7 @@ import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as L
 import Data.List (isPrefixOf, tails, intercalate)
 import Data.Maybe (mapMaybe)
---import Data.Text as T (empty, unpack)
+import Data.Monoid (mempty)
 import Data.Version (Version, showVersion, parseVersion)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Download as T
@@ -28,10 +28,7 @@ import System.FilePath ((</>))
 import System.IO (hPutStrLn, hPutStr, stderr)
 import System.IO.Error (mkIOError)
 import System.Process (CreateProcess, proc, showCommandForUser, cmdspec)
-import System.Process.ChunkE (showCmdSpecForUser)
-import System.Process.ListLike (readCreateProcessWithExitCode, readProcessWithExitCode)
-import System.Process.ByteString.Lazy ()
-import System.Process.ByteString ()
+import System.Process.Extras (readCreateProcessWithExitCode, readProcessWithExitCode, showCmdSpecForUser)
 import System.Unix.Directory (removeRecursiveSafely)
 import Text.ParserCombinators.ReadP (readP_to_S)
 

@@ -4,6 +4,7 @@ module Debian.AutoBuilder.BuildTarget.Tla where
 import Control.Exception (SomeException, try)
 import Control.Monad.Trans
 import qualified Data.ByteString.Lazy as B
+import Data.Monoid (mempty)
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
@@ -12,7 +13,7 @@ import Debian.Repo.Fingerprint (RetrieveMethod)
 import System.FilePath (splitFileName, (</>))
 import System.Unix.Directory
 import System.Process (shell)
-import Debian.Repo.Prelude.Process (readProcessV, timeTask)
+import Debian.Repo.Prelude.Process (readProcessE, readProcessV, timeTask)
 import Debian.Repo.Prelude.Verbosity (qPutStrLn)
 import System.Directory
 
@@ -38,8 +39,8 @@ instance T.Download TlaDL where
     cleanTarget x = (\ path ->
                          case any P.isKeepRCS (flags x) of
                            False -> let cmd = "find '" ++ path ++ "' -name '.arch-ids' -o -name '{arch}' -prune | xargs rm -rf" in
-                                    timeTask (readProcessV (shell cmd) "")
-                           True -> (return ([], 0)))
+                                    timeTask (readProcessE (shell cmd) "")
+                           True -> (return (Right mempty, 0)))
 
 prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m T.SomeDownload
 prepare cache method flags version =

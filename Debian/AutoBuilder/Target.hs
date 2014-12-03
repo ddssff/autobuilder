@@ -24,7 +24,7 @@ import Data.Either (partitionEithers)
 import Data.Function (on)
 import Data.List (intercalate, intersect, intersperse, isSuffixOf, nub, partition, sortBy)
 import Data.Maybe (catMaybes, fromJust, isNothing, listToMaybe)
-import Data.Monoid ((<>))
+import Data.Monoid ((<>), mempty)
 import qualified Data.Set as Set (difference, empty, fromList, insert, member, null, partition, Set, size, toList, union)
 import qualified Data.Text as T (pack, unpack)
 import Data.Time (NominalDiffTime)
@@ -44,19 +44,21 @@ import Debian.Pretty (ppDisplay, ppPrint)
 import Debian.Relation (BinPkgName(..), SrcPkgName(..))
 import Debian.Relation.ByteString (Relation(..), Relations)
 import Debian.Release (ReleaseName(relName), releaseName')
-import Debian.Repo.Fingerprint (RetrieveMethod, dependencyChanges, DownstreamFingerprint, Fingerprint, packageFingerprint, showDependencies', showFingerprint)
-import Debian.Repo.Internal.Apt (MonadApt)
-import Debian.Repo.Internal.Repos (MonadRepos)
-import Debian.Repo.MonadOS (MonadOS(getOS), evalMonadOS, updateLists, withProc, withTmp, syncLocalPool, buildEssential, syncOS)
-import Debian.Repo.OSImage (osRoot)
 import Debian.Repo.Changes (saveChangesFile)
 import Debian.Repo.Dependencies (prettySimpleRelation, simplifyRelations, solutions)
 import Debian.Repo.EnvPath (EnvRoot(EnvRoot, rootPath))
+import Debian.Repo.Fingerprint (RetrieveMethod, dependencyChanges, DownstreamFingerprint, Fingerprint, packageFingerprint, showDependencies', showFingerprint)
+import Debian.Repo.Internal.Apt (MonadApt)
+import Debian.Repo.Internal.Repos (MonadRepos)
 import Debian.Repo.LocalRepository (LocalRepository, uploadLocal)
+import Debian.Repo.MonadOS (MonadOS(getOS), evalMonadOS, updateLists, withProc, withTmp, syncLocalPool, buildEssential, syncOS)
+import Debian.Repo.OSImage (osRoot)
 import Debian.Repo.Package (binaryPackageSourceVersion, sourcePackageBinaryNames)
 import Debian.Repo.PackageID (PackageID(packageVersion))
 import Debian.Repo.PackageIndex (BinaryPackage(packageInfo), prettyBinaryPackage, SourcePackage(sourceParagraph, sourcePackageID), sortBinaryPackages, sortSourcePackages)
 import Debian.Repo.Prelude (symbol)
+import Debian.Repo.Prelude.Process (readProcessE, readProcessV, modifyProcessEnv)
+import Debian.Repo.Prelude.Verbosity (ePutStrLn, noisier, qPutStrLn, quieter, ePutStr)
 import Debian.Repo.SourceTree (addLogEntry, buildDebs, copySourceTree, DebianBuildTree, findChanges, findOneDebianBuildTree, SourcePackageStatus(..), BuildDecision(..), HasChangeLog(entry), HasDebDir(debdir), HasTopDir(topdir))
 import Debian.Repo.State.AptImage (aptSourcePackages)
 import Debian.Repo.State.OSImage (osSourcePackages, osBinaryPackages, updateOS, buildArchOfOS)
@@ -74,10 +76,7 @@ import System.FilePath ((</>))
 import System.IO (hPutStrLn, stderr)
 import System.Posix.Files (fileSize, getFileStatus)
 import System.Process (CreateProcess(cwd), proc, readProcessWithExitCode, shell, showCommandForUser)
-import Debian.Repo.Prelude.Process (readProcessV, modifyProcessEnv)
-import Debian.Repo.Prelude.Verbosity (ePutStrLn, noisier, qPutStrLn, quieter, ePutStr)
-import System.Process.ChunkE (collectProcessTriple, collectProcessOutput)
-import System.Process.ByteString (readCreateProcess)
+import System.Process.Extras (showCreateProcessForUser)
 import System.Unix.Chroot (useEnv)
 import Text.Printf (printf)
 import Text.Regex (matchRegex, mkRegex)
@@ -412,19 +411,18 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
                  doDpkgSource True = readProcessV dpkgSource L.empty >> return ()
                  -- doDpkgSource' = setEnv "EDITOR" "/bin/true" >> readCreateProcess ((proc "dpkg-source" ["--commit", ".", "autobuilder.diff"]) {cwd = Just path'}) L.empty
              _ <- liftIO $ useEnv' root (\ _ -> return ())
-                             (-- Get the version number of dpkg-dev in the build environment
-                              let p = shell ("dpkg -s dpkg-dev | sed -n 's/^Version: //p'") in
-                              readProcessV p "" >>= (\ (_, out, _) -> return out) . collectProcessTriple >>= return . head . words . L.unpack >>= \ installed ->
-                              -- If it is >= 1.16.1 we may need to run dpkg-source --commit.
-                              readCreateProcess (shell ("dpkg --compare-versions '" ++ installed ++ "' ge 1.16.1")) "" >>= return . collectProcessTriple >>= \ (result, _, _) -> return (case result of Right ExitSuccess -> True; _ -> False) >>= \ newer ->
-                              when newer (doesDirectoryExist (path' </> "debian/patches") >>= doDpkgSource)
-                              {- when newer (do createDirectoryIfMissing True (path' </> "debian/patches")
-                                             -- Create the patch if there are any changes
-                                             _ <- lazyProcessF "dpkg-source" ["--commit", ".", "autobuilder.diff"] (Just path') Nothing L.empty
-                                             -- If the patch was not created, remove the directory
-                                             exists <- doesFileExist (path' </> "debian/patches/autobuilder.diff")
-                                             when (not exists) (removeDirectory (path' </> "debian/patches"))) -}
-                             )
+                             (do -- Get the version number of dpkg-dev in the build environment
+                                 let p = shell ("dpkg -s dpkg-dev | sed -n 's/^Version: //p'")
+                                 result <- readProcessE p ""
+                                 installed <- case result of
+                                                Right (ExitSuccess, out, _) -> return . head . words . L.unpack $ out
+                                                _ -> error $ showCreateProcessForUser p ++ " -> " ++ show result
+                                 -- If it is >= 1.16.1 we may need to run dpkg-source --commit.
+                                 result <- readProcessE (shell ("dpkg --compare-versions '" ++ installed ++ "' ge 1.16.1")) ""
+                                 newer <- case result of
+                                            Right (ExitSuccess, _, _ :: L.ByteString) -> return True
+                                            _ -> return False
+                                 when newer (doesDirectoryExist (path' </> "debian/patches") >>= doDpkgSource))
              -- If newVersion is set, pass a parameter to cabal-debian
              -- to set the exact version number.
              let ver = maybe [] (\ v -> [("CABALDEBIAN", Just (show ["--deb-version", show (prettyDebianVersion v)]))]) newVersion
@@ -717,10 +715,10 @@ updateChangesFile elapsed changes = do
 {-    autobuilderVersion <- processOutput "dpkg -s autobuilder | sed -n 's/^Version: //p'" >>=
                             return . either (const Nothing) Just >>=
                             return . maybe Nothing (listToMaybe . lines) -}
-      hostname <- let p = shell "hostname" in readProcessV p "" >>= (\ (_, out, _) -> return out) . collectProcessTriple >>= return . listToMaybe . lines . L.unpack
+      hostname <- let p = shell "hostname" in readProcessV p "" >>= (\ (_, out, _) -> return out) >>= return . listToMaybe . lines . L.unpack
       cpuInfo <- parseProcCpuinfo
       memInfo <- parseProcMeminfo
-      machine <- let p = shell "uname -m" in readProcessV p "" >>= (\ (_, out, _) -> return out) . collectProcessTriple >>= return . listToMaybe . lines . L.unpack
+      machine <- let p = shell "uname -m" in readProcessV p "" >>= (\ (_, out, _) -> return out) >>= return . listToMaybe . lines . L.unpack
       date <- getCurrentLocalRFC822Time
       let buildInfo = ["Autobuilder-Version: " ++ V.autoBuilderVersion] ++
                       ["Time: " ++ show elapsed] ++
@@ -774,9 +772,10 @@ buildDependencies downloadOnly source extra sourceFingerprint =
        command <- liftIO $ modifyProcessEnv [("DEBIAN_FRONTEND", Just "noninteractive")] (if True then aptGetCommand else pbuilderCommand)
        if downloadOnly then (qPutStrLn $ "Dependency packages:\n " ++ intercalate "\n  " (showDependencies' sourceFingerprint)) else return ()
        qPutStrLn $ (if downloadOnly then "Downloading" else "Installing") ++ " build dependencies into " ++ root
-       out <- withProc (liftIO (useEnv' root forceList (noisier 2 (readProcessV command "")) >>=
-                                return . snd . collectProcessOutput))
-       return $ decode out
+       withProc (liftIO (do result <- useEnv' root return (noisier 2 (readProcessE command mempty))
+                            case result of
+                              Right (ExitSuccess, out :: L.ByteString, _) -> return $ decode out
+                              _ -> error $ "buildDependencies: " ++ showCreateProcessForUser command ++ " -> " ++ show result))
 
 -- | This should probably be what the real useEnv does.
 useEnv' :: FilePath -> (a -> IO a) -> IO a -> IO a

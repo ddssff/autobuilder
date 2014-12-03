@@ -7,6 +7,7 @@ import Control.Monad.Trans
 import qualified Data.ByteString.Lazy.Char8 as L
 import Data.Digest.Pure.MD5 (md5)
 import Data.List
+import Data.Monoid (mempty)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import Debian.AutoBuilder.Types.Download (Download(..), SomeDownload(..))
 import qualified Debian.AutoBuilder.Types.Packages as P
@@ -16,10 +17,9 @@ import Debian.URI
 import System.FilePath (splitFileName, (</>))
 import System.Unix.Directory
 import System.Process (shell)
-import Debian.Repo.Prelude.Process (readProcessV, timeTask)
+import Debian.Repo.Prelude.Process (readProcessE, readProcessV, timeTask)
 import Debian.Repo.Prelude.Verbosity (qPutStrLn)
 import System.Directory
-import System.Process.ChunkE (collectProcessTriple)
 
 documentation :: [String]
 documentation = [ "bzr:<revision> - A target of this form retrieves the a Bazaar archive with the"
@@ -45,8 +45,8 @@ instance Download BzrDL where
             do qPutStrLn ("Clean Bazaar target in " ++ top)
                case any P.isKeepRCS (flags x) of
                  False -> let cmd = "find '" ++ top ++ "' -name '.bzr' -prune | xargs rm -rf" in
-                          timeTask (readProcessV (shell cmd) L.empty)
-                 True -> return ([], 0)
+                          timeTask (readProcessE (shell cmd) L.empty)
+                 True -> return (Right mempty, 0)
 
 prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m SomeDownload
 prepare cache method flags version =
@@ -73,7 +73,7 @@ prepare cache method flags version =
 
         -- computes a diff between this archive and some other parent archive and tries to merge the changes
         mergeSource dir =
-            readProcessV (shell cmd) L.empty >>= return . collectProcessTriple >>= \ (_, out, _) ->
+            readProcessV (shell cmd) L.empty >>= \ (_, out, _) ->
             if isInfixOf "Nothing to do." (L.unpack out)
             then findSourceTree dir :: IO SourceTree
             else commitSource dir

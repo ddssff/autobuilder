@@ -5,9 +5,11 @@ module Debian.AutoBuilder.Types.Download
     , SomeDownload(SomeDownload)
     ) where
 
+import Control.Exception (SomeException)
 import Control.Monad.Catch (MonadMask)
 import Control.Monad.Trans (MonadIO)
 import qualified Data.ByteString.Lazy as L (ByteString)
+import Data.Monoid (mempty)
 import Data.Set as Set (Set, empty)
 import Data.Time (NominalDiffTime)
 import Data.Version (Version)
@@ -15,7 +17,7 @@ import Debian.AutoBuilder.Types.Packages (PackageFlag)
 import Debian.Repo.Fingerprint (RetrieveMethod(..), RetrieveAttribute(..))
 import Debian.Repo.MonadOS (MonadOS)
 import Debian.Repo.Top (MonadTop)
-import System.Process.ChunkE (Chunk)
+import System.Exit (ExitCode(ExitSuccess))
 
 class Download a where
     method :: a -> RetrieveMethod
@@ -35,8 +37,8 @@ class Download a where
     -- ^ If we have access to an original tarball, this returns its path.
     flushSource :: (MonadIO m, MonadTop m) => a -> m ()
     -- ^ Remove any existing data before downloading anew
-    cleanTarget :: a -> FilePath -> IO ([Chunk L.ByteString], NominalDiffTime)
-    cleanTarget _ = \ _ -> return ([], 0)
+    cleanTarget :: a -> FilePath -> IO ((Either SomeException (ExitCode, L.ByteString, L.ByteString)), NominalDiffTime)
+    cleanTarget _ = \ _ -> return (Right (ExitSuccess, mempty, mempty), 0)
     -- ^ Clean version control info out of a target after it has
     -- been moved to the given location.
     buildWrapper :: forall m. (MonadOS m, MonadMask m, MonadIO m) => a -> m NominalDiffTime -> m NominalDiffTime

@@ -17,7 +17,7 @@ import qualified Data.ByteString.Lazy as L
 import Data.Either (partitionEithers)
 import Data.Generics (listify)
 import Data.List as List (intercalate, null, nub)
-import Data.Monoid ((<>), mconcat)
+import Data.Monoid ((<>), mconcat, mempty)
 import Data.Text as LT (unpack)
 import Data.Text.Encoding (decodeUtf8)
 import Data.Time(NominalDiffTime)
@@ -42,6 +42,8 @@ import Debian.Repo.Internal.Repos (MonadRepos, runReposCachedT, MonadReposCached
 import Debian.Repo.LocalRepository(uploadRemote, verifyUploadURI)
 import Debian.Repo.MonadOS (MonadOS(getOS), evalMonadOS)
 import Debian.Repo.OSImage (osLocalMaster, osLocalCopy, osBaseDistro)
+import Debian.Repo.Prelude.Process (readProcessE)
+import Debian.Repo.Prelude.Verbosity (ePutStrLn, ePutStr, qPutStrLn, qPutStr, withVerbosity, noisier)
 import Debian.Repo.Release (Release(releaseName))
 import Debian.Repo.Repo (repoReleaseInfo)
 import Debian.Repo.Slice (NamedSliceList(..), SliceList(slices), Slice(sliceRepoKey),
@@ -63,10 +65,7 @@ import System.Exit(ExitCode(..), exitWith)
 import System.FilePath ((</>))
 import System.IO as IO
 import System.Process (proc, cmdspec)
-import System.Process.ChunkE (Chunk, showCmdSpecForUser, indentChunks, collectProcessOutput)
-import System.Process.ListLike (readCreateProcess)
-import Debian.Repo.Prelude.Process (timeTask)
-import Debian.Repo.Prelude.Verbosity (ePutStrLn, ePutStr, qPutStrLn, qPutStr, withVerbosity, noisier)
+import System.Process.Extras (showCmdSpecForUser)
 -- import System.Process.Read.Verbosity (defaultVerbosity, withModifiedVerbosity, withModifiedVerbosity)
 import System.Unix.Directory(removeRecursiveSafely)
 import Text.Printf ( printf )
@@ -111,7 +110,7 @@ isFailure _ = False
 
 -- |Process one set of parameters.  Usually there is only one, but there
 -- can be several which are run sequentially.  Stop on first failure.
-doParameterSet :: (Applicative m, MonadReposCached m, MonadMask m) => DebT IO () -> [Failing ([Chunk L.ByteString], NominalDiffTime)] -> P.ParamRec -> m [Failing ([Chunk L.ByteString], NominalDiffTime)]
+doParameterSet :: (Applicative m, MonadReposCached m, MonadMask m) => DebT IO () -> [Failing (ExitCode, L.ByteString, L.ByteString)] -> P.ParamRec -> m [Failing (ExitCode, L.ByteString, L.ByteString)]
 -- If one parameter set fails, don't try the rest.  Not sure if
 -- this is the right thing, but it is safe.
 doParameterSet _ results _ | any isFailure results = return results
@@ -132,7 +131,7 @@ getLocalSources = do
     Nothing -> error $ "Invalid local repo root: " ++ show root
     Just uri -> repoSources (Just (envRoot root)) uri
 
-runParameterSet :: (Applicative m, MonadReposCached m, MonadMask m) => DebT IO () -> C.CacheRec -> m (Failing ([Chunk L.ByteString], NominalDiffTime))
+runParameterSet :: (Applicative m, MonadReposCached m, MonadMask m) => DebT IO () -> C.CacheRec -> m (Failing (ExitCode, L.ByteString, L.ByteString))
 runParameterSet init cache =
     do
       top <- askTop
@@ -143,8 +142,10 @@ runParameterSet init cache =
       when (P.flushAll params) (liftIO $ doFlush top)
       liftIO checkPermissions
       maybe (return ()) (verifyUploadURI (P.doSSHExport $ params)) (P.uploadURI params)
+      qPutStrLn "Preparing dependency environment"
       dependOS <- prepareDependOS params buildRelease
       let allTargets = filter (notZero . fst) (P.foldPackages (\ p l -> (P.spec p, P.flags p) : l) (P.buildPackages params) [])
+      qPutStrLn "Preparing build environment"
       buildOS <- evalMonadOS (do sources <- osBaseDistro <$> getOS
                                  updateCacheSources (P.ifSourcesChanged params) sources
                                  when (P.report params) (ePutStrLn . doReport $ allTargets)
@@ -224,7 +225,7 @@ runParameterSet init cache =
                True -> return ()
                False -> do qPutStr "You must be superuser to run the autobuilder (to use chroot environments.)"
                            liftIO $ exitWith (ExitFailure 1)
-      upload :: MonadRepos m => (LocalRepository, [Target SomeDownload]) -> m [Failing ([Chunk L.ByteString], NominalDiffTime)]
+      upload :: MonadRepos m => (LocalRepository, [Target SomeDownload]) -> m [Failing (ExitCode, L.ByteString, L.ByteString)]
       upload (repo, [])
           | P.doUpload params =
               case P.uploadURI params of
@@ -238,7 +239,7 @@ runParameterSet init cache =
                True -> qPutStrLn "Skipping upload."
                False -> return ()
              error msg
-      newDist :: ([ErrorMsg], [([Chunk L.ByteString], NominalDiffTime)]) -> IO (Failing ([Chunk L.ByteString], NominalDiffTime))
+      newDist :: ([ErrorMsg], [(ExitCode, L.ByteString, L.ByteString)]) -> IO (Failing (ExitCode, L.ByteString, L.ByteString))
       newDist ([], _)
           | P.doNewDist params =
               case P.uploadURI params of
@@ -255,19 +256,19 @@ runParameterSet init cache =
                                          args = ["--sign", "--root", uriPath uri] in
                                      (proc cmd args)
                        qPutStrLn (" -> " ++ showCmdSpecForUser (cmdspec p))
-                       result <- try (timeTask (readCreateProcess p L.empty)) >>= return . either (\ (e :: SomeException) -> Failure [show e]) testOutput
+                       result <- readProcessE p L.empty >>= return . either (\ (e :: SomeException) -> Failure [show e]) testOutput
                        case result of
                          (Success _) -> return result
                          (Failure msgs) -> ePutStrLn (intercalate "\n " ("newdist failed:" : msgs)) >> return result
                        return result
                 _ -> error "Missing Upload-URI parameter"
-          | True = return (Success ([], (fromInteger 0)))
+          | True = return (Success mempty)
       newDist (errors, _) = return $ Failure errors
 
-      testOutput :: ((ExitCode, [Chunk L.ByteString]), NominalDiffTime) -> Failing ([Chunk L.ByteString], NominalDiffTime)
-      testOutput ((ExitSuccess, xs), t) = Success (xs, t)
-      testOutput ((code, xs), t) =
-          Failure [show code <> "\n" <> (LT.unpack $ decodeUtf8 $ mconcat $ L.toChunks $ snd $ collectProcessOutput $ indentChunks " 1> " " 2> " (xs :: [Chunk L.ByteString]))]
+      testOutput :: (ExitCode, L.ByteString, L.ByteString) -> Failing (ExitCode, L.ByteString, L.ByteString)
+      testOutput result@(ExitSuccess, _, _) = Success result
+      testOutput (code, out, err) =
+          Failure [show code <> "\n" <> ({-LT.unpack $ decodeUtf8 $ mconcat $ L.toChunks $ snd $ indentChunks " 1> " " 2> "-} show (out, err))]
 
 -- | Make sure the build release ("P.buildRelease params") - the
 -- release and repository to which we intend to upload the packages

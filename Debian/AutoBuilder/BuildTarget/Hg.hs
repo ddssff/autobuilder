@@ -5,12 +5,13 @@ module Debian.AutoBuilder.BuildTarget.Hg where
 import Control.Exception (SomeException, try)
 import Control.Monad.Trans
 import qualified Data.ByteString.Lazy as B
+import Data.Monoid (mempty)
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Repo
 import Debian.Repo.Fingerprint (RetrieveMethod)
-import Debian.Repo.Prelude.Process (readProcessV, timeTask)
+import Debian.Repo.Prelude.Process (readProcessE, readProcessV, timeTask)
 import System.Directory
 import System.FilePath (splitFileName, (</>))
 import System.Process (shell)
@@ -36,8 +37,8 @@ instance T.Download HgDL where
     cleanTarget x =
         (\ path -> case any P.isKeepRCS (flags x) of
                      False -> let cmd = "rm -rf " ++ path ++ "/.hg" in
-                              timeTask (readProcessV (shell cmd) B.empty)
-                     _ -> return ([], 0))
+                              timeTask (readProcessE (shell cmd) B.empty)
+                     _ -> return (Right mempty, 0))
 
 prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m T.SomeDownload
 prepare cache method flags archive =
