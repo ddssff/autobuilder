@@ -40,7 +40,7 @@ Library
   Hs-Source-Dirs: .
   if flag (local-debian-repo) || flag (local-cabal-debian)
     Hs-Source-Dirs: ../debian-repo
-    Build-Depends: process-chunk, transformers-compat
+    Build-Depends: transformers-compat
   else
     Build-Depends: debian-repo >= 5.70
 
@@ -81,7 +81,6 @@ Library
       , parsec
       , prettyclass
       , process
-      , process-chunk
       , process-extras >= 0.2.1
       , pureMD5
       , regex-compat
