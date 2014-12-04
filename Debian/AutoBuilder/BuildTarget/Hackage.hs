@@ -28,7 +28,7 @@ import System.FilePath ((</>))
 import System.IO (hPutStrLn, hPutStr, stderr)
 import System.IO.Error (mkIOError)
 import System.Process (CreateProcess, proc, showCommandForUser, cmdspec)
-import System.Process.Extras (readCreateProcessWithExitCode, readProcessWithExitCode, showCmdSpecForUser)
+import System.Process.ListLike (readCreateProcessWithExitCode, readProcessWithExitCode, showCmdSpecForUser)
 import System.Unix.Directory (removeRecursiveSafely)
 import Text.ParserCombinators.ReadP (readP_to_S)
 

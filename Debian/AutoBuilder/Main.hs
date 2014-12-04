@@ -65,7 +65,7 @@ import System.Exit(ExitCode(..), exitWith)
 import System.FilePath ((</>))
 import System.IO as IO
 import System.Process (proc, cmdspec)
-import System.Process.Extras (showCmdSpecForUser)
+import System.Process.ListLike (showCmdSpecForUser)
 -- import System.Process.Read.Verbosity (defaultVerbosity, withModifiedVerbosity, withModifiedVerbosity)
 import System.Unix.Directory(removeRecursiveSafely)
 import Text.Printf ( printf )

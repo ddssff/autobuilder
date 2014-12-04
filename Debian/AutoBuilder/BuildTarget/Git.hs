@@ -19,7 +19,7 @@ import System.Directory
 import System.Exit (ExitCode(..))
 import System.FilePath
 import System.Process (proc, shell, CreateProcess(cwd, cmdspec))
-import System.Process.Extras (readCreateProcessWithExitCode, showCmdSpecForUser, showCreateProcessForUser)
+import System.Process.ListLike (readCreateProcessWithExitCode, showCmdSpecForUser, showCreateProcessForUser)
 import System.Unix.Directory
 import Text.Regex
 
