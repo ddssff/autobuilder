@@ -81,7 +81,7 @@ Library
       , parsec
       , prettyclass
       , process
-      , process-extras >= 0.2.1
+      , process-listlike >= 1.0
       , pureMD5
       , regex-compat
       , regex-posix
