@@ -110,9 +110,10 @@ prepare method flags theUri gitspecs =
       updateSource :: FilePath -> IO SourceTree
       updateSource dir = do
         let p = (proc "git" ["pull", "--all"]) {cwd = Just dir}
-        readProcessV p B.empty
-        -- runTaskAndTest (updateStyle (commandTask ("cd " ++ dir ++ " && darcs pull --all " ++ renderForDarcs theUri))) >>
-        findSourceTree dir
+        result <- readProcessE p B.empty
+        case result of
+          Right (ExitSuccess, _, _) -> findSourceTree dir
+          _ -> removeSource dir >> createSource dir
 
       createSource :: FilePath -> IO SourceTree
       createSource dir =
