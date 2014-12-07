@@ -1,9 +1,10 @@
-{-# LANGUAGE GADTs, OverloadedStrings, Rank2Types, ScopedTypeVariables #-}
+{-# LANGUAGE CPP, GADTs, OverloadedStrings, Rank2Types, ScopedTypeVariables #-}
 module Debian.AutoBuilder.BuildTarget.Darcs
     ( documentation
     , prepare
     ) where
 
+import Control.Applicative ((<$>))
 import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as B
 import Data.Digest.Pure.MD5 (md5)
@@ -75,70 +76,77 @@ instance T.Download DarcsDL where
     buildWrapper _ = id
     attrs x = singleton (DarcsChangesId (attr x))
 
-prepare :: (MonadRepos m, MonadTop m) =>
-           RetrieveMethod -> [P.PackageFlag] -> String -> m T.SomeDownload
-prepare method flags theUri =
-    do
-      base <- sub "darcs"
-      let dir = base ++ "/" ++ sum
-      exists <- liftIO $ doesDirectoryExist dir
-      tree <- liftIO $ if exists then verifySource dir else createSource dir
-      -- Filter out the patch hash values, sort them because darcs
-      -- patches don't have a total ordering, and then return the
-      -- checksum.
-      attr <- liftIO $ readProcessV ((proc "darcs" ["log"]) {cwd = Just dir}) B.empty >>= \ (_, b, _) -> return $ darcsLogChecksum b
-      _output <- liftIO $ fixLink base
-      return $ T.SomeDownload $ DarcsDL { method = method
-                                        , flags = flags
-                                        , uri = theUri
-                                        , tree = tree
-                                        , attr = attr }
+prepare :: (MonadRepos m, MonadTop m) => RetrieveMethod -> [P.PackageFlag] -> String -> m T.SomeDownload
+prepare method flags theUri = sub "darcs" >>= prepare' method flags theUri
+
+prepare' :: forall m. (MonadRepos m, MonadTop m) =>
+           RetrieveMethod -> [P.PackageFlag] -> String -> FilePath -> m T.SomeDownload
+prepare' method flags theUri base = do
+  update >>= maybe recreate (return . Just) >>= finish
     where
+      update :: m (Maybe SourceTree)
+      update = do
+        exists <- liftIO $ doesDirectoryExist dir
+        case exists of
+          True -> do
+            result <- readProcessE ((proc "darcs" ["whatsnew"]) {cwd = Just dir}) ("" :: String)
+            case result of
+              Right (ExitFailure 1, "No changes!\n", "") -> do
+                do let cmd = (proc "darcs" ["pull", "--all", "--no-allow-conflicts", renderForDarcs theUri']) {cwd = Just dir}
+                   result <- readProcessE cmd B.empty
+                   case result of
+                     Right (ExitSuccess, _, _) -> liftIO $ Just <$> findSourceTree dir
+                     _ -> return Nothing
+              _ -> return Nothing -- Not the result expected with a pristine repo
+          False -> return Nothing
+
+      recreate :: m (Maybe SourceTree)
+      recreate = do
+        liftIO $ removeRecursiveSafely dir
+        liftIO $ createDirectoryIfMissing True parent
+        let cmd = proc "darcs" (["get", renderForDarcs theUri'] ++ maybe [] (\ tag -> [" --tag", tag]) theTag ++ [dir])
+        result <- readProcessE cmd B.empty
+        case result of
+          Right (ExitSuccess, _, _) -> liftIO $ Just <$> findSourceTree dir
+          _ -> return Nothing
+
+      finish :: Maybe SourceTree -> m T.SomeDownload
+      finish Nothing = error $ "Failure retrieving darcs repo " ++ theUri
+      finish (Just tree) = do
+          attr <- liftIO $ readProcessV ((proc "darcs" ["log"]) {cwd = Just dir}) B.empty >>= \ (_, b, _) -> return $ darcsLogChecksum b
+          _ <- liftIO $ fixLink -- this link is just for the convenience of someone poking around in ~/.autobuilder
+          return $ T.SomeDownload $ DarcsDL { method = method
+                                            , flags = flags
+                                            , uri = theUri
+                                            , tree = tree
+                                            , attr = attr }
+      -- Maybe we should include the "darcs:" in the string we checksum?
+      fixLink :: IO ()
+      fixLink = do
+          let rm = proc "rm" ["-rf", link]
+              ln = proc "ln" ["-s", sum, link]
+          _ <- readProcessV rm B.empty
+          _ <- readProcessV ln B.empty
+          return ()
+
       -- Collect all the checksum lines, sort them, and checksum the
       -- result.  The resulting checksum should map one to one with
       -- the state of the darcs repo.
       darcsLogChecksum :: B.ByteString -> String
       darcsLogChecksum = show . md5 . B.unlines . sort . filter (B.isPrefixOf "patch ") . B.lines
-      verifySource :: FilePath -> IO SourceTree
-      verifySource dir =
-          -- Note that this logic is the opposite of 'tla changes'
-          do result <- readProcessE ((proc "darcs" ["whatsnew"]) {cwd = Just dir}) ("" :: String)
-             case result of
-               Right (ExitSuccess, _, _) -> removeSource dir >> createSource dir		-- Yes changes
-               _ -> updateSource dir				-- No Changes!
-      removeSource :: FilePath -> IO ()
-      removeSource dir = removeRecursiveSafely dir
 
-      updateSource :: FilePath -> IO SourceTree
-      updateSource dir = do
-          let cmd = (proc "darcs" ["pull", "--all", "--no-allow-conflicts", renderForDarcs theUri']) {cwd = Just dir}
-          _ <- readProcessV cmd B.empty
-          -- runTaskAndTest (updateStyle (commandTask ("cd " ++ dir ++ " && darcs pull --all " ++ renderForDarcs theUri))) >>
-          findSourceTree dir
-
-      createSource :: FilePath -> IO SourceTree
-      createSource dir =
-          let (parent, _) = splitFileName dir in
-          do createDirectoryIfMissing True parent
-             _output <- readProcessV cmd B.empty
-             findSourceTree dir
-          where
-            cmd = proc "darcs" (["get", renderForDarcs theUri'] ++ maybe [] (\ tag -> [" --tag", tag]) theTag ++ [dir])
-      -- Maybe we should include the "darcs:" in the string we checksum?
-      fixLink base = do
-          let link = base ++ "/" ++ name
-              rm = proc "rm" ["-rf", link]
-              ln = proc "ln" ["-s", sum, link]
-          _ <- readProcessV rm B.empty
-          readProcessV ln B.empty
-      name = snd . splitFileName $ (uriPath theUri')
       sum = show (md5 (B.pack uriAndTag))
+      name = snd . splitFileName $ (uriPath theUri')
+      dir = base </> sum
+      (parent, _) = splitFileName dir
+      link = base </> name
       uriAndTag = uriToString id theUri' "" ++ maybe "" (\ tag -> "=" ++ tag) theTag
       theTag = case mapMaybe P.darcsTag flags of
                  [] -> Nothing
                  [x] -> Just x
                  xs -> error ("Conflicting tags for darcs get of " ++ theUri ++ ": " ++ show xs)
       theUri' = mustParseURI theUri
+
 
 renderForDarcs :: URI -> String
 renderForDarcs uri =
