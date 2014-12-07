@@ -24,8 +24,8 @@ import Debian.Pretty (ppDisplay)
 import Debian.Relation (SrcPkgName(..))
 import Debian.Repo.Fingerprint (RetrieveMethod(Debianize''), retrieveMethodMD5)
 import Debian.Repo.Internal.Repos (MonadRepos)
-import Debian.Repo.Prelude (rsync)
 import Debian.Repo.Prelude.Verbosity (qPutStrLn)
+import Debian.Repo.Rsync (rsyncOld)
 import Debian.Repo.Top (MonadTop, sub, runTopT)
 import Distribution.Verbosity (normal)
 import Distribution.Package (PackageIdentifier(..))
@@ -66,7 +66,7 @@ prepare defaultAtoms cache method@(Debian.Repo.Fingerprint.Debianize'' _ sourceN
     do let cabdir = T.getTop cabal
        debdir <- sub ("debianize" </> retrieveMethodMD5 method)
        liftIO $ createDirectoryIfMissing True debdir
-       _ <- rsync [] cabdir debdir
+       _ <- rsyncOld [] cabdir debdir
        cabfiles <- liftIO $ getDirectoryContents cabdir >>= return . filter (isSuffixOf ".cabal")
        case cabfiles of
          [cabfile] ->

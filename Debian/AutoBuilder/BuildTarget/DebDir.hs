@@ -12,6 +12,7 @@ import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Changes (logVersion)
 import Debian.Repo
 import Debian.Repo.Fingerprint (RetrieveMethod, retrieveMethodMD5)
+import Debian.Repo.Rsync (rsyncOld)
 import Debian.Version (version)
 import System.Directory
 import System.FilePath ((</>))
@@ -42,8 +43,8 @@ prepare method flags upstream debian =
     sub "deb-dir" >>= \ dir ->
     sub ("deb-dir" </> retrieveMethodMD5 method) >>= \ dest ->
     liftIO (createDirectoryIfMissing True dir) >>
-    rsync [] (T.getTop upstream) dest >>
-    rsync [] (T.getTop debian </> "debian") (dest </> "debian") >>
+    rsyncOld [] (T.getTop upstream) dest >>
+    rsyncOld [] (T.getTop debian </> "debian") (dest </> "debian") >>
     liftIO (findSourceTree dest :: IO DebianSourceTree) >>= \ tree ->
 
     let tgt = DebDirDL {ddMethod = method, ddFlags = flags, upstream = SomeDownload upstream, debian = SomeDownload debian, tree = tree} in
