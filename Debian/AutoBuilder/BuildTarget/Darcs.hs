@@ -16,7 +16,7 @@ import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Repo
 import Debian.Repo.Fingerprint (RetrieveMethod, RetrieveAttribute(DarcsChangesId))
-import Debian.Repo.Prelude.Process (readProcessE, readProcessV)
+import Debian.Repo.Prelude.Process (readProcessQE, readProcessVE, readProcessV)
 import Network.URI (URI(..), URIAuth(..), uriToString, parseURI)
 import System.Directory
 import System.Exit (ExitCode(..))
@@ -71,7 +71,7 @@ instance T.Download DarcsDL where
           theUri' = mustParseURI (uri x)
     cleanTarget x = \ top -> case any P.isKeepRCS (flags x) of
                                False -> let cmd = shell ("find " ++ top ++ " -name '_darcs' -maxdepth 1 -prune | xargs rm -rf") in
-                                        timeTask (readProcessE cmd "")
+                                        timeTask (readProcessVE cmd "")
                                True -> return ((Right mempty), 0)
     buildWrapper _ = id
     attrs x = singleton (DarcsChangesId (attr x))
@@ -89,11 +89,11 @@ prepare' method flags theUri base = do
         exists <- liftIO $ doesDirectoryExist dir
         case exists of
           True -> do
-            result <- readProcessE ((proc "darcs" ["whatsnew"]) {cwd = Just dir}) ("" :: String)
+            result <- readProcessQE ((proc "darcs" ["whatsnew"]) {cwd = Just dir}) ("" :: String)
             case result of
               Right (ExitFailure 1, "No changes!\n", "") -> do
                 do let cmd = (proc "darcs" ["pull", "--all", "--no-allow-conflicts", renderForDarcs theUri']) {cwd = Just dir}
-                   result <- readProcessE cmd B.empty
+                   result <- readProcessVE cmd B.empty
                    case result of
                      Right (ExitSuccess, _, _) -> liftIO $ Just <$> findSourceTree dir
                      _ -> return Nothing
@@ -105,7 +105,7 @@ prepare' method flags theUri base = do
         liftIO $ removeRecursiveSafely dir
         liftIO $ createDirectoryIfMissing True parent
         let cmd = proc "darcs" (["get", renderForDarcs theUri'] ++ maybe [] (\ tag -> [" --tag", tag]) theTag ++ [dir])
-        result <- readProcessE cmd B.empty
+        result <- readProcessVE cmd B.empty
         case result of
           Right (ExitSuccess, _, _) -> liftIO $ Just <$> findSourceTree dir
           _ -> return Nothing

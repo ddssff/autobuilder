@@ -13,7 +13,7 @@ import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Repo (SourceTree, topdir, MonadRepos, MonadTop, sub, findSourceTree)
 import Debian.Repo.Fingerprint (RetrieveMethod, RetrieveAttribute(GitCommit), GitSpec(Branch, Commit))
-import Debian.Repo.Prelude.Process (readProcessE, readProcessV, timeTask)
+import Debian.Repo.Prelude.Process (readProcessVE, readProcessV, timeTask)
 import Network.URI (URI(..), URIAuth(..), uriToString, parseURI)
 import System.Directory
 import System.Exit (ExitCode(..))
@@ -67,7 +67,7 @@ instance T.Download GitDL where
         sub ("git" </> sum) >>= liftIO . removeRecursiveSafely
     cleanTarget x =
         (\ top -> case any P.isKeepRCS (flags x) of
-                    False -> let cmd = "find " ++ top ++ " -name '.git' -maxdepth 1 -prune | xargs rm -rf" in timeTask (readProcessE (shell cmd) "")
+                    False -> let cmd = "find " ++ top ++ " -name '.git' -maxdepth 1 -prune | xargs rm -rf" in timeTask (readProcessVE (shell cmd) "")
                     True -> return (Right mempty, 0))
     attrs x = singleton $ GitCommit $ latestCommit x
 
@@ -94,7 +94,7 @@ prepare method flags theUri gitspecs =
       verifySource :: FilePath -> IO SourceTree
       verifySource dir =
           -- Note that this logic is the opposite of 'tla changes'
-          do result <- readProcessE ((proc "git" ["status", "--porcelain"]) {cwd = Just dir}) mempty
+          do result <- readProcessVE ((proc "git" ["status", "--porcelain"]) {cwd = Just dir}) mempty
 
       -- CB  No output lines means no changes
       -- CB  git reset --hard    will remove all edits back to the most recent commit
@@ -110,7 +110,7 @@ prepare method flags theUri gitspecs =
       updateSource :: FilePath -> IO SourceTree
       updateSource dir = do
         let p = (proc "git" ["pull", "--all"]) {cwd = Just dir}
-        result <- readProcessE p B.empty
+        result <- readProcessVE p B.empty
         case result of
           Right (ExitSuccess, _, _) -> findSourceTree dir
           _ -> removeSource dir >> createSource dir
@@ -121,11 +121,11 @@ prepare method flags theUri gitspecs =
              createDirectoryIfMissing True parent
              removeRecursiveSafely dir
              let p = proc "git" (["clone", renderForGit theUri'] ++ concat (map (\ x -> case x of (Branch s) -> ["--branch", s]; _ -> []) gitspecs) ++ [dir])
-             result <- readProcessE p B.empty
+             result <- readProcessVE p B.empty
              case (result, mapMaybe (\ x -> case x of (Commit s) -> Just s; _ -> Nothing) gitspecs) of
                     (Right (ExitSuccess, _, _), []) -> return ()
                     (Right (ExitSuccess, _, _), [commit]) -> do
-                      result2 <- readProcessE ((proc "git" ["reset", "--hard", commit]) {cwd = Just dir}) B.empty
+                      result2 <- readProcessVE ((proc "git" ["reset", "--hard", commit]) {cwd = Just dir}) B.empty
                       case result2 of
                         Right (ExitSuccess, _, _) -> return ()
                         _ -> error "git reset failed"

@@ -42,7 +42,7 @@ Library
     Hs-Source-Dirs: ../debian-repo
     Build-Depends: transformers-compat
   else
-    Build-Depends: debian-repo >= 5.71
+    Build-Depends: debian-repo >= 5.72
 
   if flag (local-cabal-debian)
     Hs-Source-Dirs: ../cabal-debian/src
@@ -141,7 +141,7 @@ Executable autobuilder-tests
     Hs-Source-Dirs: ., ../debian-repo
     Build-Depends: deepseq, data-lens-template
   else
-    Build-Depends: debian-repo >= 5.71
+    Build-Depends: debian-repo >= 5.72
 
   if flag (local-cabal-debian)
     Hs-Source-Dirs: ., ../cabal-debian/src

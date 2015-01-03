@@ -17,7 +17,7 @@ import Debian.URI
 import System.FilePath (splitFileName, (</>))
 import System.Unix.Directory
 import System.Process (shell)
-import Debian.Repo.Prelude.Process (readProcessE, readProcessV, timeTask)
+import Debian.Repo.Prelude.Process (readProcessVE, readProcessV, timeTask)
 import Debian.Repo.Prelude.Verbosity (qPutStrLn)
 import System.Directory
 
@@ -45,7 +45,7 @@ instance Download BzrDL where
             do qPutStrLn ("Clean Bazaar target in " ++ top)
                case any P.isKeepRCS (flags x) of
                  False -> let cmd = "find '" ++ top ++ "' -name '.bzr' -prune | xargs rm -rf" in
-                          timeTask (readProcessE (shell cmd) L.empty)
+                          timeTask (readProcessVE (shell cmd) L.empty)
                  True -> return (Right mempty, 0)
 
 prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m SomeDownload

@@ -11,7 +11,7 @@ import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Repo
 import Debian.Repo.Fingerprint (RetrieveMethod)
-import Debian.Repo.Prelude.Process (readProcessE, readProcessV, timeTask)
+import Debian.Repo.Prelude.Process (readProcessVE, readProcessV, timeTask)
 import System.Directory
 import System.FilePath (splitFileName, (</>))
 import System.Process (shell)
@@ -37,7 +37,7 @@ instance T.Download HgDL where
     cleanTarget x =
         (\ path -> case any P.isKeepRCS (flags x) of
                      False -> let cmd = "rm -rf " ++ path ++ "/.hg" in
-                              timeTask (readProcessE (shell cmd) B.empty)
+                              timeTask (readProcessVE (shell cmd) B.empty)
                      _ -> return (Right mempty, 0))
 
 prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m T.SomeDownload

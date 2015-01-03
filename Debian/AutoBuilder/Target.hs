@@ -57,7 +57,7 @@ import Debian.Repo.Package (binaryPackageSourceVersion, sourcePackageBinaryNames
 import Debian.Repo.PackageID (PackageID(packageVersion))
 import Debian.Repo.PackageIndex (BinaryPackage(packageInfo), prettyBinaryPackage, SourcePackage(sourceParagraph, sourcePackageID), sortBinaryPackages, sortSourcePackages)
 import Debian.Repo.Prelude (symbol)
-import Debian.Repo.Prelude.Process (readProcessE, readProcessV, modifyProcessEnv)
+import Debian.Repo.Prelude.Process (readProcessVE, readProcessV, modifyProcessEnv)
 import Debian.Repo.Prelude.Verbosity (ePutStrLn, noisier, qPutStrLn, quieter, ePutStr)
 import Debian.Repo.SourceTree (addLogEntry, buildDebs, copySourceTree, DebianBuildTree, findChanges, findOneDebianBuildTree, SourcePackageStatus(..), BuildDecision(..), HasChangeLog(entry), HasDebDir(debdir), HasTopDir(topdir))
 import Debian.Repo.State.AptImage (aptSourcePackages)
@@ -413,12 +413,12 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
              _ <- liftIO $ useEnv' root (\ _ -> return ())
                              (do -- Get the version number of dpkg-dev in the build environment
                                  let p = shell ("dpkg -s dpkg-dev | sed -n 's/^Version: //p'")
-                                 result <- readProcessE p ""
+                                 result <- readProcessVE p ""
                                  installed <- case result of
                                                 Right (ExitSuccess, out, _) -> return . head . words . L.unpack $ out
                                                 _ -> error $ showCreateProcessForUser p ++ " -> " ++ show result
                                  -- If it is >= 1.16.1 we may need to run dpkg-source --commit.
-                                 result <- readProcessE (shell ("dpkg --compare-versions '" ++ installed ++ "' ge 1.16.1")) ""
+                                 result <- readProcessVE (shell ("dpkg --compare-versions '" ++ installed ++ "' ge 1.16.1")) ""
                                  newer <- case result of
                                             Right (ExitSuccess, _, _ :: L.ByteString) -> return True
                                             _ -> return False
@@ -772,7 +772,7 @@ buildDependencies downloadOnly source extra sourceFingerprint =
        command <- liftIO $ modifyProcessEnv [("DEBIAN_FRONTEND", Just "noninteractive")] (if True then aptGetCommand else pbuilderCommand)
        if downloadOnly then (qPutStrLn $ "Dependency packages:\n " ++ intercalate "\n  " (showDependencies' sourceFingerprint)) else return ()
        qPutStrLn $ (if downloadOnly then "Downloading" else "Installing") ++ " build dependencies into " ++ root
-       withProc (liftIO (do result <- useEnv' root return (noisier 2 (readProcessE command mempty))
+       withProc (liftIO (do result <- useEnv' root return (noisier 2 (readProcessVE command mempty))
                             case result of
                               Right (ExitSuccess, out :: L.ByteString, _) -> return $ decode out
                               _ -> error $ "buildDependencies: " ++ showCreateProcessForUser command ++ " -> " ++ show result))

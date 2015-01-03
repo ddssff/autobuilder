@@ -13,7 +13,7 @@ import Debian.Repo.Fingerprint (RetrieveMethod)
 import System.FilePath (splitFileName, (</>))
 import System.Unix.Directory
 import System.Process (shell)
-import Debian.Repo.Prelude.Process (readProcessE, readProcessV, timeTask)
+import Debian.Repo.Prelude.Process (readProcessVE, readProcessV, timeTask)
 import Debian.Repo.Prelude.Verbosity (qPutStrLn)
 import System.Directory
 
@@ -39,7 +39,7 @@ instance T.Download TlaDL where
     cleanTarget x = (\ path ->
                          case any P.isKeepRCS (flags x) of
                            False -> let cmd = "find '" ++ path ++ "' -name '.arch-ids' -o -name '{arch}' -prune | xargs rm -rf" in
-                                    timeTask (readProcessE (shell cmd) "")
+                                    timeTask (readProcessVE (shell cmd) "")
                            True -> (return (Right mempty, 0)))
 
 prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m T.SomeDownload

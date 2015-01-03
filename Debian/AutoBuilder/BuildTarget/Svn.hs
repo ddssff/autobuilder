@@ -16,7 +16,7 @@ import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Repo
 import Debian.Repo.Fingerprint (RetrieveMethod)
-import Debian.Repo.Prelude.Process (readProcessE, readProcessV, timeTask)
+import Debian.Repo.Prelude.Process (readProcessVE, readProcessV, timeTask)
 import Network.URI (URI(..), URIAuth(..), parseURI, unEscapeString)
 import System.Directory
 import System.Exit
@@ -28,7 +28,7 @@ documentation :: [String]
 documentation = [ "svn:<uri> - A target of this form retrieves the source code from"
                 , "a subversion repository." ]
 
-svn args = readProcessE (proc "svn" args) mempty
+svn args = readProcessVE (proc "svn" args) mempty
 
 username userInfo =
     let un = takeWhile (/= ':') userInfo in
@@ -58,7 +58,7 @@ instance T.Download SvnDL where
     cleanTarget x = (\ path ->
                          case any P.isKeepRCS (flags x) of
                            False -> let cmd = "find " ++ path ++ " -name .svn -type d -print0 | xargs -0 -r -n1 rm -rf" in
-                                    timeTask (readProcessE (shell cmd) "")
+                                    timeTask (readProcessVE (shell cmd) "")
                            True -> return (Right mempty, 0))
 
 prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m T.SomeDownload
@@ -98,7 +98,7 @@ prepare cache method flags uri =
           findSourceTree dir :: IO SourceTree
       checkout :: FilePath -> IO (Either String (ExitCode, L.ByteString, L.ByteString))
       --checkout = svn createStyle args
-      checkout dir = readProcessE (proc "svn" args) "" >>= return . finish
+      checkout dir = readProcessVE (proc "svn" args) "" >>= return . finish
           where
             args = ([ "co","--no-auth-cache","--non-interactive"] ++
                     (username userInfo) ++ (password userInfo) ++
