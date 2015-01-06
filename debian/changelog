@@ -1,3 +1,9 @@
+haskell-autobuilder (6.70.2) unstable; urgency=low
+
+  * Improve handling of git commit specifications.
+
+ -- David Fox <dsf@seereason.com>  Tue, 06 Jan 2015 07:12:42 -0800
+
 haskell-autobuilder (6.70.1) unstable; urgency=low
 
   * Bump version to get away from some bad upload or something.
