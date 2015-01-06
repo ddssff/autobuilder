@@ -113,7 +113,8 @@ prepare' method flags theUri base = do
       finish :: Maybe SourceTree -> m T.SomeDownload
       finish Nothing = error $ "Failure retrieving darcs repo " ++ theUri
       finish (Just tree) = do
-          attr <- liftIO $ readProcessV ((proc "darcs" ["log"]) {cwd = Just dir}) B.empty >>= \ (_, b, _) -> return $ darcsLogChecksum b
+          attr <- liftIO (readProcessQE ((proc "darcs" ["log"]) {cwd = Just dir}) B.empty) >>=
+                  either (\ e -> error $ "Failure examining darcs log: " ++ show e) (\ (_, b, _) -> return $ darcsLogChecksum b)
           _ <- liftIO $ fixLink -- this link is just for the convenience of someone poking around in ~/.autobuilder
           return $ T.SomeDownload $ DarcsDL { method = method
                                             , flags = flags

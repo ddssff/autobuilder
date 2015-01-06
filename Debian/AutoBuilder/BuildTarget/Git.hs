@@ -76,8 +76,7 @@ prepare method flags theUri gitspecs =
     sub "git" >>= \ base ->
     sub ("git" </> sum) >>= \ dir -> liftIO $
     do
-      exists <- doesDirectoryExist dir
-      tree <- if exists then verifySource dir else createSource dir
+      tree <- prepareSource dir
       _output <- fixLink base
       let p = (proc "git" ["log", "-n", "1", "--pretty=%H"]) {cwd = Just dir}
       (code, out, _) <- readCreateProcessWithExitCode p ""
@@ -91,49 +90,44 @@ prepare method flags theUri gitspecs =
                                       , tree = tree
                                       , latestCommit = commit }
     where
-      verifySource :: FilePath -> IO SourceTree
-      verifySource dir =
-          -- Note that this logic is the opposite of 'tla changes'
-          do result <- readProcessVE ((proc "git" ["status", "--porcelain"]) {cwd = Just dir}) mempty
 
-      -- CB  No output lines means no changes
-      -- CB  git reset --hard    will remove all edits back to the most recent commit
+      prepareSource dir =
+          do result1 <- pullSource dir
+             case result1 of
+               True -> findSourceTree dir
+               False ->
+                   do removeSource dir
+                      result3 <- cloneSource dir >>= \ result2 -> if result2 then pullSource dir else return False
+                      if result3 then findSourceTree dir else error ("Failure preparing " ++ show dir)
 
-      -- The status code does not reflect whether changes were made
-             case result of
-               Right (ExitSuccess, out, _) | B.null out -> updateSource dir -- No Changes!
-               Right (ExitSuccess, out, _) -> removeSource dir >> createSource dir -- Yes changes
-               _ -> error $ "git failure"
-      removeSource :: FilePath -> IO ()
-      removeSource dir = removeRecursiveSafely dir
+      test1 (Right (ExitSuccess, _, _)) = return True
+      test1 _ = return False
 
-      updateSource :: FilePath -> IO SourceTree
-      updateSource dir = do
-        let p = (proc "git" ["pull", "--all"]) {cwd = Just dir}
-        result <- readProcessVE p B.empty
-        case result of
-          Right (ExitSuccess, _, _) -> findSourceTree dir
-          _ -> removeSource dir >> createSource dir
+      pullSource dir =
+          let commit = mapMaybe (\ x -> case x of (Commit s) -> Just s; _ -> Nothing) gitspecs in
+          do exists <- doesDirectoryExist dir
+             case (exists, commit) of
+               (False, _) -> return False
+               (True, []) -> readProcessVE ((proc "git" ["pull", "--all"]) {cwd = Just dir}) B.empty >>= test1
+               (True, [commit]) -> readProcessVE ((proc "git" (["reset", "--hard", commit])) {cwd = Just dir}) B.empty >>= test1
+               (True, commits) -> error $ "Multiple commit arguments for " ++ show method ++ ": " ++ show commits
 
-      createSource :: FilePath -> IO SourceTree
-      createSource dir =
+      cloneSource dir =
           do let (parent, _) = splitFileName dir
              createDirectoryIfMissing True parent
              removeRecursiveSafely dir
-             let p = proc "git" (["clone", renderForGit theUri'] ++ concat (map (\ x -> case x of (Branch s) -> ["--branch", s]; _ -> []) gitspecs) ++ [dir])
-             result <- readProcessVE p B.empty
-             case (result, mapMaybe (\ x -> case x of (Commit s) -> Just s; _ -> Nothing) gitspecs) of
-                    (Right (ExitSuccess, _, _), []) -> return ()
-                    (Right (ExitSuccess, _, _), [commit]) -> do
-                      result2 <- readProcessVE ((proc "git" ["reset", "--hard", commit]) {cwd = Just dir}) B.empty
-                      case result2 of
-                        Right (ExitSuccess, _, _) -> return ()
-                        _ -> error "git reset failed"
-                    (Right (ExitSuccess, _, _), commits) -> error $ "Git target specifies multiple commits: " ++ show commits
-                    result -> error $ "Git failed: " ++ showCreateProcessForUser p ++ " -> " ++ show result
-             findSourceTree dir
+             let clone = proc "git" (["clone", renderForGit theUri'] ++ concat (map (\ x -> case x of (Branch s) -> ["--branch", s]; _ -> []) gitspecs) ++ [dir])
+             readProcessVE clone B.empty >>= test1
+{-
+      testSource dir =
+          do result <- readProcessVE ((proc "git" ["status", "--porcelain"]) {cwd = Just dir}) mempty
+             case result of
+               Right (ExitSuccess, out, _) | B.null out -> return True
+               _ -> return False
+-}
+      removeSource :: FilePath -> IO ()
+      removeSource dir = removeRecursiveSafely dir
 
-      -- CB  git reset --hard    will remove all edits back to the most recent commit
       fixLink base =
           let link = base </> name in
           readProcessV (proc "rm" ["-rf", link]) B.empty >>
