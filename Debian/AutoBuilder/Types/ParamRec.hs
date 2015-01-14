@@ -11,12 +11,12 @@ module Debian.AutoBuilder.Types.ParamRec
     ) where
 
 import Control.Arrow (first)
-import Data.Generics (listify, geq)
+import Data.Generics (listify)
 import Data.List as List (map, isInfixOf)
 import Data.Monoid (mempty, mappend)
 import Data.Set as Set (Set, insert, toList)
 import Debian.Arch (Arch)
-import Debian.AutoBuilder.Types.Packages (Packages(Packages, list, APackage), Package(spec), GroupName(GroupName), foldPackages, foldPackages')
+import Debian.AutoBuilder.Types.Packages (Packages(Packages, list, APackage), Package, GroupName(GroupName), foldPackages, foldPackages')
 import Debian.Pretty (PP(..), ppPrint)
 import Debian.Relation (SrcPkgName(SrcPkgName))
 import Debian.Release (ReleaseName )

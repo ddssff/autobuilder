@@ -7,7 +7,6 @@ module Debian.AutoBuilder.BuildTarget.SourceDeb where
 import Control.Monad.Trans
 import qualified Data.ByteString.Lazy as B
 import Data.List
-import Data.Monoid (mempty)
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P

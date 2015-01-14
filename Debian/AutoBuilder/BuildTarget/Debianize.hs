@@ -19,7 +19,7 @@ import qualified Debian.AutoBuilder.Types.CacheRec as P (CacheRec(params))
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P (buildRelease)
-import Debian.Debianize as Cabal hiding (verbosity, withCurrentDirectory)
+import Debian.Debianize as Cabal (DebT, compileArgs, debianize, dependOS, evalDebT, makeAtoms, runDebianizeScript, SourceFormat(Native3), sourceFormat, sourcePackageName, writeDebianization, (~?=))
 import Debian.Pretty (ppDisplay)
 import Debian.Relation (SrcPkgName(..))
 import Debian.Repo.Fingerprint (RetrieveMethod(Debianize''), retrieveMethodMD5)
@@ -134,7 +134,7 @@ autobuilderCabal cache pflags sourceName debianizeDirectory defaultAtoms =
                                                                   concatMap asCabalFlags pflags))
                                                    sourceFormat ~?= Just Native3
                                                    sourcePackageName ~?= fmap SrcPkgName sourceName
-                                                   debianization defaultAtoms (mapM_ applyPackageFlag pflags)
+                                                   Cabal.debianize defaultAtoms (mapM_ applyPackageFlag pflags)
                                                    writeDebianization)
                                                (makeAtoms eset)
 

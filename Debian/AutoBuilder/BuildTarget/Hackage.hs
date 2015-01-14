@@ -14,7 +14,6 @@ import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as L
 import Data.List (isPrefixOf, tails, intercalate)
 import Data.Maybe (mapMaybe)
-import Data.Monoid (mempty)
 import Data.Version (Version, showVersion, parseVersion)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Download as T
