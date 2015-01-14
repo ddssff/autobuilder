@@ -134,7 +134,7 @@ autobuilderCabal cache pflags sourceName debianizeDirectory defaultAtoms =
                                                                   concatMap asCabalFlags pflags))
                                                    sourceFormat ~?= Just Native3
                                                    sourcePackageName ~?= fmap SrcPkgName sourceName
-                                                   Cabal.debianize defaultAtoms (mapM_ applyPackageFlag pflags)
+                                                   Cabal.debianize (defaultAtoms >> mapM_ applyPackageFlag pflags)
                                                    writeDebianization)
                                                (makeAtoms eset)
 
