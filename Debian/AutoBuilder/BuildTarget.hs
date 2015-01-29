@@ -30,7 +30,7 @@ import qualified Debian.AutoBuilder.Types.CacheRec as C
 import Debian.AutoBuilder.Types.Download (Download(..), SomeDownload(..))
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
-import Debian.Debianize (DebT)
+import Debian.Debianize (CabalT)
 import Debian.Relation (SrcPkgName(..))
 import qualified Debian.Repo.Fingerprint as P
 import Debian.Repo.MonadOS (MonadOS, withProc)
@@ -94,7 +94,7 @@ instance Download ZeroDL where
 
 -- | Given a RetrieveMethod, perform the retrieval and return the result.
 retrieve :: forall m. (MonadOS m, MonadRepos m, MonadTop m, MonadCatch m) =>
-            DebT IO () -> C.CacheRec -> P.RetrieveMethod -> [P.PackageFlag] -> m SomeDownload
+            CabalT IO () -> C.CacheRec -> P.RetrieveMethod -> [P.PackageFlag] -> m SomeDownload
 retrieve defaultAtoms cache method flags =
     case method of
       P.Apt dist package -> Apt.prepare cache method flags dist (SrcPkgName package)

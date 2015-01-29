@@ -7,9 +7,13 @@ module Debian.AutoBuilder.BuildTarget.Debianize
     , documentation
     ) where
 
+import Control.Applicative ((<$>))
+import Control.Category ((.))
 import Control.Monad.State (modify)
 import Control.Monad.Catch (MonadMask, bracket)
 import Control.Monad.Trans (MonadIO, liftIO)
+import Data.Lens.Common (setL)
+import Data.Lens.Lazy ((~=))
 import Data.List (isSuffixOf, intercalate)
 import Data.Monoid ((<>))
 import Data.Version (Version)
@@ -19,7 +23,10 @@ import qualified Debian.AutoBuilder.Types.CacheRec as P (CacheRec(params))
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P (buildRelease)
-import Debian.Debianize as Cabal (DebT, compileArgs, debianize, dependOS, evalDebT, makeAtoms, runDebianizeScript, SourceFormat(Native3), sourceFormat, sourcePackageName, writeDebianization, (~?=))
+import Debian.Debianize as Cabal (CabalT, compileArgs, debianize, evalCabalT, makeAtoms, runDebianizeScript, SourceFormat(Native3), sourceFormat, sourcePackageName, writeDebianization, (~?=), debInfo)
+import Debian.Debianize.InputCabalPackageDescription (dependOS, newFlags, buildEnv)
+import Debian.Debianize.Monad (liftCabal)
+import Debian.Debianize.Types.Atoms (newAtoms)
 import Debian.Pretty (ppDisplay)
 import Debian.Relation (SrcPkgName(..))
 import Debian.Repo.Fingerprint (RetrieveMethod(Debianize''), retrieveMethodMD5)
@@ -31,6 +38,7 @@ import Distribution.Verbosity (normal)
 import Distribution.Package (PackageIdentifier(..))
 import Distribution.PackageDescription (GenericPackageDescription(..), PackageDescription(..))
 import Distribution.PackageDescription.Parse (readPackageDescription)
+import Prelude hiding ((.))
 import System.Directory (getDirectoryContents, createDirectoryIfMissing, getCurrentDirectory, setCurrentDirectory)
 import System.Environment (withArgs)
 import System.FilePath ((</>), takeDirectory)
@@ -42,7 +50,7 @@ documentation = [ "hackage:<name> or hackage:<name>=<version> - a target of this
                 , "retrieves source code from http://hackage.haskell.org." ]
 
 data T.Download a => DebianizeDL a
-    = DebianizeDL { def :: DebT IO ()
+    = DebianizeDL { def :: CabalT IO ()
                   , method :: RetrieveMethod
                   , debFlags :: [P.PackageFlag]
                   , cabal :: a
@@ -61,7 +69,7 @@ instance T.Download a => T.Download (DebianizeDL a) where
     attrs = T.attrs . cabal
 
 -- | Debianize the download, which is assumed to be a cabal package.
-prepare :: (MonadRepos m, MonadTop m, T.Download a) => DebT IO () -> P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> a -> m T.SomeDownload
+prepare :: (MonadRepos m, MonadTop m, T.Download a) => CabalT IO () -> P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> a -> m T.SomeDownload
 prepare defaultAtoms cache method@(Debian.Repo.Fingerprint.Debianize'' _ sourceName) flags cabal =
     do let cabdir = T.getTop cabal
        debdir <- sub ("debianize" </> retrieveMethodMD5 method)
@@ -113,7 +121,7 @@ collectPackageFlags _cache pflags =
 -- it looks for a debian/Debianize.hs script and tries to run that, if
 -- that doesn't work it runs cabal-debian --native, adding any options
 -- it can infer from the package flags.
-autobuilderCabal :: P.CacheRec -> [P.PackageFlag] -> Maybe String -> FilePath -> DebT IO () -> IO ()
+autobuilderCabal :: P.CacheRec -> [P.PackageFlag] -> Maybe String -> FilePath -> CabalT IO () -> IO ()
 autobuilderCabal cache pflags sourceName debianizeDirectory defaultAtoms =
     withCurrentDirectory debianizeDirectory $
     do let rel = P.buildRelease $ P.params cache
@@ -125,20 +133,22 @@ autobuilderCabal cache pflags sourceName debianizeDirectory defaultAtoms =
        done <- runDebianizeScript args'
        case done of
          True -> qPutStrLn (showCommandForUser "runhaskell" ("debian/Debianize.hs" : args'))
-         False -> withArgs [] $ Cabal.evalDebT (do -- We don't actually run the cabal-debian command here, we use
-                                                   -- the library API and build and print the equivalent command.
-                                                   qPutStrLn (" -> cabal-debian " <>
-                                                                intercalate " "
-                                                                 (["--native"] ++
-                                                                  maybe [] (\ name -> ["--source-package-name", name]) sourceName ++
-                                                                  concatMap asCabalFlags pflags ++ [" (in " ++ debianizeDirectory ++ ")"]))
-                                                   sourceFormat ~?= Just Native3
-                                                   sourcePackageName ~?= fmap SrcPkgName sourceName
-                                                   Cabal.debianize (defaultAtoms >> mapM_ applyPackageFlag pflags)
-                                                   writeDebianization)
-                                               (makeAtoms eset)
+         False -> withArgs [] $ do
+                    flags <- setL buildEnv eset <$> newFlags
+                    newAtoms flags >>= Cabal.evalCabalT
+                                          (do -- We don't actually run the cabal-debian command here, we use
+                                              -- the library API and build and print the equivalent command.
+                                              qPutStrLn (" -> cabal-debian " <>
+                                                         intercalate " "
+                                                           (["--native"] ++
+                                                            maybe [] (\ name -> ["--source-package-name", name]) sourceName ++
+                                                            concatMap asCabalFlags pflags ++ [" (in " ++ debianizeDirectory ++ ")"]))
+                                              (sourceFormat . debInfo) ~?= Just Native3
+                                              sourcePackageName ~?= fmap SrcPkgName sourceName
+                                              Cabal.debianize (defaultAtoms >> mapM_ applyPackageFlag pflags)
+                                              liftCabal writeDebianization)
 
-applyPackageFlag :: P.PackageFlag -> DebT IO ()
+applyPackageFlag :: P.PackageFlag -> CabalT IO ()
 applyPackageFlag (P.ModifyAtoms f) = modify f
 applyPackageFlag x = compileArgs . asCabalFlags $ x
 

@@ -32,7 +32,7 @@ import qualified Debian.AutoBuilder.Types.Packages as P (foldPackages, spec, fla
 import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec, getParams, doHelp, usage, verbosity, showParams, showSources, flushAll, doSSHExport, uploadURI, report, buildRelease, ifSourcesChanged, requiredVersion, prettyPrint, doUpload, doNewDist, newDistProgram, createRelease, buildPackages, flushSource)
 import qualified Debian.AutoBuilder.Version as V
 import Debian.Control.Policy (debianPackageNames, debianSourcePackageName)
-import Debian.Debianize (DebT)
+import Debian.Debianize (CabalT)
 import Debian.Pretty (ppDisplay)
 import Debian.Relation (BinPkgName(unBinPkgName), SrcPkgName(unSrcPkgName))
 import Debian.Release (ReleaseName(ReleaseName, relName), releaseName')
@@ -70,7 +70,7 @@ import System.Process.ListLike (showCmdSpecForUser)
 import System.Unix.Directory(removeRecursiveSafely)
 import Text.Printf ( printf )
 
-main :: DebT IO () -> (FilePath -> String -> P.ParamRec) -> IO ()
+main :: CabalT IO () -> (FilePath -> String -> P.ParamRec) -> IO ()
 main init myParams =
     do IO.hPutStrLn IO.stderr "Autobuilder starting..."
        args <- getArgs
@@ -110,7 +110,7 @@ isFailure _ = False
 
 -- |Process one set of parameters.  Usually there is only one, but there
 -- can be several which are run sequentially.  Stop on first failure.
-doParameterSet :: (Applicative m, MonadReposCached m, MonadMask m) => DebT IO () -> [Failing (ExitCode, L.ByteString, L.ByteString)] -> P.ParamRec -> m [Failing (ExitCode, L.ByteString, L.ByteString)]
+doParameterSet :: (Applicative m, MonadReposCached m, MonadMask m) => CabalT IO () -> [Failing (ExitCode, L.ByteString, L.ByteString)] -> P.ParamRec -> m [Failing (ExitCode, L.ByteString, L.ByteString)]
 -- If one parameter set fails, don't try the rest.  Not sure if
 -- this is the right thing, but it is safe.
 doParameterSet _ results _ | any isFailure results = return results
@@ -131,7 +131,7 @@ getLocalSources = do
     Nothing -> error $ "Invalid local repo root: " ++ show root
     Just uri -> repoSources (Just (envRoot root)) uri
 
-runParameterSet :: (Applicative m, MonadReposCached m, MonadMask m) => DebT IO () -> C.CacheRec -> m (Failing (ExitCode, L.ByteString, L.ByteString))
+runParameterSet :: (Applicative m, MonadReposCached m, MonadMask m) => CabalT IO () -> C.CacheRec -> m (Failing (ExitCode, L.ByteString, L.ByteString))
 runParameterSet init cache =
     do
       top <- askTop
