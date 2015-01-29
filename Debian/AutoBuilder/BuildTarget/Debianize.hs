@@ -135,8 +135,9 @@ autobuilderCabal cache pflags sourceName debianizeDirectory defaultAtoms =
          True -> qPutStrLn (showCommandForUser "runhaskell" ("debian/Debianize.hs" : args'))
          False -> withArgs [] $ do
                     flags <- setL buildEnv eset <$> newFlags
-                    newAtoms flags >>= Cabal.evalCabalT
-                                          (do -- We don't actually run the cabal-debian command here, we use
+                    newFlags >>=
+                      newAtoms . setL buildEnv eset >>=
+                        Cabal.evalCabalT  (do -- We don't actually run the cabal-debian command here, we use
                                               -- the library API and build and print the equivalent command.
                                               qPutStrLn (" -> cabal-debian " <>
                                                          intercalate " "
