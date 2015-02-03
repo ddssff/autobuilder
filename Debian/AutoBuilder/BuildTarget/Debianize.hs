@@ -23,10 +23,10 @@ import qualified Debian.AutoBuilder.Types.CacheRec as P (CacheRec(params))
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P (buildRelease)
-import Debian.Debianize as Cabal (CabalT, compileArgs, debianize, evalCabalT, makeAtoms, runDebianizeScript, SourceFormat(Native3), sourceFormat, sourcePackageName, writeDebianization, (~?=), debInfo)
-import Debian.Debianize.InputCabalPackageDescription (dependOS, newFlags, buildEnv)
-import Debian.Debianize.Monad (liftCabal)
-import Debian.Debianize.Types.Atoms (newAtoms)
+import Debian.Debianize as Cabal hiding (package) -- (CabalT, compileArgs, debianize, evalCabalT, makeAtoms, runDebianizeScript, SourceFormat(Native3), sourceFormat, sourcePackageName, writeDebianization, (~?=), debInfo)
+--import Debian.Debianize.InputCabal (dependOS, newFlags, buildEnv)
+--import Debian.Debianize.Monad (liftCabal)
+--import Debian.Debianize.Types.Atoms (newAtoms)
 import Debian.Pretty (ppDisplay)
 import Debian.Relation (SrcPkgName(..))
 import Debian.Repo.Fingerprint (RetrieveMethod(Debianize''), retrieveMethodMD5)
@@ -123,7 +123,7 @@ collectPackageFlags _cache pflags =
 -- it can infer from the package flags.
 autobuilderCabal :: P.CacheRec -> [P.PackageFlag] -> Maybe String -> FilePath -> CabalT IO () -> IO ()
 autobuilderCabal cache pflags sourceName debianizeDirectory defaultAtoms =
-    withCurrentDirectory debianizeDirectory $
+    Cabal.withCurrentDirectory debianizeDirectory $
     do let rel = P.buildRelease $ P.params cache
        top <- computeTopDir (P.params cache)
        eset <- runTopT top (envSet rel)
@@ -136,8 +136,8 @@ autobuilderCabal cache pflags sourceName debianizeDirectory defaultAtoms =
          False -> withArgs [] $ do
                     flags <- setL buildEnv eset <$> newFlags
                     newFlags >>=
-                      newAtoms . setL buildEnv eset >>=
-                        Cabal.evalCabalT  (do -- We don't actually run the cabal-debian command here, we use
+                      newCabalInfo . setL buildEnv eset >>=
+                        evalCabalT  (do -- We don't actually run the cabal-debian command here, we use
                                               -- the library API and build and print the equivalent command.
                                               qPutStrLn (" -> cabal-debian " <>
                                                          intercalate " "
@@ -145,7 +145,7 @@ autobuilderCabal cache pflags sourceName debianizeDirectory defaultAtoms =
                                                             maybe [] (\ name -> ["--source-package-name", name]) sourceName ++
                                                             concatMap asCabalFlags pflags ++ [" (in " ++ debianizeDirectory ++ ")"]))
                                               (sourceFormat . debInfo) ~?= Just Native3
-                                              sourcePackageName ~?= fmap SrcPkgName sourceName
+                                              (sourcePackageName . debInfo) ~?= fmap SrcPkgName sourceName
                                               Cabal.debianize (defaultAtoms >> mapM_ applyPackageFlag pflags)
                                               liftCabal writeDebianization)
 

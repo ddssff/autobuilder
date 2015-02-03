@@ -49,7 +49,7 @@ import Data.ByteString (ByteString)
 import Data.Generics (Data, Typeable)
 import Data.Monoid (Monoid(mempty, mappend))
 import Data.String (IsString(fromString))
-import qualified Debian.Debianize as CD
+import Debian.Debianize (CabalInfo)
 import Debian.Relation (Relations)
 import Debian.Repo (DebianSourceTree, findDebianSourceTrees)
 import Debian.Repo.Fingerprint (RetrieveMethod(..), GitSpec(..))
@@ -181,7 +181,7 @@ data PackageFlag
     -- ^ Pass the --no-hoogle flag to cabal-debian.
     | CabalDebian [String]
     -- ^ Pass some arbitrary arguments to cabal-debian
-    | ModifyAtoms (CD.Atoms -> CD.Atoms)
+    | ModifyAtoms (CabalInfo -> CabalInfo)
     -- ^ Modify the cabal-debian configuration in a fully general way
     | MapDep String Relations
     -- ^ Tell cabal-debian to map the first argument (a name that
