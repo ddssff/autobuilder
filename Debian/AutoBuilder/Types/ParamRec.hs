@@ -103,6 +103,9 @@ data ParamRec =
     , forceBuild :: [SrcPkgName]
       -- ^,  Build the named source package(s) whether or not they seem
     -- to need it.
+    , ignoreNewVersions :: Bool
+    -- ^ Do not build if the only reason is a new version - assume the
+    -- old version is sufficient.
     , buildTrumped :: [SrcPkgName]
     -- ^ Build the named source package(s) whether or not they seem
     -- to be older than the version already in the repository.
@@ -314,6 +317,7 @@ prettyPrint x =
             , "flushSource=" ++ take 120 (show (flushSource x))
             , "flushDepends=" ++ take 120 (show (flushDepends x))
             , "forceBuild=" ++ take 120 (show (forceBuild x))
+            , "ignoreNewVersions=" ++ take 120 (show (ignoreNewVersions x))
             , "buildTrumped=" ++ take 120 (show (buildTrumped x))
             , "allowBuildDependencyRegressions=" ++ take 120 (show (allowBuildDependencyRegressions x))
             , "preferred=" ++ take 120 (show (preferred x))
@@ -415,6 +419,8 @@ optSpecs =
                , "goal package is built.)"])
     , Option [] ["force"] (ReqArg (\ s -> (Right (\ p -> p {forceBuild = forceBuild p ++ [SrcPkgName s]}))) "PACKAGE")
       ("Build the specified source package even if it doesn't seem to need it.")
+    , Option [] ["ignore-new-versions"] (NoArg (Right (\ p -> p {ignoreNewVersions = True})))
+      "Do not trigger a package build solely because there is a new upstream version."
     , Option [] ["strict"] (NoArg (Right (\ p -> p {strictness = Strict})))
       "Use the lax build environment, where dependencies are not removed between package builds."
     , Option [] ["build-trumped"] (ReqArg (\ s -> (Right (\ p -> p {buildTrumped = buildTrumped p ++ [SrcPkgName s]}))) "PACKAGE")

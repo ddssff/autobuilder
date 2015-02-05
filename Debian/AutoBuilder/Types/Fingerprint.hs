@@ -91,8 +91,9 @@ buildDecision _ target _ _ _
         Error "FailPackage specified"
     where isFailPackage P.FailPackage = True
           isFailPackage _ = False
-buildDecision _ _ Nothing (Fingerprint {upstreamVersion = sourceVersion}) _ =
-    Yes ("Initial build of version " ++ show (prettyDebianVersion sourceVersion))
+buildDecision cache _ Nothing (Fingerprint {upstreamVersion = sourceVersion}) _
+    | not (P.ignoreNewVersions (P.params cache)) =
+        Yes ("Initial build of version " ++ show (prettyDebianVersion sourceVersion))
 buildDecision _ _ (Just (DownstreamFingerprint {upstreamFingerprint = Fingerprint {retrievedAttributes = oldAttrs}})) (Fingerprint {retrievedAttributes = newAttrs}) _
     | oldAttrs /= newAttrs && not (specialAptVersionCase (toList oldAttrs) (toList newAttrs)) =
         Yes ("Package attributes changed: " ++ show oldAttrs ++ " -> " ++ show newAttrs)
