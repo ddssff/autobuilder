@@ -61,6 +61,9 @@ defaultParams myBuildRelease -- e.g. wheezy or precise
     , forceBuild = []
     -- Packages we should build and upload even if their source code looks
     -- older than the version already uploaded to the repository.
+    , ignoreNewVersions = False
+    -- Do not build if the only reason is a new version - assume the
+    -- old version is sufficient.
     , buildTrumped = []
     -- If true, try to set up ssh access to the upload host if necessary.
     , doSSHExport = True
