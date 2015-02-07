@@ -133,21 +133,19 @@ autobuilderCabal cache pflags sourceName debianizeDirectory defaultAtoms =
        done <- runDebianizeScript args'
        case done of
          True -> qPutStrLn (showCommandForUser "runhaskell" ("debian/Debianize.hs" : args'))
-         False -> withArgs [] $ do
-                    flags <- setL buildEnv eset <$> newFlags
-                    newFlags >>=
-                      newCabalInfo . setL buildEnv eset >>=
-                        evalCabalT  (do -- We don't actually run the cabal-debian command here, we use
-                                              -- the library API and build and print the equivalent command.
-                                              qPutStrLn (" -> cabal-debian " <>
-                                                         intercalate " "
-                                                           (["--native"] ++
-                                                            maybe [] (\ name -> ["--source-package-name", name]) sourceName ++
-                                                            concatMap asCabalFlags pflags ++ [" (in " ++ debianizeDirectory ++ ")"]))
-                                              (sourceFormat . debInfo) ~?= Just Native3
-                                              (sourcePackageName . debInfo) ~?= fmap SrcPkgName sourceName
-                                              Cabal.debianize (defaultAtoms >> mapM_ applyPackageFlag pflags)
-                                              liftCabal writeDebianization)
+         False ->
+             let args = (["--native"] ++
+                         maybe [] (\ name -> ["--source-package-name", name]) sourceName ++
+                         concatMap asCabalFlags pflags) in
+             withArgs args $
+                   newFlags >>= return . setL buildEnv eset >>= newCabalInfo >>=
+                   evalCabalT (do -- We don't actually run the cabal-debian command here, we use
+                                  -- the library API and build and print the equivalent command.
+                                  qPutStrLn (" -> cabal-debian " <> intercalate " " args ++ " (in " ++ debianizeDirectory ++ ")")
+                                  (sourceFormat . debInfo) ~?= Just Native3
+                                  (sourcePackageName . debInfo) ~?= fmap SrcPkgName sourceName
+                                  Cabal.debianize (defaultAtoms >> mapM_ applyPackageFlag pflags)
+                                  liftCabal writeDebianization)
 
 applyPackageFlag :: P.PackageFlag -> CabalT IO ()
 applyPackageFlag (P.ModifyAtoms f) = modify f
@@ -170,6 +168,8 @@ instance CabalFlags P.PackageFlag where
     asCabalFlags (P.Epoch name d) = ["--epoch-map", name ++ "=" ++ show d]
     asCabalFlags P.NoDoc = ["--disable-haddock"]
     asCabalFlags P.NoHoogle = ["--no-hoogle"]
+    -- P.CabalDebian is the most future proof way to pass options to
+    -- cabal-debian, most of the other cases can be done with this one
     asCabalFlags (P.CabalDebian ss) = ss
     asCabalFlags (P.RelaxDep _) = []
     asCabalFlags (P.UDeb _) = []
