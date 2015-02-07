@@ -12,6 +12,7 @@ import Control.Category ((.))
 import Control.Monad.State (modify)
 import Control.Monad.Catch (MonadMask, bracket)
 import Control.Monad.Trans (MonadIO, liftIO)
+import Data.Either (partitionEithers)
 import Data.Lens.Common (setL)
 import Data.Lens.Lazy ((~=))
 import Data.List (isSuffixOf, intercalate)
@@ -134,14 +135,16 @@ autobuilderCabal cache pflags sourceName debianizeDirectory defaultAtoms =
        case done of
          True -> qPutStrLn (showCommandForUser "runhaskell" ("debian/Debianize.hs" : args'))
          False ->
+             let (functions, flags) = partitionEithers (map (\ x -> case x of P.ModifyAtoms fn -> Left fn; _ -> Right x) pflags) in
              let args = (["--native"] ++
                          maybe [] (\ name -> ["--source-package-name", name]) sourceName ++
-                         concatMap asCabalFlags pflags) in
+                         concatMap asCabalFlags flags) in
              withArgs args $
                    newFlags >>= return . setL buildEnv eset >>= newCabalInfo >>=
                    evalCabalT (do -- We don't actually run the cabal-debian command here, we use
                                   -- the library API and build and print the equivalent command.
                                   qPutStrLn (" -> cabal-debian " <> intercalate " " args ++ " (in " ++ debianizeDirectory ++ ")")
+                                  modify (foldl1 (.) (id : functions))
                                   (sourceFormat . debInfo) ~?= Just Native3
                                   (sourcePackageName . debInfo) ~?= fmap SrcPkgName sourceName
                                   Cabal.debianize (defaultAtoms >> mapM_ applyPackageFlag pflags)
