@@ -144,7 +144,7 @@ autobuilderCabal cache pflags sourceName debianizeDirectory defaultAtoms =
                    evalCabalT (do -- We don't actually run the cabal-debian command here, we use
                                   -- the library API and build and print the equivalent command.
                                   qPutStrLn (" -> cabal-debian " <> intercalate " " args ++ " (in " ++ debianizeDirectory ++ ")")
-                                  modify (foldl1 (.) (id : functions))
+                                  modify (foldl (.) id functions)
                                   (sourceFormat . debInfo) ~?= Just Native3
                                   (sourcePackageName . debInfo) ~?= fmap SrcPkgName sourceName
                                   Cabal.debianize (defaultAtoms >> mapM_ applyPackageFlag pflags)
