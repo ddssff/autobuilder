@@ -13,13 +13,13 @@ import Data.List as List (intercalate, intersperse, map, nub, partition)
 import qualified Data.Map as Map
 import Data.Maybe(isNothing, listToMaybe, mapMaybe)
 import Data.Set as Set (toList, fromList, map, filter)
-import Debian.AutoBuilder.Types.Buildable (Target(tgt, cleanSource), Buildable(download, debianSourceTree), targetRelaxed, relaxDepends)
+import Debian.AutoBuilder.Types.Buildable (Target(tgt, cleanSource), Buildable(download), targetRelaxed, relaxDepends)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Changes (logVersion)
-import Debian.Control (fieldValue, debianSourcePackageName, debianBinaryParagraphs)
+import Debian.Control (fieldValue, debianBinaryParagraphs)
 import qualified Debian.GenBuildDeps as G
 import Debian.Relation (Relation(Rel), BinPkgName(..))
 import Debian.Repo.Dependencies (prettySimpleRelation)
@@ -68,87 +68,70 @@ buildDecision :: T.Download a =>
                                      -- to the architecture we are building - either all binary packages
                                      -- are available, or none, or only the architecture independent.
               -> BuildDecision
-buildDecision cache target _ _ _ | elem (debianSourcePackageName (debianSourceTree (tgt target))) (P.forceBuild (P.params cache)) = Yes "--force-build option is set"
-buildDecision _ target _ (Fingerprint {upstreamVersion = sourceVersion}) _
-    | any (== (show (prettyDebianVersion sourceVersion))) (mapMaybe skipVersion . T.flags . download . tgt $ target) =
-        No ("Skipped version " ++ show (prettyDebianVersion sourceVersion))
+buildDecision _cache _target Nothing upstream _releaseStatus =
+    -- I am not sure whether the next older usable version is showing up here, or only
+    -- packages with the same upstream version number.  We need the next older version
+    -- to show up here to implement ignoreNewVersions properly.
+    Yes ("Initial build of package " ++ show (prettyDebianVersion (upstreamVersion upstream)))
+buildDecision cache target (Just downstream) upstream releaseStatus =
+    case () of
+      _ | skipVersion newSrcVersion ->
+            No ("Skipped version " ++ show (prettyDebianVersion newSrcVersion))
+        | failVersion newSrcVersion ->
+            Error ("Failed version " ++ show (prettyDebianVersion newSrcVersion))
+        | skipPackage ->
+            No "Skipped"
+        | failPackage ->
+            Error "FailPackage specified"
+        | oldAttrs /= newAttrs && not (specialAptVersionCase (toList oldAttrs) (toList newAttrs)) ->
+            Yes ("Package attributes changed: " ++ show oldAttrs ++ " -> " ++ show newAttrs)
+        | compare newSrcVersion oldSrcVersion == GT ->
+            Yes ("Source version (" ++ show (prettyDebianVersion newSrcVersion) ++ ") is newer than released source version (" ++ show (prettyDebianVersion oldSrcVersion) ++ ")")
+        | compare newSrcVersion oldSrcVersion == LT ->
+            No ("Source version (" ++ show (prettyDebianVersion newSrcVersion) ++ ") is trumped by released source version (" ++ show (prettyDebianVersion oldSrcVersion) ++ ")")
+        | not (notArchDep target) && not (null missingDebs) ->
+            Arch ("Version " ++ show (prettyDebianVersion repoVersion) ++ " needs arch only build. (Missing: " ++ show missingDebs ++ ")")
+        | badDependencies /= [] && not allowBuildDependencyRegressions ->
+            Error ("Build dependency regression (allow with --allow-build-dependency-regressions): " ++
+                   concat (intersperse ", " (List.map (\ ver -> show (prettySimpleRelation (builtVersion ver)) ++ " -> " ++ show (prettySimpleRelation (Just ver))) badDependencies)))
+        | badDependencies /= [] ->
+            Auto ("Build dependency regression: " ++
+                  concat (intersperse ", " (List.map (\ ver -> show (prettySimpleRelation (builtVersion ver)) ++ " -> " ++ show (prettySimpleRelation (Just ver))) badDependencies)))
+        | (not $ null $ revvedDependencies ++ newDependencies) ->
+            -- If the package *was* previously built by the autobuilder we rebuild when any
+            -- of its build dependencies are revved or new ones appear.
+            Auto ("Build dependencies changed:\n" ++ displayDependencyChanges (revvedDependencies ++ newDependencies))
+        | isArchIndep && notArchDep target ->
+            No ("Version " ++ show (prettyDebianVersion newSrcVersion) ++ " of architecture independent package is already in release.")
+        | isArchIndep ->
+            -- The binary packages are missing, we need an arch only build.
+            Arch ("Version " ++ show (prettyDebianVersion repoVersion) ++ " needs arch only build. (Missing: " ++ show missingDebs ++ ")")
+        | releaseStatus == All ->
+            No ("Version " ++ show (prettyDebianVersion newSrcVersion) ++ " is already in release.")
+      _ -> -- releaseStatus == None ->
+            error ("Unexpected releaseStatus: " ++ show releaseStatus)
     where
-      skipVersion (P.SkipVersion s) = Just s
-      skipVersion _ = Nothing
-buildDecision _ target _ (Fingerprint {upstreamVersion = sourceVersion}) _
-    | any (== (show (prettyDebianVersion sourceVersion))) (mapMaybe failVersion . T.flags . download . tgt $ target) =
-        No ("Failed version " ++ show (prettyDebianVersion sourceVersion))
-    where
-      failVersion (P.FailVersion s) = Just s
-      failVersion _ = Nothing
-buildDecision _ target _ _ _
-    | any isSkipPackage (T.flags . download . tgt $ target) =
-        No "Skipped"
-    where isSkipPackage P.SkipPackage = True
-          isSkipPackage _ = False
-buildDecision _ target _ _ _
-    | any isFailPackage (T.flags . download . tgt $ target) =
-        Error "FailPackage specified"
-    where isFailPackage P.FailPackage = True
-          isFailPackage _ = False
-buildDecision cache _ Nothing (Fingerprint {upstreamVersion = sourceVersion}) _
-    | not (P.ignoreNewVersions (P.params cache)) =
-        Yes ("Initial build of version " ++ show (prettyDebianVersion sourceVersion))
-buildDecision _ _ (Just (DownstreamFingerprint {upstreamFingerprint = Fingerprint {retrievedAttributes = oldAttrs}})) (Fingerprint {retrievedAttributes = newAttrs}) _
-    | oldAttrs /= newAttrs && not (specialAptVersionCase (toList oldAttrs) (toList newAttrs)) =
-        Yes ("Package attributes changed: " ++ show oldAttrs ++ " -> " ++ show newAttrs)
-{-
-buildDecision _ _ (Just (DownstreamFingerprint {upstreamFingerprint = Fingerprint {method = oldMethod}})) (Fingerprint {method = newMethod}) _
-    -- This doesn't make sense the retrieve method is the package
-    -- identity, it can't change or it wouldn't be the same package.
-    | oldMethod /= newMethod = Yes ("Retrieve method changed: " ++ show oldMethod ++ " -> " ++ show newMethod)
--}
-buildDecision cache target (Just (DownstreamFingerprint { upstreamFingerprint =
-                                                              Fingerprint { upstreamVersion = oldSrcVersion
-                                                                          , buildDependencyVersions = builtDependencies }
-                                                        , downstreamVersion = repoVersion })) -- I suspect oldSrcVersion is always equal to repoVersion
-                           (Fingerprint {upstreamVersion = sourceVersion, buildDependencyVersions = sourceDependencies})
-                           releaseStatus =
-    case compare sourceVersion oldSrcVersion of
-      GT -> Yes ("Source version (" ++ show (prettyDebianVersion sourceVersion) ++ ") is newer than released source version (" ++ show (prettyDebianVersion oldSrcVersion) ++ ")")
-      LT -> No ("Source version (" ++ show (prettyDebianVersion sourceVersion) ++ ") is trumped by released source version (" ++ show (prettyDebianVersion oldSrcVersion) ++ ")")
-      EQ -> sameSourceTests
-    where
-      -- discardTarget = Set.member (targetName target) (P.discard (P.params cache))
       allowBuildDependencyRegressions = P.allowBuildDependencyRegressions (P.params cache)
-      -- Build decision tests for when the version number of the
-      -- source hasn't changed.  Note that the source itself may have
-      -- changed, but we don't ask the SCCS whether that has happened.
-      -- This is a design decision which avoids building from source
-      -- that might have been checked in but isn't ready to be
-      -- uploaded to the repository.  Note that if the build
-      -- dependencies change the package will be built anyway, so we
-      -- are not completely protected from this possibility.
-      sameSourceTests =
-          case releaseStatus of
-            Indep missing | missing /= [] && not (notArchDep target) ->
-                  -- The binary packages are missing, we need an arch only build.
-                  Arch ("Version " ++ show (prettyDebianVersion repoVersion) ++ " needs arch only build. (Missing: " ++ show missing ++ ")")
-            _ | badDependencies /= [] && not allowBuildDependencyRegressions ->
-                  Error ("Build dependency regression (allow with --allow-build-dependency-regressions): " ++ 
-                         concat (intersperse ", " (List.map (\ ver -> show (prettySimpleRelation (builtVersion ver)) ++ " -> " ++ show (prettySimpleRelation (Just ver))) badDependencies)))
-              | badDependencies /= [] ->
-                  Auto ("Build dependency regression: " ++ 
-                        concat (intersperse ", " (List.map (\ ver -> show (prettySimpleRelation (builtVersion ver)) ++ " -> " ++ show (prettySimpleRelation (Just ver))) badDependencies)))
-              | (revvedDependencies ++ newDependencies) /= [] ->
-                  -- If the package *was* previously built by the autobuilder we rebuild when any
-                  -- of its build dependencies are revved or new ones appear.
-                  Auto ("Build dependencies changed:\n" ++ displayDependencyChanges (revvedDependencies ++ newDependencies))
-            Indep _ | notArchDep target ->
-                  No ("Version " ++ show (prettyDebianVersion sourceVersion) ++ " of architecture independent package is already in release.")
-            Indep missing ->
-                  -- The binary packages are missing, we need an arch only build.
-                  Arch ("Version " ++ show (prettyDebianVersion repoVersion) ++ " needs arch only build. (Missing: " ++ show missing ++ ")")
-            All ->
-                  No ("Version " ++ show (prettyDebianVersion sourceVersion) ++ " is already in release.")
-            _ ->
-                  error ("Unexpected releaseStatus: " ++ show releaseStatus)
+
+      newAttrs = retrievedAttributes upstream
+      newSrcVersion = upstreamVersion upstream
+      sourceDependencies = buildDependencyVersions upstream
+      oldAttrs = retrievedAttributes (upstreamFingerprint downstream)
+      oldSrcVersion = upstreamVersion (upstreamFingerprint downstream)
+      builtDependencies = buildDependencyVersions (upstreamFingerprint downstream)
+      repoVersion = downstreamVersion downstream -- I suspect oldSrcVersion is always equal to repoVersion
+
+      skipVersion v = any (== (show v)) (mapMaybe (\x -> case x of P.SkipVersion s -> Just s; _ -> Nothing) . T.flags . download . tgt $ target)
+      failVersion v = any (== (show v)) (mapMaybe (\x -> case x of P.FailVersion s -> Just s; _ -> Nothing) . T.flags . download . tgt $ target)
+      skipPackage = any (\x -> case x of P.SkipPackage -> True; _ -> False) (T.flags . download . tgt $ target)
+      failPackage = any (\x -> case x of P.FailPackage -> True; _ -> False) (T.flags . download . tgt $ target)
+      isArchIndep = case releaseStatus of
+                      Indep _ -> True
+                      _ -> False
       notArchDep = all (== Just "all") . List.map (fieldValue "Architecture") . debianBinaryParagraphs
+      missingDebs = case releaseStatus of
+                      Indep xs -> xs
+                      _ -> []
       displayDependencyChanges dependencies =
           "  " ++ intercalate "\n  " changes
           where
