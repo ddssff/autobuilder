@@ -100,7 +100,10 @@ buildDecision cache target (Just downstream) upstream releaseStatus =
         | (not $ null $ revvedDependencies ++ newDependencies) ->
             -- If the package *was* previously built by the autobuilder we rebuild when any
             -- of its build dependencies are revved or new ones appear.
-            Auto ("Build dependencies changed:\n" ++ displayDependencyChanges (revvedDependencies ++ newDependencies))
+            Auto ("Build dependencies changed:\n" ++ displayDependencyChanges (revvedDependencies ++ newDependencies) ++
+                  "\n  Note that if a new version appears in hackage, and it has dependencies that the current build\n" ++
+                  "does not, an unnecessary build will be triggered here even if --ignore-new-versions is used.  The\n" ++
+                  "workaround for this is to use CabalPin.")
         | isArchIndep && notArchDep target ->
             No ("Version " ++ show (prettyDebianVersion oldSrcVersion) ++ " of architecture independent package is already in release.")
         | isArchIndep ->

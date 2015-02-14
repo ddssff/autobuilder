@@ -1,4 +1,4 @@
-{-# LANGUAGE BangPatterns, CPP, FlexibleContexts, OverloadedStrings, PackageImports, RankNTypes, ScopedTypeVariables, StandaloneDeriving, TemplateHaskell, TypeFamilies #-}
+{-# LANGUAGE BangPatterns, FlexibleContexts, OverloadedStrings, PackageImports, RankNTypes, ScopedTypeVariables, StandaloneDeriving, TemplateHaskell, TypeFamilies #-}
 {-# OPTIONS -Wall -fwarn-unused-imports -fno-warn-name-shadowing -fno-warn-orphans #-}
 -- |A Target represents a particular set of source code and the
 -- methods to retrieve and update it.
@@ -22,11 +22,11 @@ import qualified Data.ByteString.Lazy.Char8 as L (ByteString, empty, toChunks, u
 import qualified Data.ByteString.UTF8 as UTF8 (toString)
 import Data.Either (partitionEithers)
 import Data.Function (on)
-import Data.List as List (intercalate, intersect, intersperse, isSuffixOf, nub, partition, sortBy, lookup)
+import Data.List as List (intercalate, intersect, intersperse, isSuffixOf, nub, partition, sortBy, lookup, null)
 import Data.Map as Map (Map, fromList, lookup)
 import Data.Maybe (catMaybes, fromJust, isNothing, listToMaybe, isJust)
 import Data.Monoid ((<>), mempty)
-import qualified Data.Set as Set (difference, empty, fromList, insert, member, null, partition, Set, size, toList, union)
+import Data.Set as Set (difference, empty, fromList, insert, member, null, Set, size, toList, union)
 import qualified Data.Text as T (pack, unpack)
 import Data.Time (NominalDiffTime)
 import Debian.Arch (Arch)
@@ -55,8 +55,8 @@ import Debian.Repo.LocalRepository (LocalRepository, uploadLocal)
 import Debian.Repo.MonadOS (MonadOS(getOS), evalMonadOS, updateLists, withProc, withTmp, syncLocalPool, buildEssential, syncOS)
 import Debian.Repo.OSImage (osRoot)
 import Debian.Repo.Package (binaryPackageSourceVersion, sourcePackageBinaryNames)
-import Debian.Repo.PackageID (PackageID(packageVersion))
-import Debian.Repo.PackageIndex (BinaryPackage(packageInfo), prettyBinaryPackage, SourcePackage(sourceParagraph, sourcePackageID), sortBinaryPackages, sortSourcePackages)
+import Debian.Repo.PackageID (PackageID(packageName, packageVersion))
+import Debian.Repo.PackageIndex (BinaryPackage(packageInfo, packageID), prettyBinaryPackage, SourcePackage(sourceParagraph, sourcePackageID), sortBinaryPackages, sortSourcePackages)
 import Debian.Repo.Prelude (symbol)
 import Debian.Repo.Prelude.Process (readProcessVE, readProcessV, modifyProcessEnv)
 import Debian.Repo.Prelude.Verbosity (ePutStrLn, noisier, qPutStrLn, quieter, ePutStr)
@@ -120,7 +120,7 @@ prepareTargets cache globalBuildDeps targetSpecs =
        let (failures, targets) = partitionEithers results
        let msg = "Could not prepare " ++ show (length failures) ++ " targets:\n" ++
                  concatMap (\ (n, e) -> printf "%4d. " n ++ show e ++ "\n") (zip [(1::Int)..] failures)
-       case null failures of
+       case List.null failures of
          True -> return targets
          False -> ePutStr msg >> error msg
     where
@@ -171,11 +171,11 @@ buildLoop cache localRepo dependOS buildOS !targets =
               Set.Set (Target a) -> Set.Set (Target a) -> m (Set.Set (Target a))
       loop unbuilt failed | Set.null unbuilt = return failed
       loop unbuilt failed =
-          ePutStrLn "\nComputing ready targets..." >>
-          case readyTargets cache (Set.toList unbuilt) of
-            [] -> return failed
+          ePutStr "\nComputing ready targets..." >>
+          case computeReadyTargets cache (Set.toList unbuilt) of
+            [] -> ePutStrLn "done\n" >> return failed
             ready ->
-                do ePutStrLn (makeTable ready)
+                do ePutStrLn ("\n" <> makeTable ready)
                    loop2 (Set.difference unbuilt (Set.fromList $ map G.ready ready)) failed ready
       loop2 :: (MonadRepos m, MonadApt m, MonadTop m, MonadMask m, T.Download a) =>
                Set.Set (Target a) -- unbuilt: targets which have not been built and are not ready to build
@@ -261,8 +261,8 @@ makeTable ready =
 -- from the target set, and repeat until all targets are built.  We
 -- can build a graph of the "has build dependency" relation and find
 -- any node that has no inbound arcs and (maybe) build that.
-readyTargets :: T.Download a => P.CacheRec -> {- [SrcPkgName] -> -} [Target a] -> [G.ReadyTarget (Target a)]
-readyTargets cache targets =
+computeReadyTargets :: T.Download a => P.CacheRec -> {- [SrcPkgName] -> -} [Target a] -> [G.ReadyTarget (Target a)]
+computeReadyTargets cache targets =
     -- q12 "Choosing next target" $
     -- Compute the list of build dependency groups, each of which
     -- starts with a target that is ready to build followed by
@@ -513,7 +513,7 @@ prepareBuildTree cache dependOS buildOS sourceFingerprint target = do
 -- | Get the control info for the newest version of a source package
 -- available in a release.  Make sure that the files for this build
 -- architecture are available.
-getReleaseControlInfo :: (MonadOS m, MonadRepos m, T.Download a) =>
+getReleaseControlInfo :: forall m a. (MonadOS m, MonadRepos m, T.Download a) =>
                          Target a -> m (Maybe SourcePackage, SourcePackageStatus, String)
 getReleaseControlInfo target = do
   -- The source packages with the specified name, newest first
@@ -564,7 +564,6 @@ getReleaseControlInfo target = do
       compareVersion a b = case ((fieldValue "Version" . sourceParagraph $ a), (fieldValue "Version" . sourceParagraph $ b)) of
                              (Just a', Just b') -> compare (parseDebianVersion . T.unpack $ b') (parseDebianVersion . T.unpack $ a')
                              _ -> error "Missing Version field"
-#if 1
       -- The source package is complete if the correct versions of the
       -- required binary packages are all available, either as debs or
       -- udebs.  Because it is easier to check for available debs, we
@@ -573,11 +572,11 @@ getReleaseControlInfo target = do
       isComplete sourcePackage =
           do let requiredDebNames = sourcePackageBinaryNames sourcePackage
              (binaryDebMap :: Map BinPkgName [BinaryPackage]) <- mapM (\ name -> (sortBinaryPackages (== name) <$> osBinaryPackages)) requiredDebNames >>= return . Map.fromList . zip requiredDebNames
-             let (_readyDebs, missingDebs) = partition (\ name -> isJust (Map.lookup name binaryDebMap)) requiredDebNames
-             case null missingDebs of
+             let (_readyDebs, missingDebs) = List.partition (\ name -> isJust (Map.lookup name binaryDebMap)) requiredDebNames
+             case List.null missingDebs of
                True -> return Complete
                False -> return $ Missing missingDebs
-#else
+{-
       isComplete :: [BinaryPackage] -> (SourcePackage, [BinPkgName]) -> Status
       isComplete binaryPackages (sourcePackage, requiredBinaryNames) =
           if Set.difference missingDebs udebs == Set.empty {- && (unableToCheckUDebs || missingUdebs == Set.empty) -}
@@ -598,7 +597,7 @@ getReleaseControlInfo target = do
       collect :: P.PackageFlag -> Set.Set BinPkgName -> Set.Set BinPkgName
       collect (P.UDeb name) udebs = Set.insert (BinPkgName name) udebs
       collect _ udebs = udebs
-#endif
+-}
       -- A binary package is available either if it appears in the
       -- package index, or if it is an available udeb.
       availableDebNames :: [BinaryPackage] -> SourcePackage -> [BinPkgName]
@@ -695,10 +694,11 @@ buildDepSolutions arch preferred target =
        -- the dependencies.  Hence this empty list.
        let relations' = G.relations info ++ globalBuildDeps
            relations'' = simplifyRelations packages relations' preferred arch
+           relations''' = filter (not . alwaysSatisfied) relations''
        -- Do not stare directly into the solutions!  Your head will
        -- explode (because there may be a lot of them.)  Also, this
        -- will be slow if solutions is not compiled.
-       case Debian.Repo.Dependencies.solutions packages (filter (not . alwaysSatisfied) relations'') 100000 of
+       case Debian.Repo.Dependencies.solutions packages relations''' 100000 of
          Left error -> return $ Failure [error, message relations' relations'']
          Right solutions -> return $ Success solutions
     where
@@ -766,7 +766,7 @@ updateChangesFile elapsed changes = do
 -- |Move this to {-Debian.-} Control
 sinkFields :: (Eq a) => (a -> Bool) -> Paragraph' a -> Paragraph' a
 sinkFields f (Paragraph fields) =
-    let (a, b) = partition f' fields in Paragraph (b ++ a)
+    let (a, b) = List.partition f' fields in Paragraph (b ++ a)
     where f' (Field (name, _)) = f name
           f' (Comment _) = False
 
@@ -814,7 +814,7 @@ useEnv' rootPath force action = quieter 1 $ useEnv rootPath force $ noisier 1 ac
 -- TLA revision to decide whether to build.
 setRevisionInfo :: Fingerprint -> ChangesFile -> IO ChangesFile
 setRevisionInfo fingerprint changes =
-    case partition (isSuffixOf ".dsc" . changedFileName) (changeFiles changes) of
+    case List.partition (isSuffixOf ".dsc" . changedFileName) (changeFiles changes) of
       ([file], otherFiles) -> do
             qPutStrLn ("Setting revision field in " <> changedFileName file)
             let dscFilePath = changeDir changes </> changedFileName file
