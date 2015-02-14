@@ -9,7 +9,6 @@ import System.FilePath ((</>))
 
 main = defaultMainWithHooks simpleUserHooks {
          postBuild = \ _ _ _ lbi -> runTestScript lbi
-       , runTests = \ _ _ _ lbi -> runTestScript lbi
        }
 
 runTestScript lbi =

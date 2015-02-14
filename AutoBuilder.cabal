@@ -131,7 +131,8 @@ Library
     Debian.AutoBuilder.Version
     Paths_AutoBuilder
 
-Executable autobuilder-tests
+Test-Suite autobuilder-tests
+  Type: exitcode-stdio-1.0
   Hs-Source-Dirs: Test
   Main-Is: Test.hs
   ghc-options: -O2 -threaded -Wall
