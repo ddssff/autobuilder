@@ -1,4 +1,4 @@
-{-# LANGUAGE BangPatterns, FlexibleContexts, OverloadedStrings, PackageImports, RankNTypes, ScopedTypeVariables, StandaloneDeriving, TemplateHaskell, TypeFamilies #-}
+{-# LANGUAGE BangPatterns, CPP, FlexibleContexts, OverloadedStrings, PackageImports, RankNTypes, ScopedTypeVariables, StandaloneDeriving, TemplateHaskell, TypeFamilies #-}
 {-# OPTIONS -Wall -fwarn-unused-imports -fno-warn-name-shadowing -fno-warn-orphans #-}
 -- |A Target represents a particular set of source code and the
 -- methods to retrieve and update it.
