@@ -1,5 +1,5 @@
 {-# OPTIONS_GHC -fno-warn-missing-signatures #-}
-module Test.ParamRec where
+module ParamRec where
 
 import Test.HUnit
 import Debian.AutoBuilder.Params

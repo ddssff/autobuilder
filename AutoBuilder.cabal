@@ -18,7 +18,7 @@ Description:
   'ParamClass' type class in the "Debian.AutoBuilder.ParamClass"
   module, and for the different build target types in the description
   of "Debian.AutoBuilder.BuildTarget".
-Cabal-Version:  >= 1.2
+Cabal-Version:  >= 1.9
 Build-type:     Simple
 
 flag local-debian-repo
@@ -132,15 +132,16 @@ Library
     Paths_AutoBuilder
 
 Executable autobuilder-tests
-  Main-Is: Test/Test.hs
+  Hs-Source-Dirs: Test
+  Main-Is: Test.hs
   ghc-options: -O2 -threaded -Wall
-  Build-Depends: HUnit
+  Build-Depends: base, containers, Cabal, HUnit
 
-  if flag (local-debian-repo) || flag (local-cabal-debian)
+  if flag (local-debian-repo)
     Hs-Source-Dirs: ., ../debian-repo, ../cabal-debian/dist/build/autogen
     Build-Depends: deepseq
   else
-    Build-Depends: debian-repo >= 5.72
+    Build-Depends: AutoBuilder, debian-repo >= 5.72
 
   if flag (local-cabal-debian)
     Hs-Source-Dirs: ., ../cabal-debian/src

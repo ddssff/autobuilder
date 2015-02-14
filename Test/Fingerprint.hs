@@ -1,5 +1,5 @@
 {-# OPTIONS_GHC -fno-warn-missing-signatures #-}
-module Test.Fingerprint where
+module Fingerprint where
 
 import Test.HUnit
 import Data.List (intercalate)
