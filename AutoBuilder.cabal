@@ -38,17 +38,17 @@ flag local-debian
 
 Library
   Hs-Source-Dirs: .
-  if flag (local-debian-repo) || flag (local-cabal-debian)
+  if flag (local-debian-repo)
     Hs-Source-Dirs: ../debian-repo
     Build-Depends: transformers-compat
   else
     Build-Depends: debian-repo >= 5.72
 
   if flag (local-cabal-debian)
-    Hs-Source-Dirs: ../cabal-debian/src
-    Build-Depends: data-default, Diff, set-extra, hsemail, memoize, pretty, syb
+    Hs-Source-Dirs: ../cabal-debian/src, ../cabal-debian/dist/build/autogen
+    Build-Depends: data-default, Diff, set-extra, hsemail, lens, memoize, pretty, syb
   else
-    Build-Depends: cabal-debian >= 4.21, deepseq, data-lens-template
+    Build-Depends: cabal-debian >= 4.21, deepseq
 
   if flag (local-debian)
     Hs-Source-Dirs: ../debian-haskell
@@ -63,7 +63,6 @@ Library
       , bzlib
       , Cabal
       , containers
-      , data-lens
       , directory
       , exceptions >= 0.6
       , Extra
@@ -138,15 +137,15 @@ Executable autobuilder-tests
   Build-Depends: HUnit
 
   if flag (local-debian-repo) || flag (local-cabal-debian)
-    Hs-Source-Dirs: ., ../debian-repo
-    Build-Depends: deepseq, data-lens-template
+    Hs-Source-Dirs: ., ../debian-repo, ../cabal-debian/dist/build/autogen
+    Build-Depends: deepseq
   else
     Build-Depends: debian-repo >= 5.72
 
   if flag (local-cabal-debian)
     Hs-Source-Dirs: ., ../cabal-debian/src
   else
-    Build-Depends: cabal-debian >= 4.20
+    Build-Depends: cabal-debian >= 4.24
 
   if flag (local-debian)
     Hs-Source-Dirs: ../debian-haskell

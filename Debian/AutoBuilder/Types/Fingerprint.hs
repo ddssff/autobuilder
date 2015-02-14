@@ -85,7 +85,7 @@ buildDecision cache target (Just downstream) upstream releaseStatus =
             Error "FailPackage specified"
         | oldAttrs /= newAttrs && not (specialAptVersionCase (toList oldAttrs) (toList newAttrs)) ->
             Yes ("Package attributes changed: " ++ show oldAttrs ++ " -> " ++ show newAttrs)
-        | compare newSrcVersion oldSrcVersion == GT ->
+        | not (P.ignoreNewVersions (P.params cache)) && compare newSrcVersion oldSrcVersion == GT ->
             Yes ("Source version (" ++ show (prettyDebianVersion newSrcVersion) ++ ") is newer than released source version (" ++ show (prettyDebianVersion oldSrcVersion) ++ ")")
         | compare newSrcVersion oldSrcVersion == LT ->
             No ("Source version (" ++ show (prettyDebianVersion newSrcVersion) ++ ") is trumped by released source version (" ++ show (prettyDebianVersion oldSrcVersion) ++ ")")
@@ -102,12 +102,12 @@ buildDecision cache target (Just downstream) upstream releaseStatus =
             -- of its build dependencies are revved or new ones appear.
             Auto ("Build dependencies changed:\n" ++ displayDependencyChanges (revvedDependencies ++ newDependencies))
         | isArchIndep && notArchDep target ->
-            No ("Version " ++ show (prettyDebianVersion newSrcVersion) ++ " of architecture independent package is already in release.")
+            No ("Version " ++ show (prettyDebianVersion oldSrcVersion) ++ " of architecture independent package is already in release.")
         | isArchIndep ->
             -- The binary packages are missing, we need an arch only build.
             Arch ("Version " ++ show (prettyDebianVersion repoVersion) ++ " needs arch only build. (Missing: " ++ show missingDebs ++ ")")
         | releaseStatus == All ->
-            No ("Version " ++ show (prettyDebianVersion newSrcVersion) ++ " is already in release.")
+            No ("Version " ++ show (prettyDebianVersion oldSrcVersion) ++ " is already in release.")
       _ -> -- releaseStatus == None ->
             error ("Unexpected releaseStatus: " ++ show releaseStatus)
     where

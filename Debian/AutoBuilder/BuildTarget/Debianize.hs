@@ -7,14 +7,12 @@ module Debian.AutoBuilder.BuildTarget.Debianize
     , documentation
     ) where
 
-import Control.Applicative ((<$>))
-import Control.Category ((.))
+import OldLens
+
 import Control.Monad.State (modify)
 import Control.Monad.Catch (MonadMask, bracket)
 import Control.Monad.Trans (MonadIO, liftIO)
 import Data.Either (partitionEithers)
-import Data.Lens.Common (setL)
-import Data.Lens.Lazy ((~=))
 import Data.List (isSuffixOf, intercalate)
 import Data.Monoid ((<>))
 import Data.Version (Version)
@@ -39,7 +37,6 @@ import Distribution.Verbosity (normal)
 import Distribution.Package (PackageIdentifier(..))
 import Distribution.PackageDescription (GenericPackageDescription(..), PackageDescription(..))
 import Distribution.PackageDescription.Parse (readPackageDescription)
-import Prelude hiding ((.))
 import System.Directory (getDirectoryContents, createDirectoryIfMissing, getCurrentDirectory, setCurrentDirectory)
 import System.Environment (withArgs)
 import System.FilePath ((</>), takeDirectory)
@@ -145,8 +142,8 @@ autobuilderCabal cache pflags sourceName debianizeDirectory defaultAtoms =
                                   -- the library API and build and print the equivalent command.
                                   qPutStrLn (" -> cabal-debian " <> intercalate " " args ++ " (in " ++ debianizeDirectory ++ ")")
                                   modify (foldl (.) id functions)
-                                  (sourceFormat . debInfo) ~?= Just Native3
-                                  (sourcePackageName . debInfo) ~?= fmap SrcPkgName sourceName
+                                  (debInfo . sourceFormat) ~?= Just Native3
+                                  (debInfo . sourcePackageName) ~?= fmap SrcPkgName sourceName
                                   Cabal.debianize (defaultAtoms >> mapM_ applyPackageFlag pflags)
                                   liftCabal writeDebianization)
 

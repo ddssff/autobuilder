@@ -22,8 +22,9 @@ import qualified Data.ByteString.Lazy.Char8 as L (ByteString, empty, toChunks, u
 import qualified Data.ByteString.UTF8 as UTF8 (toString)
 import Data.Either (partitionEithers)
 import Data.Function (on)
-import Data.List (intercalate, intersect, intersperse, isSuffixOf, nub, partition, sortBy)
-import Data.Maybe (catMaybes, fromJust, isNothing, listToMaybe)
+import Data.List as List (intercalate, intersect, intersperse, isSuffixOf, nub, partition, sortBy, lookup)
+import Data.Map as Map (Map, fromList, lookup)
+import Data.Maybe (catMaybes, fromJust, isNothing, listToMaybe, isJust)
 import Data.Monoid ((<>), mempty)
 import qualified Data.Set as Set (difference, empty, fromList, insert, member, null, partition, Set, size, toList, union)
 import qualified Data.Text as T (pack, unpack)
@@ -511,17 +512,35 @@ prepareBuildTree cache dependOS buildOS sourceFingerprint target = do
 
 -- | Get the control info for the newest version of a source package
 -- available in a release.  Make sure that the files for this build
--- architecture are available.  FIXME: Note that this should *not*
--- find packages which are simply installed in the environment but not
--- available from the repositories listed in sources.list (but
--- currently it does.)
+-- architecture are available.
 getReleaseControlInfo :: (MonadOS m, MonadRepos m, T.Download a) =>
                          Target a -> m (Maybe SourcePackage, SourcePackageStatus, String)
 getReleaseControlInfo target = do
-  sourcePackages' <- (sortBy compareVersion . sortSourcePackages [packageName]) <$> osSourcePackages
-  binaryPackages' <- sortBinaryPackages (nub . concat . map sourcePackageBinaryNames $ sourcePackages') <$> osBinaryPackages
-  let sourcePackagesWithBinaryNames = zip sourcePackages' (map sourcePackageBinaryNames sourcePackages')
-      message status =
+  -- The source packages with the specified name, newest first
+  (sourcePackages' :: [SourcePackage]) <- (sortSourcePackages (== packageName)) <$> osSourcePackages
+  -- Source packages associated with their binary package names
+  let sourcePackagesWithBinaryNames :: [(SourcePackage, [BinPkgName])]
+      sourcePackagesWithBinaryNames = zip sourcePackages' (map sourcePackageBinaryNames sourcePackages')
+  -- All The binary packages that came from from those source
+  -- packages, sorted by name and version.  Although we know what the
+  -- names of the binary packages are, it is difficult to be sure
+  -- exactly which versions correspond to a source pacakge, because it
+  -- is possible to assign a version to a binary deb that is different
+  -- from the source package version.
+  (binaryPackages' :: [BinaryPackage]) <- sortBinaryPackages (flip elem . nub . concat . map sourcePackageBinaryNames $ sourcePackages') <$> osBinaryPackages
+  sourcePackageStatusPairs <- zip sourcePackages' <$> mapM isComplete sourcePackages'
+  return $ case sourcePackageStatusPairs of
+             (info, status@Complete) : _ -> (Just info, All, message sourcePackages' binaryPackages' status)
+             (info, status@(Missing missing)) : _ -> (Just info, Indep missing, message sourcePackages' binaryPackages' status)
+             _ -> (Nothing, None, message sourcePackages' binaryPackages' Complete)
+{-
+  return $ case zip sourcePackages' (map (isComplete sourcePackage binaryPackages') sourcePackagesWithBinaryNames) of
+    (info, status@Complete) : _ -> (Just info, All, message sourcePackages' binaryPackages' status)
+    (info, status@(Missing missing)) : _ -> (Just info, Indep missing, message sourcePackages' binaryPackages' status)
+    _ -> (Nothing, None, message sourcePackages' binaryPackages' Complete)
+-}
+    where
+      message sourcePackages' binaryPackages' status =
           intercalate "\n"
                   (["  Source Package Versions: " ++ show (map (second prettyDebianVersion . sourcePackageVersion) sourcePackages'),
                     "  Required Binary Package Names:"] ++
@@ -530,11 +549,6 @@ getReleaseControlInfo target = do
                    ["  Binary Package Versions: " ++ show (map (second prettyDebianVersion . binaryPackageVersion) binaryPackages'),
                     "  Available Binary Packages of Source Package:"] ++
                    map (("   " ++) . show) (zip (map (second prettyDebianVersion . sourcePackageVersion) sourcePackages') (map (availableDebNames binaryPackages') sourcePackages')))
-  return $ case zip sourcePackages' (map (isComplete binaryPackages') sourcePackagesWithBinaryNames) of
-    (info, status@Complete) : _ -> (Just info, All, message status)
-    (info, status@(Missing missing)) : _ -> (Just info, Indep missing, message status)
-    _ -> (Nothing, None, message Complete)
-    where
       packageName = G.sourceName (targetDepends target)
       missingMessage Complete = []
       missingMessage (Missing missing) = ["  Missing Binary Package Names: "] ++ map (\ p -> "   " ++ unBinPkgName p) missing
@@ -550,10 +564,20 @@ getReleaseControlInfo target = do
       compareVersion a b = case ((fieldValue "Version" . sourceParagraph $ a), (fieldValue "Version" . sourceParagraph $ b)) of
                              (Just a', Just b') -> compare (parseDebianVersion . T.unpack $ b') (parseDebianVersion . T.unpack $ a')
                              _ -> error "Missing Version field"
+#if 1
       -- The source package is complete if the correct versions of the
       -- required binary packages are all available, either as debs or
       -- udebs.  Because it is easier to check for available debs, we
       -- do that first and only check for udebs if some names are missing.
+      isComplete :: SourcePackage -> m Status
+      isComplete sourcePackage =
+          do let requiredDebNames = sourcePackageBinaryNames sourcePackage
+             (binaryDebMap :: Map BinPkgName [BinaryPackage]) <- mapM (\ name -> (sortBinaryPackages (== name) <$> osBinaryPackages)) requiredDebNames >>= return . Map.fromList . zip requiredDebNames
+             let (_readyDebs, missingDebs) = partition (\ name -> isJust (Map.lookup name binaryDebMap)) requiredDebNames
+             case null missingDebs of
+               True -> return Complete
+               False -> return $ Missing missingDebs
+#else
       isComplete :: [BinaryPackage] -> (SourcePackage, [BinPkgName]) -> Status
       isComplete binaryPackages (sourcePackage, requiredBinaryNames) =
           if Set.difference missingDebs udebs == Set.empty {- && (unableToCheckUDebs || missingUdebs == Set.empty) -}
@@ -574,6 +598,7 @@ getReleaseControlInfo target = do
       collect :: P.PackageFlag -> Set.Set BinPkgName -> Set.Set BinPkgName
       collect (P.UDeb name) udebs = Set.insert (BinPkgName name) udebs
       collect _ udebs = udebs
+#endif
       -- A binary package is available either if it appears in the
       -- package index, or if it is an available udeb.
       availableDebNames :: [BinaryPackage] -> SourcePackage -> [BinPkgName]
@@ -614,7 +639,7 @@ computeNewVersion cache target releaseControlInfo _releaseStatus = do
                           Nothing else
                           (Just (relName (P.baseRelease (P.params cache))))
             extra = P.extraReleaseTag (P.params cache)
-            aliases = \ x -> maybe x id (lookup x (P.releaseAliases (P.params cache)))
+            aliases = \ x -> maybe x id (List.lookup x (P.releaseAliases (P.params cache)))
           {-
               aliases = f
                   where
@@ -624,7 +649,7 @@ computeNewVersion cache target releaseControlInfo _releaseStatus = do
            -}
         -- All the versions that exist in the pool in any dist,
         -- the new version number must not equal any of these.
-        available <- sortSourcePackages [G.sourceName (targetDepends target)] <$> aptSourcePackages
+        available <- sortSourcePackages (== G.sourceName (targetDepends target)) <$> aptSourcePackages
         -- quieter 3 $ qPutStrLn ("available versions: " ++ show available)
         case parseTag (vendor : oldVendors) sourceVersion of
           (_, Just tag) -> return $
@@ -723,12 +748,12 @@ updateChangesFile elapsed changes = do
       let buildInfo = ["Autobuilder-Version: " ++ V.autoBuilderVersion] ++
                       ["Time: " ++ show elapsed] ++
                       ["Date: " ++ show date] ++
-                      maybeField "Memory: " (lookup "MemTotal" memInfo) ++
-                      maybeField "CPU: " (lookup "model name" cpuInfo) ++
+                      maybeField "Memory: " (List.lookup "MemTotal" memInfo) ++
+                      maybeField "CPU: " (List.lookup "model name" cpuInfo) ++
                       ["CPU count: " ++ (show . length . lookupAll "processor" $ cpuInfo)] ++
                       maybeField "OS Architecture: " machine ++
-                      maybeField "CPU MHz: " (lookup "cpu MHz" cpuInfo) ++
-                      maybeField "CPU cache: " (lookup "cache size" cpuInfo) ++
+                      maybeField "CPU MHz: " (List.lookup "cpu MHz" cpuInfo) ++
+                      maybeField "CPU cache: " (List.lookup "cache size" cpuInfo) ++
                       maybeField "Host: " hostname
       let fields' = sinkFields (== "Files")
                     (Paragraph $ fields ++ [Field ("Build-Info", T.pack ("\n " <> intercalate "\n " buildInfo))])
