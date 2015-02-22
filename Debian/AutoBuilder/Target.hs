@@ -1,4 +1,13 @@
-{-# LANGUAGE BangPatterns, FlexibleContexts, OverloadedStrings, PackageImports, RankNTypes, ScopedTypeVariables, StandaloneDeriving, TemplateHaskell, TypeFamilies #-}
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PackageImports #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS -Wall -fwarn-unused-imports -fno-warn-name-shadowing -fno-warn-orphans #-}
 -- |A Target represents a particular set of source code and the
 -- methods to retrieve and update it.
@@ -14,7 +23,7 @@ module Debian.AutoBuilder.Target
 import Control.Applicative ((<$>))
 import Control.Applicative.Error (Failing(..))
 import Control.Arrow (second)
-import Control.Exception (AsyncException(UserInterrupt), evaluate, fromException, SomeException, throw, toException)
+import Control.Exception (AsyncException(UserInterrupt), fromException, SomeException, throw, toException)
 import Control.Monad.Catch (MonadCatch, catch, try, MonadMask)
 import Control.Monad.RWS (liftIO, MonadIO, when)
 import qualified Data.ByteString.Char8 as B (concat)
@@ -33,9 +42,9 @@ import Debian.Arch (Arch)
 import qualified Debian.AutoBuilder.Params as P (baseRelease, isDevelopmentRelease)
 import Debian.AutoBuilder.Types.Buildable (Buildable(..), failing, prepareTarget, relaxDepends, Target(tgt, cleanSource, targetDepends), targetRelaxed)
 import qualified Debian.AutoBuilder.Types.CacheRec as P (CacheRec(params))
-import qualified Debian.AutoBuilder.Types.Download as T (Download(buildWrapper, getTop, logText), flags, method)
-import Debian.AutoBuilder.Types.Fingerprint (buildDecision, targetFingerprint)
-import qualified Debian.AutoBuilder.Types.Packages as P (foldPackages, packageCount, PackageFlag(UDeb), Packages, Package(spec))
+import qualified Debian.AutoBuilder.Types.Download as T (Download(buildWrapper, getTop, logText), method)
+import Debian.AutoBuilder.Types.Fingerprint (ReleaseControlInfo(..), buildDecision, targetFingerprint)
+import qualified Debian.AutoBuilder.Types.Packages as P (PackageFlag)
 import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec(autobuilderEmail, buildDepends, buildRelease, buildTrumped, discard, doNotChangeVersion, dryRun, extraReleaseTag, noClean, oldVendorTags, preferred, releaseAliases, setEnv, strictness, vendorTag), Strictness(Lax))
 import qualified Debian.AutoBuilder.Version as V (autoBuilderVersion)
 import Debian.Changes (ChangedFileSpec(changedFileSize, changedFileName, changedFileMD5sum, changedFileSHA1sum, changedFileSHA256sum), ChangeLogEntry(logWho, logVersion, logDists, logDate, logComments), ChangesFile(changeRelease, changeInfo, changeFiles, changeDir))
@@ -55,8 +64,8 @@ import Debian.Repo.LocalRepository (LocalRepository, uploadLocal)
 import Debian.Repo.MonadOS (MonadOS(getOS), evalMonadOS, updateLists, withProc, withTmp, syncLocalPool, buildEssential, syncOS)
 import Debian.Repo.OSImage (osRoot)
 import Debian.Repo.Package (binaryPackageSourceVersion, sourcePackageBinaryNames)
-import Debian.Repo.PackageID (PackageID(packageName, packageVersion))
-import Debian.Repo.PackageIndex (BinaryPackage(packageInfo, packageID), prettyBinaryPackage, SourcePackage(sourceParagraph, sourcePackageID), sortBinaryPackages, sortSourcePackages)
+import Debian.Repo.PackageID (PackageID(packageVersion))
+import Debian.Repo.PackageIndex (BinaryPackage(packageInfo), SourcePackage(sourceParagraph, sourcePackageID), sortBinaryPackages, sortSourcePackages)
 import Debian.Repo.Prelude (symbol)
 import Debian.Repo.Prelude.Process (readProcessVE, readProcessV, modifyProcessEnv)
 import Debian.Repo.Prelude.Verbosity (ePutStrLn, noisier, qPutStrLn, quieter, ePutStr)
@@ -315,7 +324,7 @@ showTargets :: [(RetrieveMethod, [P.PackageFlag])] -> String
 showTargets targets =
     unlines (heading :
              map (const '-') heading :
-             map (\ (count, (spec, flags)) -> printf "%4d. " count <> " " <> limit 100 (show spec)) (zip ([1..] :: [Int]) targets)
+             map (\ (count, (spec, _flags)) -> printf "%4d. " count <> " " <> limit 100 (show spec)) (zip ([1..] :: [Int]) targets)
              -- map concat (columns (reverse (snd (P.foldPackages (\ p (count, rows) -> (count + 1, [printf "%4d. " count, " ", limit 100 (show (P.spec p))] : rows)) targets (1 :: Int, [])))))
             )
     where
@@ -348,14 +357,12 @@ buildTarget cache dependOS buildOS repo !target = do
             do -- quieter 3 $ qPutStrLn ("Build dependency solution: " ++ show (map prettyBinaryPackage packages))
                -- Get the newest available version of a source package,
                -- along with its status, either Indep or All
-               (releaseControlInfo, releaseStatus, _message) <- evalMonadOS (getReleaseControlInfo target) dependOS
-               let repoVersion = fmap (packageVersion . sourcePackageID) releaseControlInfo
-                   oldFingerprint = maybe Nothing packageFingerprint releaseControlInfo
+               info <- evalMonadOS (getReleaseControlInfo target) dependOS
                -- Get the changelog entry from the clean source
                let newFingerprint = targetFingerprint target packages
                -- qPutStrLn "Computing new version number of target package..."
-               newVersion <- evalMonadOS (computeNewVersion cache target releaseControlInfo releaseStatus) dependOS
-               let decision = buildDecision cache target oldFingerprint newFingerprint releaseStatus
+               newVersion <- evalMonadOS (computeNewVersion cache target info) dependOS
+               let decision = buildDecision cache target info newFingerprint
                ePutStrLn ("Build decision: " ++ show decision)
                -- qPutStrLn ("newVersion: " ++ show (fmap prettyDebianVersion newVersion))
                -- qPutStrLn ("Release status: " ++ show releaseStatus)
@@ -365,13 +372,19 @@ buildTarget cache dependOS buildOS repo !target = do
                      -- If we are doing an arch only build, the version number needs to match the
                      -- version number of the architecture independent package already uploaded.
                      let buildVersion = case decision of
-                                          Arch _ -> repoVersion
+                                          Arch _ -> repoVersion info
                                           _ -> Just version in
                      case decision of
                        Error message -> qError ("Failure making build decision: " ++ message)
                        No _ -> return Nothing
-                       _ ->  buildPackage cache dependOS buildOS buildVersion oldFingerprint newFingerprint target decision repo >>=
+                       _ ->  buildPackage cache dependOS buildOS buildVersion (oldFingerprint info) newFingerprint target decision repo >>=
                              return . Just
+
+repoVersion :: ReleaseControlInfo -> Maybe DebianVersion
+repoVersion = fmap (packageVersion . sourcePackageID) . releaseSourcePackage
+
+oldFingerprint :: ReleaseControlInfo -> Maybe DownstreamFingerprint
+oldFingerprint = maybe Nothing packageFingerprint . releaseSourcePackage
 
 -- | Build a package and upload it to the local repository.
 buildPackage :: (MonadRepos m, MonadTop m, MonadMask m, T.Download a) =>
@@ -514,13 +527,13 @@ prepareBuildTree cache dependOS buildOS sourceFingerprint target = do
 -- available in a release.  Make sure that the files for this build
 -- architecture are available.
 getReleaseControlInfo :: forall m a. (MonadOS m, MonadRepos m, T.Download a) =>
-                         Target a -> m (Maybe SourcePackage, SourcePackageStatus, String)
+                         Target a -> m ReleaseControlInfo
 getReleaseControlInfo target = do
   -- The source packages with the specified name, newest first
   (sourcePackages' :: [SourcePackage]) <- (sortSourcePackages (== packageName)) <$> osSourcePackages
   -- Source packages associated with their binary package names
-  let sourcePackagesWithBinaryNames :: [(SourcePackage, [BinPkgName])]
-      sourcePackagesWithBinaryNames = zip sourcePackages' (map sourcePackageBinaryNames sourcePackages')
+  -- let sourcePackagesWithBinaryNames :: [(SourcePackage, [BinPkgName])]
+  --     sourcePackagesWithBinaryNames = zip sourcePackages' (map sourcePackageBinaryNames sourcePackages')
   -- All The binary packages that came from from those source
   -- packages, sorted by name and version.  Although we know what the
   -- names of the binary packages are, it is difficult to be sure
@@ -530,9 +543,9 @@ getReleaseControlInfo target = do
   (binaryPackages' :: [BinaryPackage]) <- sortBinaryPackages (flip elem . nub . concat . map sourcePackageBinaryNames $ sourcePackages') <$> osBinaryPackages
   sourcePackageStatusPairs <- zip sourcePackages' <$> mapM isComplete sourcePackages'
   return $ case sourcePackageStatusPairs of
-             (info, status@Complete) : _ -> (Just info, All, message sourcePackages' binaryPackages' status)
-             (info, status@(Missing missing)) : _ -> (Just info, Indep missing, message sourcePackages' binaryPackages' status)
-             _ -> (Nothing, None, message sourcePackages' binaryPackages' Complete)
+             (info, status@Complete) : _ -> ReleaseControlInfo (Just info) All (message sourcePackages' binaryPackages' status)
+             (info, status@(Missing missing)) : _ -> ReleaseControlInfo (Just info) (Indep missing) (message sourcePackages' binaryPackages' status)
+             _ -> ReleaseControlInfo Nothing None (message sourcePackages' binaryPackages' Complete)
 {-
   return $ case zip sourcePackages' (map (isComplete sourcePackage binaryPackages') sourcePackagesWithBinaryNames) of
     (info, status@Complete) : _ -> (Just info, All, message sourcePackages' binaryPackages' status)
@@ -561,9 +574,9 @@ getReleaseControlInfo target = do
           case ((fieldValue "Package" . packageInfo $ package), (fieldValue "Version" . packageInfo $ package)) of
             (Just name, Just version) -> (BinPkgName (T.unpack name), parseDebianVersion (T.unpack version))
             _ -> error "Missing Package or Version field"
-      compareVersion a b = case ((fieldValue "Version" . sourceParagraph $ a), (fieldValue "Version" . sourceParagraph $ b)) of
-                             (Just a', Just b') -> compare (parseDebianVersion . T.unpack $ b') (parseDebianVersion . T.unpack $ a')
-                             _ -> error "Missing Version field"
+      -- compareVersion a b = case ((fieldValue "Version" . sourceParagraph $ a), (fieldValue "Version" . sourceParagraph $ b)) of
+      --                        (Just a', Just b') -> compare (parseDebianVersion . T.unpack $ b') (parseDebianVersion . T.unpack $ a')
+      --                        _ -> error "Missing Version field"
       -- The source package is complete if the correct versions of the
       -- required binary packages are all available, either as debs or
       -- udebs.  Because it is easier to check for available debs, we
@@ -608,9 +621,9 @@ getReleaseControlInfo target = do
       --  or (if it is a udeb) if it simply exists on the
       -- server and has the correct filename.  There is no way to
       -- decide whether a package is a udeb from the package indexes.
-      unableToCheckUDebs = True
-      availableUDebNames :: SourcePackage -> [BinPkgName]
-      availableUDebNames _sourcePackage = (error "availableUDebNames")
+      -- unableToCheckUDebs = True
+      -- availableUDebNames :: SourcePackage -> [BinPkgName]
+      -- availableUDebNames _sourcePackage = (error "availableUDebNames")
 
 data Status = Complete | Missing [BinPkgName]
 
@@ -618,9 +631,9 @@ data Status = Complete | Missing [BinPkgName]
 -- with a number sufficiently high to trump the newest version in the
 -- dist, and distinct from versions in any other dist.
 computeNewVersion :: (MonadApt m, MonadRepos m, MonadOS m, MonadMask m, T.Download a) =>
-                     P.CacheRec -> Target a -> Maybe SourcePackage -> SourcePackageStatus -> m (Failing DebianVersion)
-computeNewVersion cache target releaseControlInfo _releaseStatus = do
-  let current = if buildTrumped then Nothing else releaseControlInfo
+                     P.CacheRec -> Target a -> ReleaseControlInfo -> m (Failing DebianVersion)
+computeNewVersion cache target info = do
+  let current = if buildTrumped then Nothing else releaseSourcePackage info
       currentVersion = maybe Nothing (Just . parseDebianVersion . T.unpack) (maybe Nothing (fieldValue "Version" . sourceParagraph) current)
       checkVersion :: DebianVersion -> Failing DebianVersion
       checkVersion result =
@@ -860,5 +873,5 @@ sha1sum = doChecksum "sha1sum" (take 40)
 sha256sum :: FilePath -> IO (Failing String)
 sha256sum = doChecksum "sha256sum" (take 64)
 
-forceList :: [a] -> IO [a]
-forceList output = evaluate (length output) >> return output
+-- forceList :: [a] -> IO [a]
+-- forceList output = evaluate (length output) >> return output

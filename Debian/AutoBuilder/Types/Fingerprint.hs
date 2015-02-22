@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP, OverloadedStrings #-}
 module Debian.AutoBuilder.Types.Fingerprint
-    ( targetFingerprint
+    ( ReleaseControlInfo(..)
+    , targetFingerprint
     , buildDecision
     ) where
 
@@ -11,7 +12,7 @@ import Data.Char (isSpace)
 #endif
 import Data.List as List (intercalate, intersperse, map, nub, partition)
 import qualified Data.Map as Map
-import Data.Maybe(isNothing, listToMaybe, mapMaybe)
+import Data.Maybe(isJust, isNothing, listToMaybe, mapMaybe)
 import Data.Set as Set (toList, fromList, map, filter)
 import Debian.AutoBuilder.Types.Buildable (Target(tgt, cleanSource), Buildable(download), targetRelaxed, relaxDepends)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
@@ -26,8 +27,15 @@ import Debian.Repo.Dependencies (prettySimpleRelation)
 import Debian.Repo.Fingerprint as P
 import Debian.Repo.SourceTree (HasChangeLog(entry), SourcePackageStatus(..), BuildDecision(..))
 import Debian.Repo.PackageID (PackageID(PackageID, packageName, packageVersion))
-import Debian.Repo.PackageIndex (BinaryPackage(packageID))
+import Debian.Repo.PackageIndex (BinaryPackage(packageID), SourcePackage)
 import Debian.Version (prettyDebianVersion)
+
+data ReleaseControlInfo
+    = ReleaseControlInfo
+      { releaseSourcePackage :: Maybe SourcePackage
+      , releaseStatus :: SourcePackageStatus
+      , releaseMessage :: String
+      }
 
 targetFingerprint :: T.Download a => Target a -> [BinaryPackage] -> Fingerprint
 targetFingerprint target buildDependencySolution =
@@ -62,18 +70,16 @@ makeVersion package =
 buildDecision :: T.Download a =>
                  P.CacheRec
               -> Target a
-              -> Maybe DownstreamFingerprint -- ^ The fingerprint of the most recent build
+              -> ReleaseControlInfo
               -> Fingerprint -- ^ The fingerprint of the source package
+{-
+              -> Maybe DownstreamFingerprint -- ^ The fingerprint of the most recent build
               -> SourcePackageStatus -- ^ The status of the version in the repository with respect
                                      -- to the architecture we are building - either all binary packages
                                      -- are available, or none, or only the architecture independent.
+-}
               -> BuildDecision
-buildDecision _cache _target Nothing upstream _releaseStatus =
-    -- I am not sure whether the next older usable version is showing up here, or only
-    -- packages with the same upstream version number.  We need the next older version
-    -- to show up here to implement ignoreNewVersions properly.
-    Yes ("Initial build of package " ++ show (prettyDebianVersion (upstreamVersion upstream)))
-buildDecision cache target (Just downstream) upstream releaseStatus =
+buildDecision cache target info@(ReleaseControlInfo {releaseSourcePackage = Just p}) upstream | isJust (P.packageFingerprint p) =
     case () of
       _ | skipVersion newSrcVersion ->
             No ("Skipped version " ++ show (prettyDebianVersion newSrcVersion))
@@ -109,16 +115,18 @@ buildDecision cache target (Just downstream) upstream releaseStatus =
         | isArchIndep ->
             -- The binary packages are missing, we need an arch only build.
             Arch ("Version " ++ show (prettyDebianVersion repoVersion) ++ " needs arch only build. (Missing: " ++ show missingDebs ++ ")")
-        | releaseStatus == All ->
+        | releaseStatus info == All ->
             No ("Version " ++ show (prettyDebianVersion oldSrcVersion) ++ " is already in release.")
       _ -> -- releaseStatus == None ->
-            error ("Unexpected releaseStatus: " ++ show releaseStatus)
+            error ("Unexpected releaseStatus: " ++ show (releaseStatus info))
     where
       allowBuildDependencyRegressions = P.allowBuildDependencyRegressions (P.params cache)
 
       newAttrs = retrievedAttributes upstream
       newSrcVersion = upstreamVersion upstream
       sourceDependencies = buildDependencyVersions upstream
+
+      Just downstream = P.packageFingerprint p
       oldAttrs = retrievedAttributes (upstreamFingerprint downstream)
       oldSrcVersion = upstreamVersion (upstreamFingerprint downstream)
       builtDependencies = buildDependencyVersions (upstreamFingerprint downstream)
@@ -128,11 +136,11 @@ buildDecision cache target (Just downstream) upstream releaseStatus =
       failVersion v = any (== (show v)) (mapMaybe (\x -> case x of P.FailVersion s -> Just s; _ -> Nothing) . T.flags . download . tgt $ target)
       skipPackage = any (\x -> case x of P.SkipPackage -> True; _ -> False) (T.flags . download . tgt $ target)
       failPackage = any (\x -> case x of P.FailPackage -> True; _ -> False) (T.flags . download . tgt $ target)
-      isArchIndep = case releaseStatus of
+      isArchIndep = case releaseStatus info of
                       Indep _ -> True
                       _ -> False
       notArchDep = all (== Just "all") . List.map (fieldValue "Architecture") . debianBinaryParagraphs
-      missingDebs = case releaseStatus of
+      missingDebs = case releaseStatus info of
                       Indep xs -> xs
                       _ -> []
       displayDependencyChanges dependencies =
@@ -168,6 +176,11 @@ buildDecision cache target (Just downstream) upstream releaseStatus =
       -- All the package names mentioned in a dependency list
       packageNames :: G.DepInfo -> [BinPkgName]
       packageNames info {-(_, deps, _)-} = nub (List.map (\ (Rel name _ _) -> name) (concat (G.relations info)))
+buildDecision _ _ _ upstream =
+    -- I am not sure whether the next older usable version is showing up here, or only
+    -- packages with the same upstream version number.  We need the next older version
+    -- to show up here to implement ignoreNewVersions properly.
+    Yes ("Initial build of package " ++ show (prettyDebianVersion (upstreamVersion upstream)))
 
 -- Special case - if all that changed is that an AptVersion attribute
 -- was added, do not build.  Debian version number changes currently
