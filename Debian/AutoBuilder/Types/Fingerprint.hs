@@ -22,12 +22,12 @@ import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Changes (logVersion)
 import Debian.Control (fieldValue, debianBinaryParagraphs)
 import qualified Debian.GenBuildDeps as G
-import Debian.Relation (Relation(Rel), BinPkgName(..))
+import Debian.Relation (Relation(Rel), BinPkgName(..), SrcPkgName(unSrcPkgName))
 import Debian.Repo.Dependencies (prettySimpleRelation)
 import Debian.Repo.Fingerprint as P
 import Debian.Repo.SourceTree (HasChangeLog(entry), SourcePackageStatus(..), BuildDecision(..))
 import Debian.Repo.PackageID (PackageID(PackageID, packageName, packageVersion))
-import Debian.Repo.PackageIndex (BinaryPackage(packageID), SourcePackage)
+import Debian.Repo.PackageIndex (BinaryPackage(packageID), SourcePackage(sourcePackageID))
 import Debian.Version (prettyDebianVersion)
 
 data ReleaseControlInfo
@@ -81,7 +81,9 @@ buildDecision :: T.Download a =>
               -> BuildDecision
 buildDecision cache target info@(ReleaseControlInfo {releaseSourcePackage = Just p}) upstream | isJust (P.packageFingerprint p) =
     case () of
-      _ | skipVersion newSrcVersion ->
+      _ | elem (packageName $ sourcePackageID p) (P.forceBuild (P.params cache)) ->
+            Yes ("--force-build " ++ (unSrcPkgName $ packageName $ sourcePackageID p) ++ " set")
+        | skipVersion newSrcVersion ->
             No ("Skipped version " ++ show (prettyDebianVersion newSrcVersion))
         | failVersion newSrcVersion ->
             Error ("Failed version " ++ show (prettyDebianVersion newSrcVersion))
