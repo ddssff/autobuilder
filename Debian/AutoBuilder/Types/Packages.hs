@@ -5,6 +5,8 @@ module Debian.AutoBuilder.Types.Packages
     ( Packages(..)
     , Package(..)
     , GroupName(..)
+    , TSt
+    , TargetState(..)
     , foldPackages
     , foldPackages'
     , filterPackages
@@ -44,13 +46,16 @@ module Debian.AutoBuilder.Types.Packages
 
 import Debug.Trace as D
 
+import Control.Applicative (pure, (<$>), (<*>))
 import Control.Exception (SomeException, try)
+import Control.Monad.State (State)
 import Data.ByteString (ByteString)
 import Data.Generics (Data, Typeable)
 import Data.Monoid (Monoid(mempty, mappend))
 import Data.String (IsString(fromString))
 import Debian.Debianize (CabalInfo)
 import Debian.Relation (Relations)
+import Debian.Releases (baseRelease, BaseRelease(..), Release(..))
 import Debian.Repo (DebianSourceTree, findDebianSourceTrees)
 import Debian.Repo.Fingerprint (RetrieveMethod(..), GitSpec(..))
 import System.FilePath ((</>))
@@ -86,6 +91,14 @@ data Package
       -- ^ These flags provide additional details about how to obtain
       -- the package.
       } deriving (Show, Data, Typeable) -- We can't derive Eq while PackageFlag contains functions
+
+data TargetState
+    = TargetState
+      { home :: FilePath
+      , release :: Release
+      }
+
+type TSt = State TargetState
 
 -- instance Eq Packages where
 --     (APackage p1) == (APackage p2) = p1 == p2
@@ -231,85 +244,85 @@ method :: RetrieveMethod -> Package
 method m = Package { spec = m, flags = [] }
 
 -- | Add a flag to every package in p
-flag :: Package -> PackageFlag -> Package
-flag p f = p {flags = f : flags p}
+flag :: TSt Package -> PackageFlag -> TSt Package
+flag mp f = (\ p -> p {flags = f : flags p}) <$> mp
 
-mflag :: Package -> Maybe PackageFlag -> Package
-mflag p Nothing = p
-mflag p (Just f) = flag p f
+mflag :: TSt Package -> Maybe PackageFlag -> TSt Package
+mflag mp Nothing = mp
+mflag mp (Just f) = flag mp f
 
-patch :: Package -> ByteString -> Package
-patch p s = p {spec = Patch (spec p) s}
+patch :: TSt Package -> ByteString -> TSt Package
+patch mp s = (\ p -> p {spec = Patch (spec p) s}) <$> mp
 
-rename :: Packages -> GroupName -> Packages
-rename p s = p {group = s}
+rename :: TSt Packages -> GroupName -> TSt Packages
+rename mps s = (\ ps -> ps {group = s}) <$> mps
 
 mapSpec :: (RetrieveMethod -> RetrieveMethod) -> Package -> Package
 mapSpec f p@(Package {spec = x}) = p {spec = f x}
 
-cd :: Package -> FilePath -> Package
-cd p path = p {spec = Cd path (spec p)}
+cd :: TSt Package -> FilePath -> TSt Package
+cd mp path = mp >>= \ p -> pure $ p {spec = Cd path (spec p)}
 
-apt :: String -> String -> Package
-apt dist name =
+apt :: String -> String -> TSt Package
+apt dist name = pure $
           Package
                { spec = Apt dist name
                , flags = [] }
 
-bzr :: String -> Package
-bzr path = method (Bzr path)
+bzr :: String -> TSt Package
+bzr path = pure $ method (Bzr path)
 
-darcs :: String -> Package
-darcs path =
+darcs :: String -> TSt Package
+darcs path = pure $
     Package { spec = Darcs path
             , flags = [] }
 
-datafiles :: RetrieveMethod -> RetrieveMethod -> FilePath -> Package
-datafiles cabal files dest = method (DataFiles cabal files dest)
+datafiles :: RetrieveMethod -> RetrieveMethod -> FilePath -> TSt Package
+datafiles cabal files dest = pure $ method (DataFiles cabal files dest)
 
-debianize :: Package -> Package
-debianize p = p { spec = Debianize'' (spec p) Nothing }
+debianize :: TSt Package -> TSt Package
+debianize mp = (\ p -> p { spec = Debianize'' (spec p) Nothing }) <$> mp
 
 -- debdir :: String -> RetrieveMethod -> RetrieveMethod -> Packages
 -- debdir name method1 method2 = method name (DebDir method1 method1)
 
-debdir :: Package -> RetrieveMethod -> Package
-debdir p debian = p {spec = DebDir (spec p) debian}
+debdir :: TSt Package -> RetrieveMethod -> TSt Package
+debdir mp debian = (\ p -> p {spec = DebDir (spec p) debian}) <$> mp
 
-dir :: FilePath -> Package
-dir path = method (Dir path)
+dir :: FilePath -> TSt Package
+dir path = pure $ method (Dir path)
 
-git :: String -> [GitSpec] -> Package
-git path gitspecs = method (Git path gitspecs)
+git :: String -> [GitSpec] -> TSt Package
+git path gitspecs = pure $ method (Git path gitspecs)
 
-hackage :: String -> Package
-hackage s =
+hackage :: String -> TSt Package
+hackage s = pure $
     Package { spec = Hackage s
             , flags = [] }
 
 hg :: String -> Package
 hg path = method (Hg path)
 
-proc :: Package -> Package
-proc = mapSpec Proc
+proc :: TSt Package -> TSt Package
+proc p = mapSpec Proc <$> p
 
-quilt :: RetrieveMethod -> Package -> Package
-quilt patchdir p = p {spec = Quilt (spec p) patchdir}
+quilt :: RetrieveMethod -> TSt Package -> TSt Package
+quilt patchdir mp = (\ p -> p {spec = Quilt (spec p) patchdir}) <$> mp
 
-sourceDeb :: Package -> Package
-sourceDeb p = method (SourceDeb (spec p))
+sourceDeb :: TSt Package -> TSt Package
+sourceDeb mp =  (\ p -> method (SourceDeb (spec p))) <$> mp
 
-svn :: String -> Package
-svn path = method (Svn path)
+svn :: String -> TSt Package
+svn path = pure $ method (Svn path)
 
-tla :: String -> Package
-tla path = method (Tla path)
+tla :: String -> TSt Package
+tla path = pure $ method (Tla path)
 
-twice :: Package -> Package
-twice p = p {spec = Twice (spec p)}
+twice :: TSt Package -> TSt Package
+twice mp = (\ p -> p {spec = Twice (spec p)}) <$> mp
 
-uri :: String -> String -> Package
-uri tarball checksum = method (Uri tarball checksum)
+uri :: String -> String -> TSt Package
+uri tarball checksum = pure $ method (Uri tarball checksum)
 
 -- | The target name returned is only used by the autobuilder command
 -- line interface to choose targets.  They look a lot like debian

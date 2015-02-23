@@ -42,7 +42,7 @@ Library
     Hs-Source-Dirs: ../debian-repo
     Build-Depends: transformers-compat
   else
-    Build-Depends: debian-repo >= 5.72
+    Build-Depends: debian-repo >= 5.73
 
   if flag (local-cabal-debian)
     Hs-Source-Dirs: ../cabal-debian/src, ../cabal-debian/dist/build/autogen
@@ -130,6 +130,8 @@ Library
     Debian.AutoBuilder.Types.ParamRec
     Debian.AutoBuilder.Version
     Paths_AutoBuilder
+  if flag(local-debian-repo)
+    Build-Depends: lens, transformers
 
 Test-Suite autobuilder-tests
   Type: exitcode-stdio-1.0
@@ -142,7 +144,7 @@ Test-Suite autobuilder-tests
     Hs-Source-Dirs: ., ../debian-repo, ../cabal-debian/dist/build/autogen
     Build-Depends: deepseq
   else
-    Build-Depends: AutoBuilder, debian-repo >= 5.72
+    Build-Depends: AutoBuilder, debian-repo >= 5.73
 
   if flag (local-cabal-debian)
     Hs-Source-Dirs: ., ../cabal-debian/src
