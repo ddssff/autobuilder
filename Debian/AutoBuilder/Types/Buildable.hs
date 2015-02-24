@@ -4,7 +4,7 @@ module Debian.AutoBuilder.Types.Buildable
     , Buildable(..)
     , asBuildable
     , relaxDepends
-    , Target(Target, tgt, cleanSource, targetDepends)
+    , Target(Target, tgt, cleanSource, targetControl)
     , prepareTarget
     , targetRelaxed
     , getRelaxedDependencyInfo
@@ -16,8 +16,6 @@ import Control.Exception as E (SomeException, try, catch, throw)
 import Control.Monad (when)
 import Control.Monad.Catch (MonadMask)
 import Control.Monad.Trans (MonadIO, liftIO)
-import qualified Data.Map as Map
-import qualified Data.Set as Set
 import qualified Debian.AutoBuilder.Types.CacheRec as C
 import qualified Debian.AutoBuilder.Types.Download as T
 import Debian.AutoBuilder.Types.Download (Download(..))
@@ -27,7 +25,7 @@ import Debian.AutoBuilder.Types.Packages (foldPackages)
 import Debian.AutoBuilder.Types.ParamRec (ParamRec(..))
 import Debian.Changes (logVersion, ChangeLogEntry(..))
 import Debian.Control (HasDebianControl(debianControl))
-import Debian.Control.Policy (debianSourcePackageName, parseDebianControlFromFile)
+import Debian.Control.Policy (DebianControl, debianSourcePackageName, parseDebianControlFromFile)
 import qualified Debian.GenBuildDeps as G
 import Debian.Relation (SrcPkgName(..), BinPkgName(..))
 import Debian.Relation.ByteString(Relations)
@@ -95,26 +93,20 @@ asBuildable x =
 -- example, @Relax-Depends: ghc6 hscolour@ means \"even if ghc6
 -- is rebuilt, don't rebuild hscolour even though ghc6 is one of
 -- its build dependencies.\"
-relaxDepends :: (T.Download a) => C.CacheRec -> Buildable a -> G.OldRelaxInfo
-relaxDepends cache@(C.CacheRec {C.params = p}) x =
-    let srcPkg = debianSourcePackageName x in
-    G.RelaxInfo $ map (\ target -> (BinPkgName target, Nothing)) (globalRelaxInfo (C.params cache)) ++
-                  foldPackages (\ p xs -> xs ++ map (\ binPkg -> (BinPkgName binPkg, Just srcPkg)) (P.relaxInfo (P.flags p))) (R.buildPackages p) []
+relaxDepends :: (T.Download a) => C.CacheRec -> Buildable a -> SrcPkgName -> BinPkgName -> Bool
+relaxDepends c x s b =
+    any (== b) (map BinPkgName (globalRelaxInfo (C.params c))) ||
+    (debianSourcePackageName x == s &&
+     any (== b) (map BinPkgName (concatMap (P.relaxInfo . P.flags) (packageList (R.buildPackages (C.params c))))))
 
-_makeRelaxInfo :: G.OldRelaxInfo -> G.RelaxInfo
-_makeRelaxInfo (G.RelaxInfo xs) srcPkgName binPkgName =
-    Set.member binPkgName global || maybe False (Set.member binPkgName) (Map.lookup srcPkgName mp)
-    where
-      (global :: Set.Set BinPkgName, mp :: Map.Map SrcPkgName (Set.Set BinPkgName)) =
-          foldr f (Set.empty, Map.empty) xs
-      f (b, Just s) (global', mp') = (global', Map.insertWith Set.union s (Set.singleton b) mp')
-      f (b, Nothing) (global', mp') = (Set.insert b global', mp')
+packageList :: P.Packages -> [P.Package]
+packageList p = foldPackages (:) p []
 
 -- | Information collected from the build tree for a Tgt.
 data Target download
     = Target { tgt :: Buildable download	-- ^ The instance of BuildTarget
              , cleanSource :: DebianBuildTree	-- ^ The source code stripped of SCCS info
-             , targetDepends :: G.DepInfo	-- ^ The dependency info parsed from the control file
+             , targetControl :: DebianControl	-- ^ The dependency control file
              }
 
 instance HasDebianControl (Target download) where
@@ -126,11 +118,11 @@ instance Eq (Target download) where
 -- |Prepare a target for building in the given environment.  At this
 -- point, the target needs to be a DebianSourceTree or a
 -- DebianBuildTree.
-prepareTarget :: (MonadOS m, MonadIO m, MonadMask m, T.Download a) => C.CacheRec -> Relations -> Buildable a -> m (Target a)
-prepareTarget cache globalBuildDeps source =
+prepareTarget :: (MonadOS m, MonadIO m, MonadMask m, T.Download a) => C.CacheRec -> Buildable a -> m (Target a)
+prepareTarget cache source =
     prepareBuild cache (download source) >>= \ tree ->
-    liftIO (getTargetDependencyInfo globalBuildDeps tree) >>= \ deps ->
-    return $ Target { tgt = source, cleanSource = tree, targetDepends = deps }
+    liftIO (getTargetControlInfo tree) >>= \ ctl ->
+    return $ Target { tgt = source, cleanSource = tree, targetControl = ctl }
 
 -- | Given a download, examine it to see if it is a debian source
 -- tree, and if that fails see if it is a debian build tree.  Copy the
@@ -250,13 +242,13 @@ getDependencyInfo globalBuildDeps targets =
              return (map (\ (target, deps) -> target {targetDepends = deps}) ok)
 -}
 
-getRelaxedDependencyInfo :: Relations -> G.OldRelaxInfo -> DebianBuildTree -> IO (G.DepInfo, G.DepInfo)
+getRelaxedDependencyInfo :: Relations -> G.RelaxInfo -> DebianBuildTree -> IO (G.DepInfo, G.DepInfo)
 getRelaxedDependencyInfo globalBuildDeps relaxInfo tree =
     do deps <- getTargetDependencyInfo globalBuildDeps tree
-       return (deps, head (G.oldRelaxDeps relaxInfo [deps]))
+       return (deps, head (G.relaxDeps relaxInfo [deps]))
 
-targetRelaxed :: (T.Download a) => G.OldRelaxInfo -> Target a -> G.DepInfo
-targetRelaxed relaxInfo target = head $ G.oldRelaxDeps relaxInfo [targetDepends target]
+targetRelaxed :: (T.Download a) => Relations -> G.RelaxInfo -> Target a -> G.DepInfo
+targetRelaxed globalBuildDeps relaxInfo target = head $ G.relaxDeps relaxInfo [targetDepends globalBuildDeps target]
 
 -- |Retrieve the dependency information for a single target
 getTargetDependencyInfo :: Relations -> DebianBuildTree -> IO G.DepInfo
@@ -268,6 +260,19 @@ getTargetDependencyInfo globalBuildDeps buildTree =
       controlPath = debdir buildTree ++ "/debian/control"
       addRelations :: Relations -> G.DepInfo -> G.DepInfo
       addRelations moreRels info = info {G.relations = G.relations info ++ moreRels}
+
+targetDepends :: Relations -> Target a -> G.DepInfo
+targetDepends globalBuildDeps =
+    addRelations globalBuildDeps . G.buildDependencies . targetControl
+    where
+      addRelations :: Relations -> G.DepInfo -> G.DepInfo
+      addRelations moreRels info = info {G.relations = G.relations info ++ moreRels}
+
+getTargetControlInfo :: DebianBuildTree -> IO DebianControl
+getTargetControlInfo buildTree =
+    parseDebianControlFromFile controlPath >>= either throw return
+    where
+      controlPath = debdir buildTree ++ "/debian/control"
 
 {-
 zipEithers :: [a] -> [Either b c] -> [Either (a, b) (a, c)]

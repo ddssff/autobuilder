@@ -22,7 +22,7 @@ import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Changes (logVersion)
 import Debian.Control (fieldValue, debianBinaryParagraphs)
 import qualified Debian.GenBuildDeps as G
-import Debian.Relation (Relation(Rel), BinPkgName(..), SrcPkgName(unSrcPkgName))
+import Debian.Relation (Relation(Rel), Relations, BinPkgName(..), SrcPkgName(unSrcPkgName))
 import Debian.Repo.Dependencies (prettySimpleRelation)
 import Debian.Repo.Fingerprint as P
 import Debian.Repo.SourceTree (HasChangeLog(entry), SourcePackageStatus(..), BuildDecision(..))
@@ -69,6 +69,7 @@ makeVersion package =
 -- encoded into the uploaded version's control file.
 buildDecision :: T.Download a =>
                  P.CacheRec
+              -> Relations
               -> Target a
               -> ReleaseControlInfo
               -> Fingerprint -- ^ The fingerprint of the source package
@@ -79,7 +80,7 @@ buildDecision :: T.Download a =>
                                      -- are available, or none, or only the architecture independent.
 -}
               -> BuildDecision
-buildDecision cache target info@(ReleaseControlInfo {releaseSourcePackage = Just p}) upstream | isJust (P.packageFingerprint p) =
+buildDecision cache globalBuildDeps target info@(ReleaseControlInfo {releaseSourcePackage = Just p}) upstream | isJust (P.packageFingerprint p) =
     case () of
       _ | elem (packageName $ sourcePackageID p) (P.forceBuild (P.params cache)) ->
             Yes ("--force-build " ++ (unSrcPkgName $ packageName $ sourcePackageID p) ++ " set")
@@ -174,11 +175,11 @@ buildDecision cache target info@(ReleaseControlInfo {releaseSourcePackage = Just
       builtDeps = Map.fromList (Set.toList (Set.map (\ p -> (packageName p, Just (packageVersion p))) builtDependencies))
       -- Remove any package not mentioned in the relaxed dependency list
       -- from the list of build dependencies which can trigger a rebuild.
-      sourceDependencies' = toList $ Set.filter (\ x -> elem (packageName x) (packageNames (targetRelaxed (relaxDepends cache (tgt target)) target))) sourceDependencies
+      sourceDependencies' = toList $ Set.filter (\ x -> elem (packageName x) (packageNames (targetRelaxed globalBuildDeps (relaxDepends cache (tgt target)) target))) sourceDependencies
       -- All the package names mentioned in a dependency list
       packageNames :: G.DepInfo -> [BinPkgName]
       packageNames info {-(_, deps, _)-} = nub (List.map (\ (Rel name _ _) -> name) (concat (G.relations info)))
-buildDecision _ _ _ upstream =
+buildDecision _ _ _ _ upstream =
     -- I am not sure whether the next older usable version is showing up here, or only
     -- packages with the same upstream version number.  We need the next older version
     -- to show up here to implement ignoreNewVersions properly.

@@ -46,7 +46,7 @@ module Debian.AutoBuilder.Types.Packages
 
 import Debug.Trace as D
 
-import Control.Applicative (pure, (<$>), (<*>))
+import Control.Applicative (pure, (<$>))
 import Control.Exception (SomeException, try)
 import Control.Monad.State (State)
 import Data.ByteString (ByteString)
@@ -55,7 +55,7 @@ import Data.Monoid (Monoid(mempty, mappend))
 import Data.String (IsString(fromString))
 import Debian.Debianize (CabalInfo)
 import Debian.Relation (Relations)
-import Debian.Releases (baseRelease, BaseRelease(..), Release(..))
+import Debian.Releases (Release(..))
 import Debian.Repo (DebianSourceTree, findDebianSourceTrees)
 import Debian.Repo.Fingerprint (RetrieveMethod(..), GitSpec(..))
 import System.FilePath ((</>))
