@@ -33,7 +33,7 @@ import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec, getParams, do
 import qualified Debian.AutoBuilder.Version as V
 import Debian.Control.Policy (debianPackageNames, debianSourcePackageName)
 import Debian.Debianize (CabalT)
-import Debian.Pretty (ppDisplay)
+import Debian.Pretty (prettyShow, ppShow)
 import Debian.Relation (BinPkgName(unBinPkgName), SrcPkgName(unSrcPkgName))
 import Debian.Release (ReleaseName(ReleaseName, relName), releaseName')
 import Debian.Repo.EnvPath (EnvRoot)
@@ -213,7 +213,7 @@ runParameterSet init cache =
           where
             doShow sources =
                 do qPutStrLn $ (relName . sliceListName $ sources) ++ ":"
-                   qPutStrLn . ppDisplay . sliceList $ sources
+                   qPutStrLn . prettyShow . sliceList $ sources
                    exitWith ExitSuccess
       doFlush top =
           do qPutStrLn "Flushing cache"
@@ -233,7 +233,7 @@ runParameterSet init cache =
                 Just uri -> qPutStrLn "Uploading from local repository to remote" >> liftIO (uploadRemote repo uri)
           | True = return []
       upload (_, failed) =
-          do let msg = ("Some targets failed to build:\n  " ++ intercalate "\n  " (map (ppDisplay . debianSourcePackageName) failed))
+          do let msg = ("Some targets failed to build:\n  " ++ intercalate "\n  " (map (ppShow . debianSourcePackageName) failed))
              qPutStrLn msg
              case P.doUpload params of
                True -> qPutStrLn "Skipping upload."

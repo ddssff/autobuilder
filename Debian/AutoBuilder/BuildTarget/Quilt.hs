@@ -20,7 +20,7 @@ import Debian.AutoBuilder.Target (decode)
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Changes (ChangeLogEntry(..), parseEntries, parseEntry)
-import Debian.Pretty (ppDisplay)
+import Debian.Pretty (ppShow)
 import Debian.Repo (HasDebDir(debdir), HasTopDir(topdir), SourceTree, DebianBuildTree, findSourceTree, findOneDebianBuildTree, copySourceTree, sub, MonadRepos, MonadTop)
 import Debian.Repo.Fingerprint (RetrieveMethod, retrieveMethodMD5)
 import Debian.Repo.Prelude.Process (readProcessVE, readProcessV)
@@ -204,7 +204,7 @@ mergeChangelogs baseText patchText =
             True ->
                 let baseEntries' = map Base baseEntries in
                 let mergedEntries = third . appendVersionNumbers . sortBy compareDate $ baseEntries' ++ patchEntries' in
-                Right $ (intercalate "\n" (map ppDisplay mergedEntries)) ++ baseText'
+                Right $ (intercalate "\n" (map ppShow mergedEntries)) ++ baseText'
             False ->
                 Left $ "Package name mismatch between base and patch changelogs: " ++
                        maybe "?" id basePackage ++ " /= " ++ maybe "?" id patchPackage

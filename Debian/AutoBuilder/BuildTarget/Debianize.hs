@@ -26,7 +26,7 @@ import Debian.Debianize as Cabal hiding (package) -- (CabalT, compileArgs, debia
 --import Debian.Debianize.InputCabal (dependOS, newFlags, buildEnv)
 --import Debian.Debianize.Monad (liftCabal)
 --import Debian.Debianize.Types.Atoms (newAtoms)
-import Debian.Pretty (ppDisplay)
+import Debian.Pretty (ppShow)
 import Debian.Relation (SrcPkgName(..))
 import Debian.Repo.Fingerprint (RetrieveMethod(Debianize''), retrieveMethodMD5)
 import Debian.Repo.Internal.Repos (MonadRepos)
@@ -158,7 +158,7 @@ instance CabalFlags P.PackageFlag where
     asCabalFlags (P.Maintainer s) = ["--maintainer", s]
     asCabalFlags (P.BuildDep s) = ["--build-dep", s]
     asCabalFlags (P.DevelDep s) = ["--build-dep", s, "--dev-dep", s]
-    asCabalFlags (P.MapDep c d) = ["--map-dep", c ++ "=" ++ ppDisplay d]
+    asCabalFlags (P.MapDep c d) = ["--map-dep", c ++ "=" ++ ppShow d]
     asCabalFlags (P.DebVersion s) = ["--deb-version", s]
     asCabalFlags (P.SkipVersion _) = []
     asCabalFlags (P.FailVersion _) = []

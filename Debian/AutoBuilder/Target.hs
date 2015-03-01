@@ -50,7 +50,7 @@ import qualified Debian.AutoBuilder.Version as V (autoBuilderVersion)
 import Debian.Changes (ChangedFileSpec(changedFileSize, changedFileName, changedFileMD5sum, changedFileSHA1sum, changedFileSHA256sum), ChangeLogEntry(logWho, logVersion, logDists, logDate, logComments), ChangesFile(changeRelease, changeInfo, changeFiles, changeDir))
 import Debian.Control (Control'(Control), ControlFunctions(parseControlFromFile), Field'(Comment, Field), fieldValue, Paragraph'(..), raiseFields, HasDebianControl, debianSourcePackageName)
 import qualified Debian.GenBuildDeps as G
-import Debian.Pretty (ppDisplay, ppPrint)
+import Debian.Pretty (prettyShow, ppShow, ppPrint)
 import Debian.Relation (BinPkgName(..), SrcPkgName(..))
 import Debian.Relation.ByteString (Relation(..), Relations)
 import Debian.Release (ReleaseName(relName), releaseName')
@@ -135,7 +135,7 @@ prepareTargets cache targetSpecs =
     where
       prepare :: (MonadOS m, MonadRepos m, MonadMask m, T.Download a) => Int -> (Int, Buildable a) -> m (Either SomeException (Target a))
       prepare count (index, tgt) =
-          do qPutStrLn (printf "[%2d of %2d] %s in %s" index count (ppDisplay . debianSourcePackageName $ tgt) (T.getTop $ download $ tgt))
+          do qPutStrLn (printf "[%2d of %2d] %s in %s" index count (ppShow . debianSourcePackageName $ tgt) (T.getTop $ download $ tgt))
              try (prepareTarget cache tgt) >>=
                  either (\ (e :: SomeException) ->
                              ePutStrLn (printf "[%2d of %2d] - could not prepare %s: %s"
@@ -196,7 +196,7 @@ buildLoop cache localRepo dependOS buildOS !targets =
           loop unbuilt failed
       loop2 unbuilt failed (G.ReadyTarget {G.ready = target, G.waiting = blocked} : ready') =
           do ePutStrLn (printf "[%2d of %2d] TARGET: %s - %s"
-                        (length targets - (Set.size unbuilt + length ready')) (length targets) (ppDisplay . debianSourcePackageName $ target) (show (T.method (download (tgt target)))))
+                        (length targets - (Set.size unbuilt + length ready')) (length targets) (ppShow . debianSourcePackageName $ target) (show (T.method (download (tgt target)))))
              -- Build one target.
              result <- if Set.member (debianSourcePackageName target) (P.discard (P.params cache))
                        then return (Failure ["--discard option set"])
@@ -205,8 +205,8 @@ buildLoop cache localRepo dependOS buildOS !targets =
                      -- added to failed.
                      (\ errs ->
                           do ePutStrLn ("Package build failed:\n " ++ intercalate "\n " errs ++ "\n" ++
-                                        "Discarding " ++ ppDisplay (debianSourcePackageName target) ++ " and its dependencies:\n  " ++
-                                        concat (intersperse "\n  " (map (ppDisplay . debianSourcePackageName) blocked)))
+                                        "Discarding " ++ ppShow (debianSourcePackageName target) ++ " and its dependencies:\n  " ++
+                                        concat (intersperse "\n  " (map (ppShow . debianSourcePackageName) blocked)))
                              let -- Remove the dependencies of the failed packages from unbuilt
                                  unbuilt' = Set.difference unbuilt (Set.fromList blocked)
                                  -- Add the target and its dependencies to failed
@@ -250,7 +250,7 @@ makeTable ready =
       goalsLine = []
       readyLines = map readyLine ready
       readyLine (G.ReadyTarget {G.ready = ready, G.waiting = blocked}) =
-          [" Ready:", ppDisplay (debianSourcePackageName ready) {-++ " (" ++ intercalate ", " (map ppDisplay (G.binaryNames ready)) ++ ")"-}, "Blocking " ++ show (length blocked) ++ ": [" ++ intercalate ", " (map (ppDisplay . debianSourcePackageName) blocked) ++ "]"]
+          [" Ready:", ppShow (debianSourcePackageName ready) {-++ " (" ++ intercalate ", " (map ppShow (G.binaryNames ready)) ++ ")"-}, "Blocking " ++ show (length blocked) ++ ": [" ++ intercalate ", " (map (ppShow . debianSourcePackageName) blocked) ++ "]"]
 
 -- |Compute the list of targets that are ready to build from the build
 -- dependency relations.  The return value is a list of target lists,
@@ -311,7 +311,7 @@ cycleMessage cache globalBuildDeps arcs =
       arcTuple (pkg, dep) =
           let rels = targetRelaxed globalBuildDeps (relaxDepends cache (tgt pkg)) pkg in
           [(show (intersect (binaryNames pkg dep) (binaryNamesOfRelations rels))),
-           ppDisplay (debianSourcePackageName dep), " -> ", ppDisplay (debianSourcePackageName pkg)]
+           ppShow (debianSourcePackageName dep), " -> ", ppShow (debianSourcePackageName pkg)]
       relaxLine :: (BinPkgName, SrcPkgName) -> String
       relaxLine (bin, src) = "Relax-Depends: " ++ unBinPkgName bin ++ " " ++ unSrcPkgName src
       pairs :: T.Download a => (Target a, Target a) -> [(BinPkgName, SrcPkgName)]
@@ -837,7 +837,7 @@ setRevisionInfo fingerprint changes =
             qPutStrLn ("Setting revision field in " <> changedFileName file)
             let dscFilePath = changeDir changes </> changedFileName file
             newDscFile <- parseControlFromFile dscFilePath >>= return . either (error . show) addField
-            replaceFile dscFilePath (ppDisplay newDscFile)
+            replaceFile dscFilePath (prettyShow newDscFile)
             md5 <- md5sum dscFilePath
             sha1 <- sha1sum dscFilePath
             sha256 <- sha256sum dscFilePath
@@ -851,7 +851,7 @@ setRevisionInfo fingerprint changes =
               e -> error (show e)
       -- A binary only build will have no .dsc file
       ([], _) -> return changes
-      (several, _) -> error ("Multiple .dsc files found in source package: " ++ intercalate ", " (map ppDisplay several))
+      (several, _) -> error ("Multiple .dsc files found in source package: " ++ intercalate ", " (map ppShow several))
     where
       addField (Control (Paragraph sourceInfo : binaryInfo)) =
           Control (newSourceInfo : binaryInfo)
