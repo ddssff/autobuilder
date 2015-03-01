@@ -23,39 +23,21 @@ Build-type:     Simple
 
 flag local-debian-repo
   Description: Link directly to the source of the debian-repo library
-  Default: False
+  Default: True
   Manual: True
 
 flag local-cabal-debian
   Description: Link directly to the source of the cabal-debian library
-  Default: False
+  Default: True
   Manual: True
 
 flag local-debian
   Description: Link directly to the source of the debian library
-  Default: False
+  Default: True
   Manual: True
 
 Library
   Hs-Source-Dirs: .
-  if flag (local-debian-repo)
-    Hs-Source-Dirs: ../debian-repo
-    Build-Depends: transformers-compat
-  else
-    Build-Depends: debian-repo >= 5.73
-
-  if flag (local-cabal-debian)
-    Hs-Source-Dirs: ../cabal-debian/src, ../cabal-debian/dist/build/autogen
-    Build-Depends: data-default, Diff, set-extra, hsemail, lens, memoize, pretty, syb
-  else
-    Build-Depends: cabal-debian >= 4.21, deepseq
-
-  if flag (local-debian)
-    Hs-Source-Dirs: ../debian-haskell
-    Build-Depends: ListLike
-  else
-    Build-Depends: debian >= 3.84
-
   Build-Depends:
         applicative-extras >= 0.1.8
       , base
@@ -130,8 +112,138 @@ Library
     Debian.AutoBuilder.Types.ParamRec
     Debian.AutoBuilder.Version
     Paths_AutoBuilder
+
   if flag(local-debian-repo)
-    Build-Depends: lens, transformers
+    Hs-Source-Dirs: ../debian-repo
+    Build-Depends: lens, transformers, transformers-compat, deepseq
+    Exposed-modules:
+        Debian.Releases,
+        Debian.Repo,
+        Debian.Repo.AptImage,
+        Debian.Repo.Changes,
+        Debian.Repo.Dependencies,
+        Debian.Repo.EnvPath,
+        Debian.Repo.Internal.Apt,
+        Debian.Repo.Internal.IO,
+        Debian.Repo.Internal.Repos,
+        Debian.Repo.Fingerprint,
+        Debian.Repo.LocalRepository,
+        Debian.Repo.MonadOS,
+        Debian.Repo.OSImage,
+        Debian.Repo.Package,
+        Debian.Repo.PackageID,
+        Debian.Repo.PackageIndex,
+        Debian.Repo.Prelude,
+        Debian.Repo.Prelude.Bool,
+        Debian.Repo.Prelude.Files,
+        Debian.Repo.Prelude.GPGSign,
+        Debian.Repo.Prelude.List,
+        Debian.Repo.Prelude.Lock,
+        Debian.Repo.Prelude.Misc,
+        Debian.Repo.Prelude.Process,
+        Debian.Repo.Prelude.SSH,
+        Debian.Repo.Prelude.Time,
+        Debian.Repo.Prelude.Verbosity,
+        Debian.Repo.Release,
+        Debian.Repo.RemoteRepository,
+        Debian.Repo.Repo,
+        Debian.Repo.Rsync,
+        Debian.Repo.Slice,
+        Debian.Repo.SourceTree,
+        Debian.Repo.State.AptImage,
+        Debian.Repo.State.OSImage,
+        Debian.Repo.State.Package,
+        Debian.Repo.State.PackageIndex,
+        Debian.Repo.State.Release,
+        Debian.Repo.State.Repository,
+        Debian.Repo.State.Slice,
+        Debian.Repo.Top,
+        Debian.VersionPolicy
+  else
+    Build-Depends: debian-repo >= 5.73
+
+  if flag(local-cabal-debian)
+    Hs-Source-Dirs: ../cabal-debian/src, ../cabal-debian/dist/build/autogen
+    Build-Depends: data-default, Diff, set-extra, hsemail, lens, memoize, pretty, syb
+    Exposed-Modules:
+      Data.Algorithm.Diff.Context
+      Data.Algorithm.Diff.Pretty
+      Debian.GHC
+      Debian.Policy
+      Distribution.Version.Invert
+      Debian.Debianize
+      Debian.Debianize.BasicInfo
+      Debian.Debianize.BinaryDebDescription
+      Debian.Debianize.BuildDependencies
+      Debian.Debianize.Bundled
+      Debian.Debianize.CabalInfo
+      Debian.Debianize.Changelog
+      Debian.Debianize.CopyrightDescription
+      Debian.Debianize.DebianName
+      Debian.Debianize.DebInfo
+      Debian.Debianize.Details
+      Debian.Debianize.Files
+      Debian.Debianize.Finalize
+      Debian.Debianize.Goodies
+      Debian.Debianize.InputCabal
+      Debian.Debianize.InputDebian
+      Debian.Debianize.Interspersed
+      Debian.Debianize.Monad
+      Debian.Debianize.Options
+      Debian.Debianize.Output
+      Debian.Debianize.Prelude
+      Debian.Debianize.SourceDebDescription
+      Debian.Debianize.SubstVars
+      Debian.Debianize.VersionSplits
+      OldLens
+      Paths_cabal_debian
+    Other-Modules:
+      Debian.Orphans
+  else
+    Build-Depends: cabal-debian >= 4.21, deepseq
+
+  if flag(local-debian)
+    Hs-Source-Dirs: ../debian-haskell
+    Build-Depends: ListLike, network
+    Exposed-modules:
+        Debian.Apt.Dependencies,
+        Debian.Apt.Index,
+        Debian.Apt.Methods,
+        Debian.Apt.Package,
+        Debian.Arch,
+        Debian.Changes,
+        Debian.Control,
+        Debian.Control.Common,
+        Debian.Control.ByteString,
+        Debian.Control.Policy,
+        Debian.Control.String,
+        Debian.Control.Text,
+        Debian.Deb,
+        Debian.Extra.Files,
+        Debian.GenBuildDeps,
+        Debian.Loc,
+        Debian.Pretty,
+        Debian.Relation,
+        Debian.Relation.ByteString,
+        Debian.Relation.Common,
+        Debian.Relation.String,
+        Debian.Relation.Text,
+        Debian.Release,
+        Debian.Sources,
+        Debian.Version,
+        Debian.Version.ByteString,
+        Debian.Version.Common,
+        Debian.Version.String,
+        Debian.Version.Text,
+        Debian.Report,
+        Debian.Time,
+        Debian.URI,
+        Debian.UTF8,
+        Debian.Util.FakeChanges
+    Other-Modules:
+        Debian.Version.Internal
+  else
+    Build-Depends: debian >= 3.84
 
 Test-Suite autobuilder-tests
   Type: exitcode-stdio-1.0
