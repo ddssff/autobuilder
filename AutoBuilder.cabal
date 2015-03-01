@@ -23,17 +23,17 @@ Build-type:     Simple
 
 flag local-debian-repo
   Description: Link directly to the source of the debian-repo library
-  Default: True
+  Default: False
   Manual: True
 
 flag local-cabal-debian
   Description: Link directly to the source of the cabal-debian library
-  Default: True
+  Default: False
   Manual: True
 
 flag local-debian
   Description: Link directly to the source of the debian library
-  Default: True
+  Default: False
   Manual: True
 
 Library
