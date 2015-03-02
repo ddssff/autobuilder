@@ -21,7 +21,7 @@ import Debian.Pretty (PP(..), ppPrint)
 import Debian.Relation (SrcPkgName(SrcPkgName))
 import Debian.Release (ReleaseName )
 import Debian.Repo.Fingerprint (RetrieveMethod)
-import Debian.Repo.Slice (SourcesChangedAction, Slice)
+import Debian.Repo.Slice (SourcesChangedAction, Slice, PPASlice)
 import Debian.Sources (DebSource)
 import Debian.Version ( DebianVersion, prettyDebianVersion )
 import Debian.URI ( URI )
@@ -59,7 +59,7 @@ data ParamRec =
     -- ^ The name of the release we will be uploading to.  It must end
     -- with one of the 'releaseSuffixes', and stripping off
     -- one of them results in the base release.
-    , extraRepos :: [Slice]
+    , extraRepos :: [Either Slice PPASlice]
     -- ^ Additional repositories to add to the os image via add-apt-repository.
     , uploadURI :: Maybe URI
     -- ^ This URI is the address of the remote repository to which packages

@@ -47,7 +47,7 @@ import Debian.Repo.Prelude.Verbosity (ePutStrLn, ePutStr, qPutStrLn, qPutStr, wi
 import Debian.Repo.Release (Release(releaseName))
 import Debian.Repo.Repo (repoReleaseInfo)
 import Debian.Repo.Slice (NamedSliceList(..), SliceList(slices), Slice(sliceRepoKey),
-                          appendSliceLists, inexactPathSlices, releaseSlices)
+                          appendSliceLists, inexactPathSlices, releaseSlices, expandPPASlice)
 import Debian.Repo.State.AptImage (withAptImage)
 import Debian.Repo.State.Repository (foldRepository)
 import Debian.Repo.State.Slice (repoSources, updateCacheSources)
@@ -143,7 +143,8 @@ runParameterSet init cache =
       liftIO checkPermissions
       maybe (return ()) (verifyUploadURI (P.doSSHExport $ params)) (P.uploadURI params)
       qPutStrLn "Preparing dependency environment"
-      dependOS <- prepareDependOS params buildRelease (P.extraRepos params)
+      extraSlices <- mapM (either (return . (: [])) (liftIO . expandPPASlice (P.baseRelease params))) (P.extraRepos params) >>= return . concat
+      dependOS <- prepareDependOS params buildRelease extraSlices
       let allTargets = filter (notZero . fst) (P.foldPackages (\ p l -> (P.spec p, P.flags p) : l) (P.buildPackages params) [])
       qPutStrLn "Preparing build environment"
       buildOS <- evalMonadOS (do sources <- osBaseDistro <$> getOS
