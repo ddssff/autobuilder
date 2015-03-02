@@ -1,5 +1,5 @@
 Name:           AutoBuilder
-Version:        6.70.2
+Version:        6.71
 License:        BSD3
 Copyright:      (c) 2006-2013, SeeReason Partners LLC
 Author:         David Fox <dsf@seereason.com>
@@ -160,7 +160,7 @@ Library
         Debian.Repo.Top,
         Debian.VersionPolicy
   else
-    Build-Depends: debian-repo >= 5.73
+    Build-Depends: debian-repo >= 5.74
 
   if flag(local-cabal-debian)
     Hs-Source-Dirs: ../cabal-debian/src, ../cabal-debian/dist/build/autogen
@@ -256,7 +256,7 @@ Test-Suite autobuilder-tests
     Hs-Source-Dirs: ., ../debian-repo, ../cabal-debian/dist/build/autogen
     Build-Depends: deepseq
   else
-    Build-Depends: AutoBuilder, debian-repo >= 5.73
+    Build-Depends: AutoBuilder, debian-repo >= 5.74
 
   if flag (local-cabal-debian)
     Hs-Source-Dirs: ., ../cabal-debian/src
