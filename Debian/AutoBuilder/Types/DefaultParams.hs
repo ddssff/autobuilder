@@ -35,6 +35,7 @@ defaultParams myBuildRelease -- e.g. wheezy or precise
     , autobuilderEmail = "SeeReason Autobuilder <partners@seereason.com>"
     , releaseSuffixes = defaultReleaseSuffixes
     , buildRelease = ReleaseName {relName = myBuildRelease}
+    , extraRepos = []
     , uploadURI = defaultUploadURI myBuildRelease myUploadURIPrefix
     , buildURI = defaultBuildURI myBuildRelease myBuildURIPrefix myUploadURIPrefix
     -- What we plan to build

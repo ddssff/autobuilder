@@ -29,7 +29,7 @@ import Debian.AutoBuilder.Types.Buildable (Target, Buildable(debianSourceTree), 
 import Debian.AutoBuilder.Types.Download (SomeDownload(..), Download(..))
 import qualified Debian.AutoBuilder.Types.CacheRec as C
 import qualified Debian.AutoBuilder.Types.Packages as P (foldPackages, spec, flags, PackageFlag(CabalPin))
-import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec, getParams, doHelp, usage, verbosity, showParams, showSources, flushAll, doSSHExport, uploadURI, report, buildRelease, ifSourcesChanged, requiredVersion, prettyPrint, doUpload, doNewDist, newDistProgram, createRelease, buildPackages, flushSource)
+import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec, getParams, doHelp, usage, verbosity, showParams, showSources, flushAll, doSSHExport, uploadURI, report, buildRelease, ifSourcesChanged, requiredVersion, prettyPrint, doUpload, doNewDist, newDistProgram, createRelease, buildPackages, flushSource, extraRepos)
 import qualified Debian.AutoBuilder.Version as V
 import Debian.Control.Policy (debianPackageNames, debianSourcePackageName)
 import Debian.Debianize (CabalT)
@@ -143,7 +143,7 @@ runParameterSet init cache =
       liftIO checkPermissions
       maybe (return ()) (verifyUploadURI (P.doSSHExport $ params)) (P.uploadURI params)
       qPutStrLn "Preparing dependency environment"
-      dependOS <- prepareDependOS params buildRelease
+      dependOS <- prepareDependOS params buildRelease (P.extraRepos params)
       let allTargets = filter (notZero . fst) (P.foldPackages (\ p l -> (P.spec p, P.flags p) : l) (P.buildPackages params) [])
       qPutStrLn "Preparing build environment"
       buildOS <- evalMonadOS (do sources <- osBaseDistro <$> getOS

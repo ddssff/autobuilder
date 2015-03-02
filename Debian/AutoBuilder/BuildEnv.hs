@@ -18,7 +18,7 @@ import Debian.Repo.EnvPath (EnvRoot(EnvRoot))
 import Debian.Repo.Internal.Repos (MonadRepos, putOSImage)
 import Debian.Repo.OSImage (OSImage, osRoot)
 import Debian.Repo.Prelude.Verbosity (qPutStrLn)
-import Debian.Repo.Slice (NamedSliceList)
+import Debian.Repo.Slice (NamedSliceList, Slice)
 import Debian.Repo.State.OSImage (prepareOS)
 import Debian.Repo.State.Package (deleteGarbage, evalInstall)
 import Debian.Repo.Top (MonadTop, sub)
@@ -44,14 +44,14 @@ cleanEnvOfRelease distro =
     sub ("dists" </> releaseName' distro </> "clean") >>= return . EnvRoot
 -}
 
-prepareDependOS :: (Applicative m, MonadRepos m, MonadTop m, MonadMask m) => P.ParamRec -> NamedSliceList -> m EnvRoot
-prepareDependOS params rel =
+prepareDependOS :: (Applicative m, MonadRepos m, MonadTop m, MonadMask m) => P.ParamRec -> NamedSliceList -> [Slice] -> m EnvRoot
+prepareDependOS params rel extra =
     do localRepo <- Local.prepare (P.flushPool params) (P.buildRelease params) (P.archSet params)
        -- release <- prepareRelease repo (P.buildRelease params) [] [parseSection' "main"] (P.archSet params)
        when (P.cleanUp params) (evalInstall deleteGarbage localRepo Nothing)
        eset <- envSet (P.buildRelease params)
        -- exists <- liftIO $ doesDirectoryExist dRoot
-       (_cOS, dOS) <- prepareOS eset rel localRepo (P.flushRoot params) (P.flushDepends params) (P.ifSourcesChanged params) (P.includePackages params) (P.optionalIncludePackages params) (P.excludePackages params) (P.components params)
+       (_cOS, dOS) <- prepareOS eset rel extra localRepo (P.flushRoot params) (P.flushDepends params) (P.ifSourcesChanged params) (P.includePackages params) (P.optionalIncludePackages params) (P.excludePackages params) (P.components params)
        return dOS
 
 prepareBuildOS :: (MonadTop m, MonadRepos m, Applicative m) => ReleaseName -> OSImage -> m EnvRoot
