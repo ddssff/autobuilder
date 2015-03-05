@@ -11,6 +11,7 @@ module Debian.AutoBuilder.Types.Packages
     , foldPackages'
     , filterPackages
     , packageCount
+    , mapPackages
     , PackageFlag(..)
     , relaxInfo
     , hackage
@@ -156,6 +157,15 @@ filterPackages f xs =
 
 packageCount :: Packages -> Int
 packageCount ps = foldPackages (\ _ n -> n + 1) ps 0
+
+mapPackages :: Monad m => (m Package -> m Package) -> m Packages -> m Packages
+mapPackages f ps =
+    ps >>= \ x ->
+        case x of
+          NoPackage -> return NoPackage
+          (APackage p) -> f (return p) >>= return . APackage
+          (Packages {}) -> mapM (mapPackages f) (map return (list x)) >>= \ l' -> return $ x {list = l'}
+          (Named {}) -> mapPackages f (return (packages x)) >>= \ ps -> return $ x {packages = ps}
 
 -- | Hints about debianizing and building the package.
 data PackageFlag

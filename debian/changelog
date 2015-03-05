@@ -1,3 +1,9 @@
+haskell-autobuilder (6.72) unstable; urgency=low
+
+  * Add mapPackages
+
+ -- David Fox <dsf@seereason.com>  Thu, 05 Mar 2015 12:26:58 -0800
+
 haskell-autobuilder (6.70.2) unstable; urgency=low
 
   * Improve handling of git commit specifications.
