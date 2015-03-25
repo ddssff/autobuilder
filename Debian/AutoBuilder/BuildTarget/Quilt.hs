@@ -26,7 +26,7 @@ import Debian.Repo.Fingerprint (RetrieveMethod, retrieveMethodMD5)
 import Debian.Repo.Prelude.Process (readProcessVE, readProcessV)
 import Debian.Version
 import Extra.Files (replaceFile)
-import "Extra" Extra.List ()
+import Extra.List ()
 import System.Directory (doesFileExist, createDirectoryIfMissing, doesDirectoryExist, renameDirectory)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure))
 import System.FilePath ((</>))
