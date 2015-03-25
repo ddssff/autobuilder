@@ -47,7 +47,7 @@ Library
       , containers
       , directory
       , exceptions >= 0.6
-      , Extra
+      , sr-extra
       , file-embed
       , filepath
       , happstack-util
