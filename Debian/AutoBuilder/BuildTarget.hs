@@ -32,12 +32,15 @@ import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Debianize (CabalT)
 import Debian.Relation (SrcPkgName(..))
+import Debian.Repo.EnvPath (EnvRoot(rootPath))
 import qualified Debian.Repo.Fingerprint as P
-import Debian.Repo.MonadOS (MonadOS, withProc)
+import Debian.Repo.MonadOS (MonadOS, getOS)
+import Debian.Repo.OSImage (osRoot)
 import Debian.Repo.SourceTree (SourceTree(dir'), copySourceTree, findSourceTree, topdir)
 import Debian.Repo.Internal.Repos (MonadRepos)
 import Debian.Repo.Top (MonadTop)
 import System.FilePath ((</>))
+import System.FilePath.Extra4 (withProcAndSys)
 
 data Download a => CdDL a
     = CdDL { cd :: P.RetrieveMethod
@@ -68,7 +71,7 @@ instance Download a => Download (ProcDL a) where
     logText x = logText (base x) ++ " (with /proc mounted)"
     flushSource x = flushSource (base x)
     cleanTarget = cleanTarget . base
-    buildWrapper _ = withProc
+    buildWrapper _ go = getOS >>= \ os -> withProcAndSys (rootPath . osRoot $ os) go
     attrs = attrs . base
 
 data DirDL
@@ -159,19 +162,6 @@ retrieve defaultAtoms cache method flags =
                       Twice.prepare method flags
       P.Uri uri sum -> SomeDownload <$> Uri.prepare method flags uri sum
       P.Zero -> return $ SomeDownload ZeroDL
-
-{-
--- | Perform an IO operation with /proc mounted
-withProc :: forall m a. (MonadOS m, MonadIO m) => m a -> m a
-withProc task =
-    rootPath <$> rootDir >>= \ root -> do liftIO $
-      let dir = root </> "proc" in
-      createDirectoryIfMissing True dir
-      _ <- quieter 1 $ runProc (proc "mount" ["--bind", "/proc", dir])
-      result <- try task :: IO (Either SomeException a)
-      _ <- quieter 1 $ runProc (proc "umount" [dir])
-      either throw return result
--}
 
 targetDocumentation :: String
 targetDocumentation =

@@ -47,8 +47,8 @@ Library
       , containers
       , directory
       , exceptions >= 0.6
-      , sr-extra
       , file-embed
+      , filemanip-extra
       , filepath
       , happstack-util
       , HaXml >= 1.22.5
@@ -67,6 +67,7 @@ Library
       , regex-compat
       , regex-posix
       , regex-tdfa
+      , sr-extra
       , syb
       , tar >= 0.4
       , template-haskell
@@ -135,7 +136,6 @@ Library
         Debian.Repo.PackageIndex,
         Debian.Repo.Prelude,
         Debian.Repo.Prelude.Bool,
-        Debian.Repo.Prelude.Files,
         Debian.Repo.Prelude.GPGSign,
         Debian.Repo.Prelude.List,
         Debian.Repo.Prelude.Lock,

@@ -61,7 +61,7 @@ import Debian.Repo.Fingerprint (RetrieveMethod, dependencyChanges, DownstreamFin
 import Debian.Repo.Internal.Apt (MonadApt)
 import Debian.Repo.Internal.Repos (MonadRepos)
 import Debian.Repo.LocalRepository (LocalRepository, uploadLocal)
-import Debian.Repo.MonadOS (MonadOS(getOS), evalMonadOS, updateLists, withProc, withTmp, syncLocalPool, buildEssential, syncOS)
+import Debian.Repo.MonadOS (MonadOS(getOS), evalMonadOS, updateLists, syncLocalPool, buildEssential, syncOS)
 import Debian.Repo.OSImage (osRoot)
 import Debian.Repo.Package (binaryPackageSourceVersion, sourcePackageBinaryNames)
 import Debian.Repo.PackageID (PackageID(packageVersion))
@@ -83,6 +83,7 @@ import Extra.Misc (columns)
 import System.Directory (createDirectoryIfMissing, doesDirectoryExist, doesFileExist, removeDirectory)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure), exitWith)
 import System.FilePath ((</>))
+import System.FilePath.Extra4 (withProcAndSys, withTmp)
 import System.IO (hPutStrLn, stderr)
 import System.Posix.Files (fileSize, getFileStatus)
 import System.Process (CreateProcess(cwd), proc, readProcessWithExitCode, shell, showCommandForUser)
@@ -518,7 +519,7 @@ prepareBuildTree cache dependOS buildOS sourceFingerprint target = do
   when (P.strictness (P.params cache) /= P.Lax)
        (do -- Strict mode - download dependencies to depend environment,
            -- sync downloads to build environment and install dependencies there.
-           _ <- evalMonadOS (withTmp (downloadDependencies buildTree buildDepends sourceFingerprint)) dependOS
+           _ <- evalMonadOS (withTmp dependRoot (downloadDependencies buildTree buildDepends sourceFingerprint)) dependOS
            when (not noClean) (evalMonadOS (syncOS (EnvRoot buildRoot)) dependOS >> return ())
            _ <- evalMonadOS (installDependencies buildTree buildDepends sourceFingerprint) buildOS
            return ())
@@ -815,7 +816,8 @@ buildDependencies downloadOnly source extra sourceFingerprint =
        command <- liftIO $ modifyProcessEnv [("DEBIAN_FRONTEND", Just "noninteractive")] (if True then aptGetCommand else pbuilderCommand)
        if downloadOnly then (qPutStrLn $ "Dependency packages:\n " ++ intercalate "\n  " (showDependencies' sourceFingerprint)) else return ()
        qPutStrLn $ (if downloadOnly then "Downloading" else "Installing") ++ " build dependencies into " ++ root
-       withProc (liftIO (do result <- useEnv' root return (noisier 2 (readProcessVE command mempty))
+       withProcAndSys root $
+                (liftIO (do result <- useEnv' root return (noisier 2 (readProcessVE command mempty))
                             case result of
                               Right (ExitSuccess, out :: L.ByteString, _) -> return $ decode out
                               _ -> error $ "buildDependencies: " ++ showCreateProcessForUser command ++ " -> " ++ show result))
