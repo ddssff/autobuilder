@@ -36,7 +36,7 @@ import Debian.Debianize (CabalT)
 import Debian.Pretty (prettyShow, ppShow)
 import Debian.Relation (BinPkgName(unBinPkgName), SrcPkgName(unSrcPkgName))
 import Debian.Release (ReleaseName(ReleaseName, relName), releaseName')
-import Debian.Repo.EnvPath (EnvRoot)
+import Debian.Repo.EnvPath (EnvRoot(rootPath))
 import qualified Debian.Repo.Fingerprint as P (RetrieveMethod(Patch, Cd, DebDir, DataFiles, Debianize'', Proc, Quilt, SourceDeb, Twice, Zero))
 import Debian.Repo.Internal.Repos (MonadRepos, runReposCachedT, MonadReposCached)
 import Debian.Repo.LocalRepository(uploadRemote, verifyUploadURI)
@@ -68,6 +68,7 @@ import System.Process (proc, cmdspec)
 import System.Process.ListLike (showCmdSpecForUser)
 -- import System.Process.Read.Verbosity (defaultVerbosity, withModifiedVerbosity, withModifiedVerbosity)
 import System.Unix.Directory(removeRecursiveSafely)
+import System.Unix.Mount (withProcAndSys)
 import Text.Printf ( printf )
 
 main :: CabalT IO () -> (FilePath -> String -> P.ParamRec) -> IO ()
@@ -153,7 +154,7 @@ runParameterSet init cache =
                                  qPutStr ("\n" ++ showTargets allTargets ++ "\n")
                                  getOS >>= prepareBuildOS (P.buildRelease params)) dependOS
       qPutStrLn "Retrieving all source code:\n"
-      (failures, targets) <- partitionEithers <$> (mapM (uncurry (retrieveTarget buildOS (length allTargets))) (zip [1..] allTargets))
+      (failures, targets) <- partitionEithers <$> (mapM (uncurry (retrieveTarget dependOS (length allTargets))) (zip [1..] allTargets))
       when (not $ List.null $ failures) (error $ unlines $ "Some targets could not be retrieved:" : map ("  " ++) failures)
 
       -- Compute a list of sources for all the releases in the repository we will upload to,
@@ -178,15 +179,15 @@ runParameterSet init cache =
                         (Success a) -> Right a) xs
       notZero x = null (listify (\ x -> case x of P.Zero -> True; _ -> False) x)
       retrieveTarget :: (MonadReposCached m) => EnvRoot -> Int -> Int -> (P.RetrieveMethod, [P.PackageFlag]) -> m (Either String (Buildable SomeDownload))
-      retrieveTarget buildOS count index (method, flags) = do
+      retrieveTarget dependOS count index (method, flags) = do
             liftIO (hPutStr stderr (printf "[%2d of %2d]" index count))
-            res <- (Right <$> evalMonadOS (do download <- retrieve init cache method flags
+            res <- (Right <$> evalMonadOS (do download <- withProcAndSys (rootPath dependOS) $ retrieve init cache method flags
                                               when (P.flushSource params) (flushSource download)
                                               buildable <- liftIO (asBuildable download)
                                               let (src, bins) = debianPackageNames (debianSourceTree buildable)
                                               liftIO (hPutStrLn stderr (printf " %s - %s:" (unSrcPkgName src) (limit 100 (show method) :: String)))
                                               qPutStrLn $ "Binary debs: [" <> intercalate ", " (map unBinPkgName bins) <> "]"
-                                              return buildable) buildOS) `catch` handleRetrieveException method
+                                              return buildable) dependOS) `catch` handleRetrieveException method
             return res
       params = C.params cache
       baseRelease =  either (error . show) id (P.findSlice cache (P.baseRelease params))

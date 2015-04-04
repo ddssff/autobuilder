@@ -42,6 +42,7 @@ import System.Environment (withArgs)
 import System.FilePath ((</>), takeDirectory)
 import System.Process (showCommandForUser)
 import System.Unix.Directory (removeRecursiveSafely)
+import System.Unix.Mount (withProcAndSys)
 
 documentation :: [String]
 documentation = [ "hackage:<name> or hackage:<name>=<version> - a target of this form"

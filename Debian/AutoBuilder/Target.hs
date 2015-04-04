@@ -83,12 +83,12 @@ import Extra.Misc (columns)
 import System.Directory (createDirectoryIfMissing, doesDirectoryExist, doesFileExist, removeDirectory)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure), exitWith)
 import System.FilePath ((</>))
-import System.FilePath.Extra4 (withProcAndSys, withTmp)
 import System.IO (hPutStrLn, stderr)
 import System.Posix.Files (fileSize, getFileStatus)
 import System.Process (CreateProcess(cwd), proc, readProcessWithExitCode, shell, showCommandForUser)
 import System.Process.ListLike (showCreateProcessForUser)
 import System.Unix.Chroot (useEnv)
+import System.Unix.Mount (WithProcAndSys, withProcAndSys, withTmp)
 import Text.Printf (printf)
 import Text.Regex (matchRegex, mkRegex)
 
@@ -399,7 +399,7 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
   checkDryRun
   source <- noisier 2 $ prepareBuildTree cache dependOS buildOS newFingerprint target
   logEntry source
-  result <- evalMonadOS (build source) buildOS
+  result <- evalMonadOS (withProcAndSys (rootPath buildOS) $ build source) buildOS
   result' <- find result
   -- Upload to the local repo without a PGP key
   evalInstall (doLocalUpload result') repo Nothing
@@ -413,7 +413,7 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
             False -> liftIO (maybeAddLogEntry buildTree newVersion)
             True -> return ()
       build :: forall m. (MonadOS m, MonadRepos m, MonadMask m) =>
-               DebianBuildTree -> m (DebianBuildTree, NominalDiffTime)
+               DebianBuildTree -> WithProcAndSys m (DebianBuildTree, NominalDiffTime)
       build buildTree =
           do -- The --commit flag does not appear until dpkg-dev-1.16.1,
              -- so we need to check this version number.  We also
@@ -442,7 +442,7 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
                                  newer <- case result of
                                             Right (ExitSuccess, _, _ :: L.ByteString) -> return True
                                             _ -> return False
-                                 when newer (doesDirectoryExist (path' </> "debian/patches") >>= doDpkgSource))
+                                 when newer (liftIO $ doesDirectoryExist (path' </> "debian/patches") >>= doDpkgSource))
              -- If newVersion is set, pass a parameter to cabal-debian
              -- to set the exact version number.
              let ver = maybe [] (\ v -> [("CABALDEBIAN", Just (show ["--deb-version", show (prettyDebianVersion v)]))]) newVersion
@@ -816,15 +816,14 @@ buildDependencies downloadOnly source extra sourceFingerprint =
        command <- liftIO $ modifyProcessEnv [("DEBIAN_FRONTEND", Just "noninteractive")] (if True then aptGetCommand else pbuilderCommand)
        if downloadOnly then (qPutStrLn $ "Dependency packages:\n " ++ intercalate "\n  " (showDependencies' sourceFingerprint)) else return ()
        qPutStrLn $ (if downloadOnly then "Downloading" else "Installing") ++ " build dependencies into " ++ root
-       withProcAndSys root $
-                (liftIO (do result <- useEnv' root return (noisier 2 (readProcessVE command mempty))
-                            case result of
-                              Right (ExitSuccess, out :: L.ByteString, _) -> return $ decode out
-                              _ -> error $ "buildDependencies: " ++ showCreateProcessForUser command ++ " -> " ++ show result))
+       liftIO (do result <- useEnv' root return (liftIO $ noisier 2 $ readProcessVE command mempty)
+                  case result of
+                    Right (ExitSuccess, out :: L.ByteString, _) -> return $ decode out
+                    _ -> error $ "buildDependencies: " ++ showCreateProcessForUser command ++ " -> " ++ show result)
 
 -- | This should probably be what the real useEnv does.
-useEnv' :: FilePath -> (a -> IO a) -> IO a -> IO a
-useEnv' rootPath force action = quieter 1 $ useEnv rootPath force $ noisier 1 action
+useEnv' :: FilePath -> (a -> IO a) -> WithProcAndSys IO a -> IO a
+useEnv' rootPath force action = quieter 1 $ useEnv rootPath force $ noisier 1 $ withProcAndSys rootPath action
 
 -- |Set a "Revision" line in the .dsc file, and update the .changes
 -- file to reflect the .dsc file's new md5sum.  By using our newdist

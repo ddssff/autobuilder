@@ -2,7 +2,7 @@
 module Debian.AutoBuilder.BuildTarget.Git where
 
 import Control.Exception (try, SomeException)
-import Control.Monad.Trans (liftIO)
+import Control.Monad.Trans (liftIO, lift)
 import qualified Data.ByteString.Lazy.Char8 as B
 import Data.Digest.Pure.MD5 (md5)
 import Data.Maybe (mapMaybe)

@@ -5,8 +5,8 @@ module Debian.AutoBuilder.BuildTarget
     ) where
 
 import Control.Applicative ((<$>))
-import Control.Monad.Catch (MonadCatch)
-import Control.Monad.Trans (liftIO)
+import Control.Monad.Catch (MonadCatch(catch), MonadMask(mask), MonadThrow(throwM))
+import Control.Monad.Trans (lift, liftIO)
 import Data.List (intersperse)
 import Data.Monoid (mempty)
 import qualified Debian.AutoBuilder.BuildTarget.Apt as Apt
@@ -37,10 +37,10 @@ import qualified Debian.Repo.Fingerprint as P
 import Debian.Repo.MonadOS (MonadOS, getOS)
 import Debian.Repo.OSImage (osRoot)
 import Debian.Repo.SourceTree (SourceTree(dir'), copySourceTree, findSourceTree, topdir)
-import Debian.Repo.Internal.Repos (MonadRepos)
-import Debian.Repo.Top (MonadTop)
+import Debian.Repo.Internal.Repos (MonadRepos(..))
+import Debian.Repo.Top (MonadTop(askTop))
 import System.FilePath ((</>))
-import System.FilePath.Extra4 (withProcAndSys)
+import System.Unix.Mount (withProcAndSys, WithProcAndSys(runWithProcAndSys))
 
 data Download a => CdDL a
     = CdDL { cd :: P.RetrieveMethod
@@ -71,7 +71,8 @@ instance Download a => Download (ProcDL a) where
     logText x = logText (base x) ++ " (with /proc mounted)"
     flushSource x = flushSource (base x)
     cleanTarget = cleanTarget . base
-    buildWrapper _ go = getOS >>= \ os -> withProcAndSys (rootPath . osRoot $ os) go
+    -- A no op - as of now we always mount /proc and /sys
+    buildWrapper _ = id -- getOS >>= \ os -> withProcAndSys (rootPath . osRoot $ os) go
     attrs = attrs . base
 
 data DirDL
@@ -96,34 +97,40 @@ instance Download ZeroDL where
     flushSource _ = return ()
 
 -- | Given a RetrieveMethod, perform the retrieval and return the result.
+-- This wrapper ensures that /proc and /sys are mounted, even though the
+-- underlying code in retrieve' hasn't been updated to enforce this.
 retrieve :: forall m. (MonadOS m, MonadRepos m, MonadTop m, MonadCatch m) =>
+            CabalT IO () -> C.CacheRec -> P.RetrieveMethod -> [P.PackageFlag] -> WithProcAndSys m SomeDownload
+retrieve defaultAtoms cache method flags = lift $ retrieve' defaultAtoms cache method flags
+
+retrieve' :: forall m. (MonadOS m, MonadRepos m, MonadTop m, MonadCatch m) =>
             CabalT IO () -> C.CacheRec -> P.RetrieveMethod -> [P.PackageFlag] -> m SomeDownload
-retrieve defaultAtoms cache method flags =
+retrieve' defaultAtoms cache method flags =
     case method of
       P.Apt dist package -> Apt.prepare cache method flags dist (SrcPkgName package)
       P.Bzr string -> Bzr.prepare cache method flags string
 
       P.Cd dir spec' ->
-          retrieve defaultAtoms cache spec' flags >>= \ target' ->
+          retrieve' defaultAtoms cache spec' flags >>= \ target' ->
           return $ SomeDownload $ CdDL { cd = method, fs = flags, dir = dir, parent = target' }
 
       P.Darcs uri -> Darcs.prepare method flags uri
 
       P.DataFiles base files loc ->
-          do base' <- retrieve defaultAtoms cache base flags
-             files' <- retrieve defaultAtoms cache files flags
+          do base' <- retrieve' defaultAtoms cache base flags
+             files' <- retrieve' defaultAtoms cache files flags
              baseTree <- liftIO (findSourceTree (T.getTop base') :: IO SourceTree)
              filesTree <- liftIO (findSourceTree (T.getTop files') :: IO SourceTree)
              _ <- liftIO $ copySourceTree filesTree (dir' baseTree </> loc)
              return base'
 
       P.DebDir upstream debian ->
-          do upstream' <- retrieve defaultAtoms cache upstream flags
-             debian' <- retrieve defaultAtoms cache debian flags
+          do upstream' <- retrieve' defaultAtoms cache upstream flags
+             debian' <- retrieve' defaultAtoms cache debian flags
              DebDir.prepare method flags upstream' debian'
       P.Debianize _ -> error "retrieve - old Debianize constructor"
       P.Debianize'' package _ ->
-          retrieve defaultAtoms cache package flags >>=
+          retrieve' defaultAtoms cache package flags >>=
           Debianize.prepare defaultAtoms cache method flags
 
       -- Dir is a simple instance of BuildTarget representing building the
@@ -141,24 +148,24 @@ retrieve defaultAtoms cache method flags =
       P.Hackage package -> Hackage.prepare cache method flags package
       P.Hg string -> Hg.prepare cache method flags string
       P.Patch base patch ->
-          retrieve defaultAtoms cache base flags >>=
+          retrieve' defaultAtoms cache base flags >>=
           Patch.prepare method flags patch
 
       P.Proc spec' ->
-          retrieve defaultAtoms cache spec' flags >>= \ base ->
+          retrieve' defaultAtoms cache spec' flags >>= \ base ->
           return $ SomeDownload $ ProcDL { procMethod = method
                                          , procFlags = flags
                                          , base = base }
       P.Quilt base patches ->
-          do base' <- retrieve defaultAtoms cache base flags
-             patches' <- retrieve defaultAtoms cache patches flags
+          do base' <- retrieve' defaultAtoms cache base flags
+             patches' <- retrieve' defaultAtoms cache patches flags
              Quilt.prepare method flags base' patches'
       P.SourceDeb spec' ->
-          retrieve defaultAtoms cache spec' flags >>=
+          retrieve' defaultAtoms cache spec' flags >>=
           SourceDeb.prepare cache method flags
       P.Svn uri -> Svn.prepare cache method flags uri
       P.Tla string -> Tla.prepare cache method flags string
-      P.Twice base -> retrieve defaultAtoms cache base flags >>=
+      P.Twice base -> retrieve' defaultAtoms cache base flags >>=
                       Twice.prepare method flags
       P.Uri uri sum -> SomeDownload <$> Uri.prepare method flags uri sum
       P.Zero -> return $ SomeDownload ZeroDL
