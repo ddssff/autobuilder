@@ -26,6 +26,7 @@ import Control.Arrow (second)
 import Control.Exception (AsyncException(UserInterrupt), fromException, SomeException, throw, toException)
 import Control.Monad.Catch (MonadCatch, catch, try, MonadMask)
 import Control.Monad.RWS (liftIO, MonadIO, when)
+import Control.Monad.Trans (lift)
 import qualified Data.ByteString.Char8 as B (concat)
 import qualified Data.ByteString.Lazy.Char8 as L (ByteString, empty, toChunks, unpack)
 import qualified Data.ByteString.UTF8 as UTF8 (toString)
@@ -822,8 +823,8 @@ buildDependencies downloadOnly source extra sourceFingerprint =
                     _ -> error $ "buildDependencies: " ++ showCreateProcessForUser command ++ " -> " ++ show result)
 
 -- | This should probably be what the real useEnv does.
-useEnv' :: FilePath -> (a -> IO a) -> WithProcAndSys IO a -> IO a
-useEnv' rootPath force action = quieter 1 $ useEnv rootPath force $ noisier 1 $ withProcAndSys rootPath action
+useEnv' :: (MonadIO m, MonadMask m) => FilePath -> (a -> m a) -> m a -> m a
+useEnv' rootPath force action = quieter 1 $ withProcAndSys rootPath $ lift $ useEnv rootPath force $ noisier 1 action
 
 -- |Set a "Revision" line in the .dsc file, and update the .changes
 -- file to reflect the .dsc file's new md5sum.  By using our newdist

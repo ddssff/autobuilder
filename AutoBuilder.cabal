@@ -74,7 +74,7 @@ Library
       , text
       , time
       , unix
-      , Unixutils >= 1.51
+      , Unixutils >= 1.54
       , utf8-string
       , xhtml
       , zlib
