@@ -52,6 +52,7 @@ Library
       , filepath
       , happstack-util
       , HaXml >= 1.22.5
+      , lens
       , ListLike >= 4.0
       , magic
       , MIME >= 1.1
@@ -164,7 +165,7 @@ Library
 
   if flag(local-cabal-debian)
     Hs-Source-Dirs: ../cabal-debian/src, ../cabal-debian/dist/build/autogen
-    Build-Depends: data-default, Diff, set-extra, hsemail, lens, memoize, pretty, syb
+    Build-Depends: data-default, Diff, set-extra, hsemail, memoize, pretty, syb
     Exposed-Modules:
       Data.Algorithm.Diff.Context
       Data.Algorithm.Diff.Pretty

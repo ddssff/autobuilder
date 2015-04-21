@@ -7,8 +7,7 @@ module Debian.AutoBuilder.BuildTarget.Debianize
     , documentation
     ) where
 
-import OldLens
-
+import Control.Lens (set)
 import Control.Monad.State (modify)
 import Control.Monad.Catch (MonadMask, bracket)
 import Control.Monad.Trans (MonadIO, liftIO)
@@ -138,13 +137,13 @@ autobuilderCabal cache pflags sourceName debianizeDirectory defaultAtoms =
                          maybe [] (\ name -> ["--source-package-name", name]) sourceName ++
                          concatMap asCabalFlags flags) in
              withArgs args $
-                   newFlags >>= return . setL buildEnv eset >>= newCabalInfo >>=
+                   newFlags >>= return . set buildEnv eset >>= newCabalInfo >>=
                    evalCabalT (do -- We don't actually run the cabal-debian command here, we use
                                   -- the library API and build and print the equivalent command.
                                   qPutStrLn (" -> cabal-debian " <> intercalate " " args ++ " (in " ++ debianizeDirectory ++ ")")
                                   modify (foldl (.) id functions)
-                                  (debInfo . sourceFormat) ~?= Just Native3
-                                  (debInfo . sourcePackageName) ~?= fmap SrcPkgName sourceName
+                                  (debInfo . sourceFormat) .?= Just Native3
+                                  (debInfo . sourcePackageName) .?= fmap SrcPkgName sourceName
                                   Cabal.debianize (defaultAtoms >> mapM_ applyPackageFlag pflags)
                                   liftCabal writeDebianization)
 
