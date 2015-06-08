@@ -201,7 +201,7 @@ Library
     Other-Modules:
       Debian.Orphans
   else
-    Build-Depends: cabal-debian >= 4.21, deepseq
+    Build-Depends: cabal-debian >= 4.29, deepseq
 
   if flag(local-debian)
     Hs-Source-Dirs: ../debian-haskell
@@ -262,7 +262,7 @@ Test-Suite autobuilder-tests
   if flag (local-cabal-debian)
     Hs-Source-Dirs: ., ../cabal-debian/src
   else
-    Build-Depends: cabal-debian >= 4.24
+    Build-Depends: cabal-debian >= 4.29
 
   if flag (local-debian)
     Hs-Source-Dirs: ../debian-haskell

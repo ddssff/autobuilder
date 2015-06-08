@@ -7,12 +7,13 @@ module Debian.AutoBuilder.BuildTarget.Debianize
     , documentation
     ) where
 
-import Control.Lens (set)
-import Control.Monad.State (modify)
+import Control.Lens (set, (.=))
+import Control.Monad.State (evalStateT, modify)
 import Control.Monad.Catch (MonadMask, bracket)
 import Control.Monad.Trans (MonadIO, liftIO)
 import Data.Either (partitionEithers)
-import Data.List (isSuffixOf, intercalate)
+import Data.List (isSuffixOf, intercalate, partition)
+import Data.Maybe (mapMaybe)
 import Data.Monoid ((<>))
 import Data.Version (Version)
 import Debian.AutoBuilder.BuildEnv (envSet)
@@ -22,6 +23,7 @@ import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P (buildRelease)
 import Debian.Debianize as Cabal hiding (package) -- (CabalT, compileArgs, debianize, evalCabalT, makeAtoms, runDebianizeScript, SourceFormat(Native3), sourceFormat, sourcePackageName, writeDebianization, (~?=), debInfo)
+import Debian.Debianize.Optparse (handleBehaviorAdjustment, parseProgramArguments, parseProgramArguments', CommandLineOptions(..))
 --import Debian.Debianize.InputCabal (dependOS, newFlags, buildEnv)
 --import Debian.Debianize.Monad (liftCabal)
 --import Debian.Debianize.Types.Atoms (newAtoms)
@@ -137,19 +139,26 @@ autobuilderCabal cache pflags sourceName debianizeDirectory defaultAtoms =
                          maybe [] (\ name -> ["--source-package-name", name]) sourceName ++
                          concatMap asCabalFlags flags) in
              withArgs args $
-                   newFlags >>= return . set buildEnv eset >>= newCabalInfo >>=
+                do let args' = groom $ args {-++ concatMap asCabalFlags pflags-}
+                   (opts :: CommandLineOptions) <- parseProgramArguments' args'
+                   -- (moreOpts :: [CommandLineOptions]) <- mapM parseProgramArguments' (map asCabalFlags pflags)
+                   let modFns = mapMaybe (\x -> case x of P.ModifyAtoms f -> Just f; _ -> Nothing) pflags
+                   st <- newCabalInfo (_flags opts)
                    evalCabalT (do -- We don't actually run the cabal-debian command here, we use
                                   -- the library API and build and print the equivalent command.
                                   qPutStrLn (" -> cabal-debian " <> intercalate " " args ++ " (in " ++ debianizeDirectory ++ ")")
+                                  handleBehaviorAdjustment (_adjustment opts)
                                   modify (foldl (.) id functions)
-                                  (debInfo . sourceFormat) .?= Just Native3
+                                  (debInfo . sourceFormat) .= Native3
                                   (debInfo . sourcePackageName) .?= fmap SrcPkgName sourceName
-                                  Cabal.debianize (defaultAtoms >> mapM_ applyPackageFlag pflags)
-                                  liftCabal writeDebianization)
+                                  Cabal.debianize (defaultAtoms >> mapM_ modify modFns)
+                                  liftCabal writeDebianization) st
 
-applyPackageFlag :: P.PackageFlag -> CabalT IO ()
-applyPackageFlag (P.ModifyAtoms f) = modify f
-applyPackageFlag x = compileArgs . asCabalFlags $ x
+groom args = foldl nubOpt args ["--disable-tests", "--no-tests"]
+    where
+      nubOpt args opt = case partition (== opt) args of
+                          ([], _) -> args
+                          (_, args) -> args ++ [opt]
 
 class CabalFlags a where
     asCabalFlags :: a -> [String]
@@ -158,7 +167,7 @@ instance CabalFlags P.PackageFlag where
     asCabalFlags (P.Maintainer s) = ["--maintainer", s]
     asCabalFlags (P.BuildDep s) = ["--build-dep", s]
     asCabalFlags (P.DevelDep s) = ["--build-dep", s, "--dev-dep", s]
-    asCabalFlags (P.MapDep c d) = ["--map-dep", c ++ "=" ++ ppShow d]
+    asCabalFlags (P.MapDep c d) = ["--dep-map", c ++ "=" ++ ppShow d]
     asCabalFlags (P.DebVersion s) = ["--deb-version", s]
     asCabalFlags (P.SkipVersion _) = []
     asCabalFlags (P.FailVersion _) = []
@@ -176,7 +185,7 @@ instance CabalFlags P.PackageFlag where
     asCabalFlags P.OmitLTDeps = [] -- I think this exists
     asCabalFlags (P.AptPin _) = []
     asCabalFlags (P.CabalPin _) = []
-    asCabalFlags (P.ModifyAtoms _) = ["<un-showable-modifyatoms-function>"]
+    asCabalFlags (P.ModifyAtoms _) = []
     asCabalFlags (P.DarcsTag _) = []
     asCabalFlags (P.GitBranch _) = []
     asCabalFlags P.KeepRCS = []
