@@ -137,6 +137,7 @@ autobuilderCabal cache pflags sourceName debianizeDirectory defaultAtoms =
              let (functions, flags) = partitionEithers (map (\ x -> case x of P.ModifyAtoms fn -> Left fn; _ -> Right x) pflags) in
              let args = (["--native"] ++
                          maybe [] (\ name -> ["--source-package-name", name]) sourceName ++
+                         ["--buildenvdir", takeDirectory (dependOS eset)] ++
                          concatMap asCabalFlags flags) in
              withArgs args $
                 do let args' = groom $ args {-++ concatMap asCabalFlags pflags-}
@@ -167,7 +168,7 @@ instance CabalFlags P.PackageFlag where
     asCabalFlags (P.Maintainer s) = ["--maintainer", s]
     asCabalFlags (P.BuildDep s) = ["--build-dep", s]
     asCabalFlags (P.DevelDep s) = ["--build-dep", s, "--dev-dep", s]
-    asCabalFlags (P.MapDep c d) = ["--dep-map", c ++ "=" ++ ppShow d]
+    asCabalFlags (P.MapDep c d) = ["--dep-map", c ++ ":" ++ ppShow d]
     asCabalFlags (P.DebVersion s) = ["--deb-version", s]
     asCabalFlags (P.SkipVersion _) = []
     asCabalFlags (P.FailVersion _) = []
