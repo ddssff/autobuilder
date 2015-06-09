@@ -116,7 +116,7 @@ Library
     Paths_AutoBuilder
 
   if flag(local-debian-repo)
-    Hs-Source-Dirs: ../debian-repo
+    Hs-Source-Dirs: debian-repo
     Build-Depends: lens, transformers, transformers-compat, deepseq
     Exposed-modules:
         Debian.Releases,
@@ -164,11 +164,9 @@ Library
     Build-Depends: debian-repo >= 5.74
 
   if flag(local-cabal-debian)
-    Hs-Source-Dirs: ../cabal-debian/src, ../cabal-debian/dist/build/autogen
-    Build-Depends: data-default, Diff, set-extra, hsemail, memoize, pretty, syb
+    Hs-Source-Dirs: cabal-debian/src, cabal-debian/dist/build/autogen
+    Build-Depends: data-default, Diff, set-extra, hsemail, memoize, pretty, syb, newtype-generics, bifunctors, ansi-wl-pprint, optparse-applicative
     Exposed-Modules:
-      Data.Algorithm.Diff.Context
-      Data.Algorithm.Diff.Pretty
       Debian.GHC
       Debian.Policy
       Distribution.Version.Invert
@@ -190,13 +188,11 @@ Library
       Debian.Debianize.InputDebian
       Debian.Debianize.Interspersed
       Debian.Debianize.Monad
-      Debian.Debianize.Options
+      Debian.Debianize.Optparse
       Debian.Debianize.Output
       Debian.Debianize.Prelude
       Debian.Debianize.SourceDebDescription
-      Debian.Debianize.SubstVars
       Debian.Debianize.VersionSplits
-      OldLens
       Paths_cabal_debian
     Other-Modules:
       Debian.Orphans
@@ -204,7 +200,7 @@ Library
     Build-Depends: cabal-debian >= 4.29, deepseq
 
   if flag(local-debian)
-    Hs-Source-Dirs: ../debian-haskell
+    Hs-Source-Dirs: debian-haskell
     Build-Depends: ListLike, network
     Exposed-modules:
         Debian.Apt.Dependencies,
@@ -254,17 +250,17 @@ Test-Suite autobuilder-tests
   Build-Depends: base, containers, Cabal, HUnit
 
   if flag (local-debian-repo)
-    Hs-Source-Dirs: ., ../debian-repo, ../cabal-debian/dist/build/autogen
+    Hs-Source-Dirs: debian-repo
     Build-Depends: deepseq
   else
     Build-Depends: AutoBuilder, debian-repo >= 5.74
 
   if flag (local-cabal-debian)
-    Hs-Source-Dirs: ., ../cabal-debian/src
+    Hs-Source-Dirs: cabal-debian/src, cabal-debian/dist/build/autogen
   else
     Build-Depends: cabal-debian >= 4.29
 
   if flag (local-debian)
-    Hs-Source-Dirs: ../debian-haskell
+    Hs-Source-Dirs: debian-haskell
   else
     Build-Depends: debian >= 3.87
