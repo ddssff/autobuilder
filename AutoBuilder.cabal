@@ -50,7 +50,6 @@ Library
       , file-embed
       , filemanip-extra
       , filepath
-      , happstack-util
       , HaXml >= 1.22.5
       , lens
       , ListLike >= 4.0
@@ -117,7 +116,7 @@ Library
 
   if flag(local-debian-repo)
     Hs-Source-Dirs: debian-repo
-    Build-Depends: lens, transformers, transformers-compat, deepseq
+    Build-Depends: lens, transformers, transformers-compat, deepseq, bytestring, transformers, process-extras, Unixutils, filepath, lens, mtl, template-haskell, filemanip-extra, directory, pureMD5, unix, process, ListLike, old-locale, exceptions, text, regex-compat, network-uri
     Exposed-modules:
         Debian.Releases,
         Debian.Repo,
@@ -165,7 +164,7 @@ Library
 
   if flag(local-cabal-debian)
     Hs-Source-Dirs: cabal-debian/src, cabal-debian/dist/build/autogen
-    Build-Depends: data-default, Diff, set-extra, hsemail, memoize, pretty, syb, newtype-generics, bifunctors, ansi-wl-pprint, optparse-applicative
+    Build-Depends: ansi-wl-pprint, bifunctors, data-default, Diff, set-extra, hsemail, memoize, newtype-generics, optparse-applicative, pretty, syb
     Exposed-Modules:
       Debian.GHC
       Debian.Policy
