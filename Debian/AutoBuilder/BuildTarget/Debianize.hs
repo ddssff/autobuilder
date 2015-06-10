@@ -8,6 +8,7 @@ module Debian.AutoBuilder.BuildTarget.Debianize
     ) where
 
 import Control.Lens (set, (.=))
+import Control.Monad (when)
 import Control.Monad.State (evalStateT, modify)
 import Control.Monad.Catch (MonadMask, bracket)
 import Control.Monad.Trans (MonadIO, liftIO)
@@ -108,15 +109,6 @@ autobuilderDebianize cache pflags currentDirectory =
        when (not done) (Cabal.callDebianize args)
 -}
 
--- | Convert a set of package flags into the corresponding
--- cabal-debian command line options.  (Is this really in the IO monad
--- for a good reason?)
-collectPackageFlags :: P.CacheRec -> [P.PackageFlag] -> IO [String]
-collectPackageFlags _cache pflags =
-    do v <- return 0 -- verbosity
-       return $ ["--verbose=" ++ show (v :: Int)] ++
-                concatMap asCabalFlags pflags
-
 -- | Run the autobuilder's version of the cabal-debian program.  First
 -- it looks for a debian/Debianize.hs script and tries to run that, if
 -- that doesn't work it runs cabal-debian --native, adding any options
@@ -127,23 +119,21 @@ autobuilderCabal cache pflags sourceName debianizeDirectory defaultAtoms =
     do let rel = P.buildRelease $ P.params cache
        top <- computeTopDir (P.params cache)
        eset <- runTopT top (envSet rel)
-       args <- collectPackageFlags cache pflags
-       let args' = "--buildenvdir" : takeDirectory (dependOS eset) : args
+       let (functions, flags) = partitionEithers (map (\ x -> case x of P.ModifyAtoms fn -> Left fn; _ -> Right x) pflags)
+       v <- return 0 -- verbosity
+       let args =
+               groom $
+                   ["--native"] ++
+                   maybe [] (\ name -> ["--source-package-name", name]) sourceName ++
+                   ["--buildenvdir", takeDirectory (dependOS eset)] ++
+                   replicate v "--verbose" ++
+                   concatMap asCabalFlags flags
        -- This will be false if the package has no debian/Debianize.hs script
-       done <- runDebianizeScript args'
-       case done of
-         True -> qPutStrLn (showCommandForUser "runhaskell" ("debian/Debianize.hs" : args'))
-         False ->
-             let (functions, flags) = partitionEithers (map (\ x -> case x of P.ModifyAtoms fn -> Left fn; _ -> Right x) pflags) in
-             let args = (["--native"] ++
-                         maybe [] (\ name -> ["--source-package-name", name]) sourceName ++
-                         ["--buildenvdir", takeDirectory (dependOS eset)] ++
-                         concatMap asCabalFlags flags) in
+       done <- runDebianizeScript args
+       when (not done) $ do
              withArgs args $
-                do let args' = groom $ args {-++ concatMap asCabalFlags pflags-}
-                   (opts :: CommandLineOptions) <- parseProgramArguments' args'
+                do (opts :: CommandLineOptions) <- parseProgramArguments' args
                    -- (moreOpts :: [CommandLineOptions]) <- mapM parseProgramArguments' (map asCabalFlags pflags)
-                   let modFns = mapMaybe (\x -> case x of P.ModifyAtoms f -> Just f; _ -> Nothing) pflags
                    st <- newCabalInfo (_flags opts)
                    evalCabalT (do -- We don't actually run the cabal-debian command here, we use
                                   -- the library API and build and print the equivalent command.
@@ -152,7 +142,7 @@ autobuilderCabal cache pflags sourceName debianizeDirectory defaultAtoms =
                                   modify (foldl (.) id functions)
                                   (debInfo . sourceFormat) .= Native3
                                   (debInfo . sourcePackageName) .?= fmap SrcPkgName sourceName
-                                  Cabal.debianize (defaultAtoms >> mapM_ modify modFns)
+                                  Cabal.debianize (defaultAtoms >> mapM_ modify functions)
                                   liftCabal writeDebianization) st
 
 groom args = foldl nubOpt args ["--disable-tests", "--no-tests"]
