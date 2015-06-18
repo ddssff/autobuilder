@@ -126,24 +126,21 @@ autobuilderCabal cache pflags sourceName debianizeDirectory defaultAtoms =
                    ["--native"] ++
                    maybe [] (\ name -> ["--source-package-name", name]) sourceName ++
                    ["--buildenvdir", takeDirectory (dependOS eset)] ++
-                   replicate v "--verbose" ++
+                   replicate v "-v" ++
                    concatMap asCabalFlags flags
-       -- This will be false if the package has no debian/Debianize.hs script
+       -- This will return false if the package has no debian/Debianize.hs script.
+       -- Note that this will use the *installed* cabal-debian library, if you are
+       -- trying to test changes to cabal-debian you need to build and install with
+       -- the current source:
+       -- ghc debian/Debianize.hs -i/home/dsf/git/cabal-debian/src:/home/dsf/git/autobuilder-seereason '-DMIN_VERSION_Cabal(a,b,c)=1' -o setup
        done <- runDebianizeScript args
        when (not done) $ do
              withArgs args $
-                do (opts :: CommandLineOptions) <- parseProgramArguments' args
-                   -- (moreOpts :: [CommandLineOptions]) <- mapM parseProgramArguments' (map asCabalFlags pflags)
-                   st <- newCabalInfo (_flags opts)
-                   evalCabalT (do -- We don't actually run the cabal-debian command here, we use
-                                  -- the library API and build and print the equivalent command.
-                                  qPutStrLn (" -> cabal-debian " <> intercalate " " args ++ " (in " ++ debianizeDirectory ++ ")")
-                                  handleBehaviorAdjustment (_adjustment opts)
-                                  modify (foldl (.) id functions)
-                                  (debInfo . sourceFormat) .= Native3
-                                  (debInfo . sourcePackageName) .?= fmap SrcPkgName sourceName
-                                  Cabal.debianize (defaultAtoms >> mapM_ modify functions)
-                                  liftCabal writeDebianization) st
+                do performDebianization $ do
+                     defaultAtoms
+                     modify (foldl (.) id functions)
+                     (debInfo . sourceFormat) .= Native3
+                     (debInfo . sourcePackageName) .?= fmap SrcPkgName sourceName
 
 groom args = foldl nubOpt args ["--disable-tests", "--no-tests"]
     where
