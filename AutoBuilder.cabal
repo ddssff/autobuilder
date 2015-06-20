@@ -21,6 +21,10 @@ Description:
 Cabal-Version:  >= 1.9
 Build-type:     Simple
 
+flag pretty112
+  Description: Is Text.PrettyPrint.HughesPJClass available?
+  Default: True
+
 flag local-debian-repo
   Description: Link directly to the source of the debian-repo library
   Default: False
@@ -60,7 +64,6 @@ Library
       , old-locale
       , old-time
       , parsec
-      , prettyclass
       , process
       , process-extras >= 0.2.0
       , pureMD5
@@ -78,6 +81,10 @@ Library
       , utf8-string
       , xhtml
       , zlib
+  if flag(pretty112)
+    Build-Depends: pretty >= 1.1.2
+  else
+    Build-Depends: prettyclass
   GHC-Options: -O2 -threaded -Wall -fno-warn-missing-signatures -fno-warn-name-shadowing -fno-warn-type-defaults
   Exposed-modules:
     Debian.AutoBuilder.BuildEnv,
@@ -164,7 +171,11 @@ Library
 
   if flag(local-cabal-debian)
     Hs-Source-Dirs: cabal-debian/src, cabal-debian/dist/build/autogen
-    Build-Depends: ansi-wl-pprint, bifunctors, data-default, Diff, set-extra, hsemail, memoize, newtype-generics, optparse-applicative, pretty, syb
+    Build-Depends: ansi-wl-pprint, bifunctors, data-default, Diff, set-extra, hsemail, memoize, newtype-generics, optparse-applicative, syb
+    if flag(pretty112)
+      Build-Depends: pretty >= 1.1.2
+    else
+      Build-Depends: prettyclass
     Exposed-Modules:
       Debian.GHC
       Debian.Policy

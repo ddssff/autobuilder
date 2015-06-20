@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables, TemplateHaskell, TypeFamilies #-}
+{-# LANGUAGE CPP, FlexibleContexts, FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables, TemplateHaskell, TypeFamilies #-}
 -- |AutoBuilder - application to build Debian packages in a clean
 -- environment.  In the following list, each module's dependencies
 -- appear above it:
