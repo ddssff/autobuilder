@@ -203,7 +203,7 @@ data ParamRec =
     -- you change this value use the flushRoot option to get it to take
     -- effect.
     , optionalIncludePackages :: [String]
-    -- ^ Additional additional packages that might not be immediately
+    -- ^ Additional packages that might not be immediately
     -- available when a release is created - specifically,
     -- seereason-keyring, which must be built and uploaded to each new
     -- distribution, at least the way we do things.
@@ -275,8 +275,8 @@ data ParamRec =
   }
 
 data Strictness
-    = Lax |		-- Let build dependencies accumulate (default)
-      Strict 		-- Start each target with a clean build environment
+    = Lax |             -- Let build dependencies accumulate (default)
+      Strict            -- Start each target with a clean build environment
       deriving (Eq, Show)
 
 -- |Information about what targets to build are temporarily held in a
@@ -481,8 +481,8 @@ data DescrLine
 
 -- |Modified version of System.Console.GetOpt.usageInfo, avoids printing
 -- such wide lines.
-usage :: String		-- header
-          -> String		-- nicely formatted decription of options
+usage :: String         -- header
+          -> String             -- nicely formatted decription of options
 usage header =
     unlines (header:table)
     where table = map fmtLine xs

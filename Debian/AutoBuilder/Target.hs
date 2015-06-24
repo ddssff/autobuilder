@@ -14,7 +14,7 @@
 -- 
 -- Author: David Fox <ddssff@gmail.com>
 module Debian.AutoBuilder.Target
-    ( changelogText	-- Tgt -> Maybe String -> [PkgVersion] -> String
+    ( changelogText     -- Tgt -> Maybe String -> [PkgVersion] -> String
     , buildTargets
     , showTargets
     , decode
@@ -345,12 +345,12 @@ qError message = qPutStrLn message >> error message
 -- Decide whether a target needs to be built and, if so, build it.
 buildTarget ::
     (MonadRepos m, MonadTop m, MonadApt m, MonadMask m, T.Download a) =>
-    P.CacheRec ->			-- configuration info
+    P.CacheRec ->                       -- configuration info
     EnvRoot ->
     EnvRoot ->
-    LocalRepository ->			-- ^ The local repository the packages will be uploaded to, this also may already contain packages.
+    LocalRepository ->                  -- ^ The local repository the packages will be uploaded to, this also may already contain packages.
     Target a ->
-    m (Maybe LocalRepository)	-- The local repository after the upload (if it changed)
+    m (Maybe LocalRepository)   -- The local repository after the upload (if it changed)
 buildTarget cache dependOS buildOS repo !target = do
   -- Get the control file from the clean source and compute the
   -- build dependencies
@@ -474,7 +474,7 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
       doLocalUpload (changesFile, elapsed) =
           do
             (changesFile' :: ChangesFile) <-
-		-- Set the Distribution field in the .changes file to the one
+                -- Set the Distribution field in the .changes file to the one
                 -- specified by the autobuilder Build-Release parameter.
                 return (setDistribution (P.buildRelease (P.params cache)) changesFile) >>=
                 -- Insert information about the build into the .changes file.

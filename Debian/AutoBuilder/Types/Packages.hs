@@ -310,8 +310,8 @@ hackage s = pure $
     Package { spec = Hackage s
             , flags = [] }
 
-hg :: String -> Package
-hg path = method (Hg path)
+hg :: String -> TSt Package
+hg path = pure $ method (Hg path)
 
 proc :: TSt Package -> TSt Package
 proc p = mapSpec Proc <$> p
