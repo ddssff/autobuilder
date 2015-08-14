@@ -58,7 +58,7 @@ prepare cache method flags version =
           do result <- try (readProcessV (shell ("cd " ++ dir ++ " && tla changes")) B.empty)
              case result of
                Left (e :: SomeException) -> qPutStrLn (show e) >> removeSource dir >> createSource dir -- Failure means there is corruption
-               Right _output -> updateSource dir						         -- Success means no changes
+               Right _output -> updateSource dir                                                         -- Success means no changes
 
       removeSource dir = liftIO $ removeRecursiveSafely dir
 

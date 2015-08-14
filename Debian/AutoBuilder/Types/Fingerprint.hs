@@ -168,9 +168,9 @@ buildDecision cache globalBuildDeps target info@(ReleaseControlInfo {releaseSour
             -- If a dependency is newer it generally triggers a rebuild.
             (changed, notChanged) = partition isNewer notBad
             isNewer x = maybe False (\ built -> packageVersion built < packageVersion x) (builtVersion x)
-	    -- Dependencies which we have never seen before also generally trigger a rebuild.
+            -- Dependencies which we have never seen before also generally trigger a rebuild.
             (new, unchanged) = partition (isNothing . builtVersion) notChanged
-	    -- What version of this dependency was most recently used to build?
+            -- What version of this dependency was most recently used to build?
       builtVersion x = maybe Nothing (\ ver -> Just (PackageID (packageName x) ver)) (Map.findWithDefault Nothing (packageName x) builtDeps)
       builtDeps = Map.fromList (Set.toList (Set.map (\ p -> (packageName p, Just (packageVersion p))) builtDependencies))
       -- Remove any package not mentioned in the relaxed dependency list

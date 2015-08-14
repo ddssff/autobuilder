@@ -54,8 +54,8 @@ prepare cache method flags archive =
     where
       verifySource dir =
           try (readProcessV (shell ("cd " ++ dir ++ " && hg status | grep -q .")) B.empty) >>=
-          either (\ (_ :: SomeException) -> updateSource dir)	-- failure means there were no changes
-                 (\ _ -> removeSource dir >> createSource dir)	-- success means there was a change
+          either (\ (_ :: SomeException) -> updateSource dir)   -- failure means there were no changes
+                 (\ _ -> removeSource dir >> createSource dir)  -- success means there was a change
 
       removeSource dir = liftIO $ removeRecursiveSafely dir
 

@@ -104,9 +104,9 @@ packageList p = foldPackages (:) p []
 
 -- | Information collected from the build tree for a Tgt.
 data Target download
-    = Target { tgt :: Buildable download	-- ^ The instance of BuildTarget
-             , cleanSource :: DebianBuildTree	-- ^ The source code stripped of SCCS info
-             , targetControl :: DebianControl	-- ^ The dependency control file
+    = Target { tgt :: Buildable download        -- ^ The instance of BuildTarget
+             , cleanSource :: DebianBuildTree   -- ^ The source code stripped of SCCS info
+             , targetControl :: DebianControl   -- ^ The dependency control file
              }
 
 instance HasDebianControl (Target download) where
