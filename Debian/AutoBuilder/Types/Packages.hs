@@ -95,8 +95,8 @@ data Package
 
 data TargetState
     = TargetState
-      { home :: FilePath
-      , release :: Release
+      { home :: FilePath    -- ^ typically $HOME, where we find .autobuilder/
+      , release :: Release  -- ^ e.g. trusty, trusty-seereason
       }
 
 type TSt = State TargetState
