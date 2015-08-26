@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveDataTypeable, RankNTypes, ScopedTypeVariables #-}
+{-# LANGUAGE DeriveDataTypeable, RankNTypes, ScopedTypeVariables, TemplateHaskell #-}
 -- | The Packages type specifies how to obtain the source code for one
 -- or more packages.
 module Debian.AutoBuilder.Types.Packages
@@ -6,7 +6,8 @@ module Debian.AutoBuilder.Types.Packages
     , Package(..)
     , GroupName(..)
     , TSt
-    , TargetState(..)
+    , TargetState, release
+    , targetState
     , foldPackages
     , foldPackages'
     , filterPackages
@@ -49,6 +50,7 @@ import Debug.Trace as D
 
 import Control.Applicative (pure, (<$>))
 import Control.Exception (SomeException, try)
+import Control.Lens (makeLenses)
 import Control.Monad.State (State)
 import Data.ByteString (ByteString)
 import Data.Generics (Data, Typeable)
@@ -95,77 +97,14 @@ data Package
 
 data TargetState
     = TargetState
-      { home :: FilePath    -- ^ typically $HOME, where we find .autobuilder/
-      , release :: Release  -- ^ e.g. trusty, trusty-seereason
+      { _home :: FilePath    -- ^ typically $HOME, where we find .autobuilder/
+      , _release :: Release  -- ^ e.g. trusty, trusty-seereason
       }
 
+targetState :: Release -> FilePath -> TargetState
+targetState rel path = TargetState {_release = rel, _home = path}
+
 type TSt = State TargetState
-
--- instance Eq Packages where
---     (APackage p1) == (APackage p2) = p1 == p2
---     (Packages {list = l1}) == (Packages {list = l2}) = l1 == l2
---     (Named {group = g1, packages = p1}) == (Named {group = g2, packages = p2}) = g1 == g2 && p1 == p2
---     NoPackage == NoPackage = True
---     _ == _ = False
---
--- instance Eq Package where
---     p1 == p2 = spec p1 == spec p2
-
-instance Monoid GroupName where
-    mempty = NoName
-    mappend NoName x = x
-    mappend x _ = x
-
-instance Monoid Packages where
-    mempty = NoPackage
-    mappend NoPackage y = y
-    mappend x NoPackage = x
-    mappend x@(APackage {}) y = mappend (Packages [x]) y
-    mappend x y@(APackage {}) = mappend x (Packages [y])
-    mappend x@(Packages {}) y@(Packages {}) = Packages { list = list x ++ list y }
-    mappend x@(Named {}) y@(Named {}) =
-        Named { group = mappend (group x) (group y)
-              , packages = mappend (packages x) (packages y) }
-    mappend x@(Named {}) y = x {packages = mappend (packages x) y}
-    mappend x y@(Named {}) = y {packages = mappend x (packages y)}
-
-foldPackages' :: (Package -> r -> r)
-              -> (GroupName -> Packages -> r -> r)
-              -> ([Packages] -> r -> r)
-              -> (r -> r)
-              -> Packages -> r -> r
-foldPackages' _ n _ _ ps@(Named {}) r = n (group ps) (packages ps) r
-foldPackages' _ _ g _ ps@(Packages {}) r = g (list ps) r
-foldPackages' f _ _ _ (APackage p) r = f p r
-foldPackages' _ _ _ h NoPackage r = h r
-
--- FIXME: this can be implemented using foldPackages'
-foldPackages :: (Package -> r -> r) -> Packages -> r -> r
-foldPackages _ NoPackage r = r
-foldPackages f (APackage x) r = f x r
-foldPackages f x@(Packages {}) r = foldr (foldPackages f) r (list x)
-foldPackages f x@(Named {}) r = foldPackages f (packages x) r
-
-filterPackages :: (Packages -> Bool) -> Packages -> Packages
-filterPackages f xs =
-    foldPackages (\ p xs' ->
-                      if f (APackage p)
-                      then mappend (APackage p) xs'
-                      else xs')
-                 xs
-                 mempty
-
-packageCount :: Packages -> Int
-packageCount ps = foldPackages (\ _ n -> n + 1) ps 0
-
-mapPackages :: Monad m => (m Package -> m Package) -> m Packages -> m Packages
-mapPackages f ps =
-    ps >>= \ x ->
-        case x of
-          NoPackage -> return NoPackage
-          (APackage p) -> f (return p) >>= return . APackage
-          (Packages {}) -> mapM (mapPackages f) (map return (list x)) >>= \ l' -> return $ x {list = l'}
-          (Named {}) -> mapPackages f (return (packages x)) >>= \ ps -> return $ x {packages = ps}
 
 -- | Hints about debianizing and building the package.
 data PackageFlag
@@ -241,6 +180,74 @@ data PackageFlag
     -- ^ Don't clean out the subdirectory containing the revision control info,
     -- i.e. _darcs or .git or whatever.
     deriving (Show, Data, Typeable)
+
+$(makeLenses ''TargetState)
+
+-- instance Eq Packages where
+--     (APackage p1) == (APackage p2) = p1 == p2
+--     (Packages {list = l1}) == (Packages {list = l2}) = l1 == l2
+--     (Named {group = g1, packages = p1}) == (Named {group = g2, packages = p2}) = g1 == g2 && p1 == p2
+--     NoPackage == NoPackage = True
+--     _ == _ = False
+--
+-- instance Eq Package where
+--     p1 == p2 = spec p1 == spec p2
+
+instance Monoid GroupName where
+    mempty = NoName
+    mappend NoName x = x
+    mappend x _ = x
+
+instance Monoid Packages where
+    mempty = NoPackage
+    mappend NoPackage y = y
+    mappend x NoPackage = x
+    mappend x@(APackage {}) y = mappend (Packages [x]) y
+    mappend x y@(APackage {}) = mappend x (Packages [y])
+    mappend x@(Packages {}) y@(Packages {}) = Packages { list = list x ++ list y }
+    mappend x@(Named {}) y@(Named {}) =
+        Named { group = mappend (group x) (group y)
+              , packages = mappend (packages x) (packages y) }
+    mappend x@(Named {}) y = x {packages = mappend (packages x) y}
+    mappend x y@(Named {}) = y {packages = mappend x (packages y)}
+
+foldPackages' :: (Package -> r -> r)
+              -> (GroupName -> Packages -> r -> r)
+              -> ([Packages] -> r -> r)
+              -> (r -> r)
+              -> Packages -> r -> r
+foldPackages' _ n _ _ ps@(Named {}) r = n (group ps) (packages ps) r
+foldPackages' _ _ g _ ps@(Packages {}) r = g (list ps) r
+foldPackages' f _ _ _ (APackage p) r = f p r
+foldPackages' _ _ _ h NoPackage r = h r
+
+-- FIXME: this can be implemented using foldPackages'
+foldPackages :: (Package -> r -> r) -> Packages -> r -> r
+foldPackages _ NoPackage r = r
+foldPackages f (APackage x) r = f x r
+foldPackages f x@(Packages {}) r = foldr (foldPackages f) r (list x)
+foldPackages f x@(Named {}) r = foldPackages f (packages x) r
+
+filterPackages :: (Packages -> Bool) -> Packages -> Packages
+filterPackages f xs =
+    foldPackages (\ p xs' ->
+                      if f (APackage p)
+                      then mappend (APackage p) xs'
+                      else xs')
+                 xs
+                 mempty
+
+packageCount :: Packages -> Int
+packageCount ps = foldPackages (\ _ n -> n + 1) ps 0
+
+mapPackages :: Monad m => (m Package -> m Package) -> m Packages -> m Packages
+mapPackages f ps =
+    ps >>= \ x ->
+        case x of
+          NoPackage -> return NoPackage
+          (APackage p) -> f (return p) >>= return . APackage
+          (Packages {}) -> mapM (mapPackages f) (map return (list x)) >>= \ l' -> return $ x {list = l'}
+          (Named {}) -> mapPackages f (return (packages x)) >>= \ ps -> return $ x {packages = ps}
 
 relaxInfo :: [PackageFlag] -> [String]
 relaxInfo flags' =
