@@ -8,6 +8,7 @@ module Debian.AutoBuilder.Types.Packages
     , TSt
     , TargetState, release
     , targetState
+    , edge
     , foldPackages
     , foldPackages'
     , filterPackages
@@ -51,11 +52,14 @@ import Debug.Trace as D
 
 import Control.Applicative (pure, (<$>))
 import Control.Exception (SomeException, try)
-import Control.Lens (makeLenses)
+import Control.Lens (makeLenses, use, (%=))
 import Control.Monad.State (State)
 import Data.ByteString (ByteString)
 import Data.Function (on)
 import Data.Generics (Data, Typeable)
+import Data.Graph.Inductive (Node, LNode, insEdge, insNode, mkGraph)
+import Data.Graph.Inductive.PatriciaTree (Gr)
+import Data.Map as Map (insert, lookup, Map)
 import Data.Monoid (Monoid(mempty, mappend))
 import Data.String (IsString(fromString))
 import Debian.Debianize (CabalInfo)
@@ -105,14 +109,20 @@ instance Eq Package where
 instance Ord Package where
     compare = compare `on` (\x -> (spec x, flags x))
 
+type NodeLabel = Package
+type EdgeLabel = ()
+
 data TargetState
     = TargetState
       { _home :: FilePath    -- ^ typically $HOME, where we find .autobuilder/
       , _release :: Release  -- ^ e.g. trusty, trusty-seereason
+      , _nodes :: Map NodeLabel Node
+      , _next :: Node
+      , _deps :: Gr NodeLabel EdgeLabel
       }
 
 targetState :: Release -> FilePath -> TargetState
-targetState rel path = TargetState {_release = rel, _home = path}
+targetState rel path = TargetState {_release = rel, _home = path, _nodes = mempty, _next = 1, _deps = mkGraph [] []}
 
 type TSt = State TargetState
 
@@ -190,6 +200,29 @@ data PackageFlag
     deriving (Show, Data, Typeable, Eq, Ord)
 
 $(makeLenses ''TargetState)
+
+-- | If necessary, allocate a new Node and associate it with the argument package.
+node :: TSt NodeLabel -> TSt (LNode NodeLabel)
+node pkg = do
+  (,) <$> node' <*> pkg
+    where
+      node' = do
+        mn <- Map.lookup <$> pkg <*> use nodes
+        maybe (do n' <- use next
+                  pkg' <- pkg
+                  next %= succ
+                  nodes %= Map.insert pkg' n'
+                  deps %= insNode (n', pkg')
+                  pure n')
+              pure
+              mn
+
+-- | Record the fact that PKG has a build dependency on DEP.
+edge :: TSt NodeLabel -> TSt NodeLabel -> TSt ()
+edge pkg dep = do
+  (pkgNode, _) <- node pkg
+  (depNode, _) <- node dep
+  deps %= insEdge (pkgNode, depNode, ())
 
 -- instance Eq Packages where
 --     (APackage p1) == (APackage p2) = p1 == p2
