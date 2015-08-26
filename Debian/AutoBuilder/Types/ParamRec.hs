@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE CPP, FlexibleInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Debian.AutoBuilder.Types.ParamRec
     ( ParamRec(..)
@@ -13,14 +13,16 @@ module Debian.AutoBuilder.Types.ParamRec
 import Control.Arrow (first)
 import Data.Generics (listify)
 import Data.List as List (map, isInfixOf)
+#if !MIN_VERSION_base(4,8,0)
 import Data.Monoid (mempty, mappend)
+#endif
 import Data.Set as Set (Set, insert, toList)
 import Debian.Arch (Arch)
 import Debian.AutoBuilder.Types.Packages (Packages(Packages, list, APackage), Package, GroupName(GroupName), foldPackages, foldPackages')
 import Debian.Pretty (PP(..), ppPrint)
 import Debian.Relation (SrcPkgName(SrcPkgName))
 import Debian.Release (ReleaseName )
-import Debian.Repo.Fingerprint (RetrieveMethod)
+--import Debian.Repo.Fingerprint (RetrieveMethod)
 import Debian.Repo.Slice (SourcesChangedAction, Slice, PPASlice)
 import Debian.Sources (DebSource)
 import Debian.Version ( DebianVersion, prettyDebianVersion )
@@ -28,7 +30,7 @@ import Debian.URI ( URI )
 import Prelude hiding (map)
 import System.Console.GetOpt
 import Text.PrettyPrint.HughesPJClass (Pretty(pPrint), text, vcat)
-import Text.Read (readMaybe)
+--import Text.Read (readMaybe)
 
 -- |An instance of 'ParamClass' contains the configuration parameters
 -- for a run of the autobuilder.  Among other things, it defined a set
@@ -444,8 +446,10 @@ optSpecs =
                    xs -> error $ "Multiple packages found: " ++ show (map sourcePackageName xs)
 -}
 
+#if 0
 readPattern :: Monad m => String -> m RetrieveMethod
 readPattern s = maybe (fail $ "Invalid RetrieveMethod: " ++ show s) return (readMaybe s)
+#endif
 
 -- |given a list of strings as they would be returned from getArgs,
 -- build the list of ParamRec which defines the build.

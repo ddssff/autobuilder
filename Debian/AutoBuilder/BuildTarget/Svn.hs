@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, ScopedTypeVariables, TypeFamilies #-}
+{-# LANGUAGE CPP, OverloadedStrings, ScopedTypeVariables, TypeFamilies #-}
 module Debian.AutoBuilder.BuildTarget.Svn 
     ( prepare
     , documentation
@@ -9,14 +9,17 @@ import Control.Monad.Trans
 import qualified Data.ByteString.Lazy.Char8 as L
 import Data.Digest.Pure.MD5 (md5)
 import Data.List
-import Data.Monoid ((<>), mempty)
-import Data.String (IsString)
+import Data.Monoid ((<>))
+#if !MIN_VERSION_base(4,8,0)
+import Data.Monoid (mempty)
+#endif
+--import Data.String (IsString)
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Repo
 import Debian.Repo.Fingerprint (RetrieveMethod)
-import Debian.Repo.Prelude.Process (readProcessVE, readProcessV, timeTask)
+import Debian.Repo.Prelude.Process (readProcessVE, timeTask)
 import Network.URI (URI(..), URIAuth(..), parseURI, unEscapeString)
 import System.Directory
 import System.Exit

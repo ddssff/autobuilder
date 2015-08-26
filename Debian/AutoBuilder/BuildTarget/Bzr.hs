@@ -1,5 +1,5 @@
 -- | A Bazaar archive
-{-# LANGUAGE GADTs, OverloadedStrings, ScopedTypeVariables #-}
+{-# LANGUAGE CPP, GADTs, OverloadedStrings, ScopedTypeVariables #-}
 module Debian.AutoBuilder.BuildTarget.Bzr where
 
 import Control.Monad.Error (catchError, throwError)
@@ -7,7 +7,9 @@ import Control.Monad.Trans
 import qualified Data.ByteString.Lazy.Char8 as L
 import Data.Digest.Pure.MD5 (md5)
 import Data.List
+#if !MIN_VERSION_base(4,8,0)
 import Data.Monoid (mempty)
+#endif
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import Debian.AutoBuilder.Types.Download (Download(..), SomeDownload(..))
 import qualified Debian.AutoBuilder.Types.Packages as P

@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, PackageImports, ScopedTypeVariables, TypeFamilies #-}
+{-# LANGUAGE CPP, OverloadedStrings, PackageImports, ScopedTypeVariables, TypeFamilies #-}
 -- |A 'uri:' target is an URI that returns a tarball, with an optional
 -- md5sum if we want to ensure against the tarball changing unexpectedly.
 module Debian.AutoBuilder.BuildTarget.Uri
@@ -14,7 +14,9 @@ import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as B (empty, readFile)
 import Data.Digest.Pure.MD5 (md5)
 import Data.List (isPrefixOf)
+#if !MIN_VERSION_base(4,8,0)
 import Data.Monoid (mempty)
+#endif
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.Repo as R (topdir, SourceTree, findSourceTree)

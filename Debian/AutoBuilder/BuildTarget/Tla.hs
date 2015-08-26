@@ -1,10 +1,12 @@
-{-# LANGUAGE OverloadedStrings, ScopedTypeVariables #-}
+{-# LANGUAGE CPP, OverloadedStrings, ScopedTypeVariables #-}
 module Debian.AutoBuilder.BuildTarget.Tla where
 
 import Control.Exception (SomeException, try)
 import Control.Monad.Trans
 import qualified Data.ByteString.Lazy as B
+#if !MIN_VERSION_base(4,8,0)
 import Data.Monoid (mempty)
+#endif
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P

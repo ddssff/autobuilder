@@ -154,12 +154,14 @@ downloadCached server name version = do
       untar :: (MonadIO m, MonadTop m) => L.ByteString -> m ()
       untar text = tmpDir >>= \ tmp -> liftIO $ Tar.unpack tmp (Tar.read (Z.decompress text))
 
+#if 0
 tryNTimes :: Int -> IO a -> IO (Either String a) -> IO a
 tryNTimes n failed action =
     hPutStr stderr " ." >> action >>= nTimes n
     where
       nTimes 0 _ = failed
       nTimes n r = either (\ _ -> hPutStr stderr "." >> action) (return . Right) r >>= nTimes (n - 1)
+#endif
 
 getVersion' :: String -> String -> IO Version
 getVersion' server name =

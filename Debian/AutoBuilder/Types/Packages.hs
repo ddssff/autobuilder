@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveDataTypeable, RankNTypes, ScopedTypeVariables, TemplateHaskell #-}
+{-# LANGUAGE CPP, DeriveDataTypeable, FlexibleContexts, RankNTypes, ScopedTypeVariables, TemplateHaskell #-}
 -- | The Packages type specifies how to obtain the source code for one
 -- or more packages.
 module Debian.AutoBuilder.Types.Packages
@@ -50,7 +50,9 @@ module Debian.AutoBuilder.Types.Packages
 
 import Debug.Trace as D
 
+#if !MIN_VERSION_base(4,8,0)
 import Control.Applicative (pure, (<$>))
+#endif
 import Control.Exception (SomeException, try)
 import Control.Lens (makeLenses, use, (%=))
 import Control.Monad.State (State)
@@ -60,7 +62,11 @@ import Data.Generics (Data, Typeable)
 import Data.Graph.Inductive (Node, LNode, insEdge, insNode, mkGraph)
 import Data.Graph.Inductive.PatriciaTree (Gr)
 import Data.Map as Map (insert, lookup, Map)
+import Data.Maybe (fromJust)
+#if !MIN_VERSION_base(4,8,0)
 import Data.Monoid (Monoid(mempty, mappend))
+#endif
+import Data.Set as Set (fromList, Set, singleton, toList, unions)
 import Data.String (IsString(fromString))
 import Debian.Debianize (CabalInfo)
 import Debian.Relation (Relations)
