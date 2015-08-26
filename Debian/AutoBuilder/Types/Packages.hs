@@ -3,6 +3,7 @@
 -- or more packages.
 module Debian.AutoBuilder.Types.Packages
     ( Packages(..)
+    , aPackage
     , Package(..)
     , GroupName(..)
     , TSt
@@ -15,6 +16,7 @@ module Debian.AutoBuilder.Types.Packages
     , packageCount
     , mapPackages
     , PackageFlag(..)
+    , plist
     , relaxInfo
     , hackage
     , method
@@ -59,7 +61,7 @@ import Control.Monad.State (State)
 import Data.ByteString (ByteString)
 import Data.Function (on)
 import Data.Generics (Data, Typeable)
-import Data.Graph.Inductive (Node, LNode, insEdge, insNode, mkGraph)
+import Data.Graph.Inductive (Node, LNode, insEdge, insNode, lab, mkGraph, reachable)
 import Data.Graph.Inductive.PatriciaTree (Gr)
 import Data.Map as Map (insert, lookup, Map)
 import Data.Maybe (fromJust)
@@ -206,6 +208,26 @@ data PackageFlag
     deriving (Show, Data, Typeable, Eq, Ord)
 
 $(makeLenses ''TargetState)
+
+-- | Expand dependency list and turn a Package into a Packages.
+aPackage :: TSt Package -> TSt Packages
+aPackage p = p >>= plist . (: []) >>= \ps -> return $ case ps of
+                                                        [p'] -> APackage p'
+                                                        _ -> Packages $ map APackage ps
+
+-- | Expand a package list using the suspected dependency graph
+plist :: [Package] -> TSt [Package]
+plist ps = mapM reach ps >>= return . Set.toList . Set.unions
+    where
+      reach :: Package -> TSt (Set Package)
+      reach p = use nodes >>= maybe (return (singleton p)) (reach' p) . Map.lookup p
+      reach' p n = do
+        g <- use deps
+        -- fromJust because we know these nodes have labels
+        return $ Set.fromList $ map (fromJust . lab g) $ {-tr p n $-} reachable n g
+      -- tr _p _n ns@[_] = ns
+      -- tr p _n [] = error ("No self edge to " ++ show p)
+      -- tr _p n ns = trace ("edges: " ++ show n ++ " -> " ++ show ns) ns
 
 -- | If necessary, allocate a new Node and associate it with the argument package.
 node :: TSt NodeLabel -> TSt (LNode NodeLabel)
