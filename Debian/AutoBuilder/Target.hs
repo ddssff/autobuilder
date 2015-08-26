@@ -50,6 +50,7 @@ import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec(autobuilderEma
 import qualified Debian.AutoBuilder.Version as V (autoBuilderVersion)
 import Debian.Changes (ChangedFileSpec(changedFileSize, changedFileName, changedFileMD5sum, changedFileSHA1sum, changedFileSHA256sum), ChangeLogEntry(logWho, logVersion, logDists, logDate, logComments), ChangesFile(changeRelease, changeInfo, changeFiles, changeDir))
 import Debian.Control (Control'(Control), ControlFunctions(parseControlFromFile), Field'(Comment, Field), fieldValue, Paragraph'(..), raiseFields, HasDebianControl, debianSourcePackageName)
+import Debian.Debianize (CabalInfo)
 import qualified Debian.GenBuildDeps as G
 import Debian.Pretty (prettyShow, ppShow, ppPrint)
 import Debian.Relation (BinPkgName(..), SrcPkgName(..))
@@ -326,11 +327,11 @@ cycleMessage cache globalBuildDeps arcs =
       binaryNames :: T.Download a => Target a -> Target a -> [BinPkgName]
       binaryNames pkg dep = G.binaryNames (targetRelaxed globalBuildDeps (relaxDepends cache (tgt pkg)) dep)
 
-showTargets :: [(RetrieveMethod, [P.PackageFlag])] -> String
+showTargets :: [(RetrieveMethod, [P.PackageFlag], [CabalInfo -> CabalInfo])] -> String
 showTargets targets =
     unlines (heading :
              map (const '-') heading :
-             map (\ (count, (spec, _flags)) -> printf "%4d. " count <> " " <> limit 100 (show spec)) (zip ([1..] :: [Int]) targets)
+             map (\ (count, (spec, _flags, _fns)) -> printf "%4d. " count <> " " <> limit 100 (show spec)) (zip ([1..] :: [Int]) targets)
              -- map concat (columns (reverse (snd (P.foldPackages (\ p (count, rows) -> (count + 1, [printf "%4d. " count, " ", limit 100 (show (P.spec p))] : rows)) targets (1 :: Int, [])))))
             )
     where

@@ -70,8 +70,8 @@ instance T.Download a => T.Download (DebianizeDL a) where
     attrs = T.attrs . cabal
 
 -- | Debianize the download, which is assumed to be a cabal package.
-prepare :: (MonadRepos m, MonadTop m, T.Download a) => CabalT IO () -> P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> a -> m T.SomeDownload
-prepare defaultAtoms cache method@(Debian.Repo.Fingerprint.Debianize'' _ sourceName) flags cabal =
+prepare :: (MonadRepos m, MonadTop m, T.Download a) => CabalT IO () -> P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> [CabalInfo -> CabalInfo] -> a -> m T.SomeDownload
+prepare defaultAtoms cache method@(Debian.Repo.Fingerprint.Debianize'' _ sourceName) flags functions cabal =
     do let cabdir = T.getTop cabal
        debdir <- sub ("debianize" </> retrieveMethodMD5 method)
        liftIO $ createDirectoryIfMissing True debdir
@@ -84,7 +84,7 @@ prepare defaultAtoms cache method@(Debian.Repo.Fingerprint.Debianize'' _ sourceN
                 let version = pkgVersion . package . Distribution.PackageDescription.packageDescription $ desc
                 -- We want to see the original changelog, so don't remove this
                 -- removeRecursiveSafely (dir </> "debian")
-                liftIO $ autobuilderCabal cache flags sourceName debdir defaultAtoms
+                liftIO $ autobuilderCabal cache flags functions sourceName debdir defaultAtoms
                 return $ T.SomeDownload $ DebianizeDL { def = defaultAtoms
                                                       , method = method
                                                       , debFlags = flags
@@ -92,7 +92,7 @@ prepare defaultAtoms cache method@(Debian.Repo.Fingerprint.Debianize'' _ sourceN
                                                       , version = version
                                                       , dir = debdir }
          _ -> error $ "Download at " ++ cabdir ++ ": missing or multiple cabal files"
-prepare _ _ method _ _ = error $ "Unexpected method passed to Debianize.prepare: " ++ show method
+prepare _ _ method _ _ _ = error $ "Unexpected method passed to Debianize.prepare: " ++ show method
 
 withCurrentDirectory :: (MonadMask m, MonadIO m) => FilePath -> m a -> m a
 withCurrentDirectory new action = bracket (liftIO getCurrentDirectory >>= \ old -> liftIO (setCurrentDirectory new) >> return old) (liftIO . setCurrentDirectory) (\ _ -> action)
@@ -113,13 +113,13 @@ autobuilderDebianize cache pflags currentDirectory =
 -- it looks for a debian/Debianize.hs script and tries to run that, if
 -- that doesn't work it runs cabal-debian --native, adding any options
 -- it can infer from the package flags.
-autobuilderCabal :: P.CacheRec -> [P.PackageFlag] -> Maybe String -> FilePath -> CabalT IO () -> IO ()
-autobuilderCabal cache pflags sourceName debianizeDirectory defaultAtoms =
+autobuilderCabal :: P.CacheRec -> [P.PackageFlag] -> [CabalInfo -> CabalInfo] -> Maybe String -> FilePath -> CabalT IO () -> IO ()
+autobuilderCabal cache flags functions sourceName debianizeDirectory defaultAtoms =
     Cabal.withCurrentDirectory debianizeDirectory $
     do let rel = P.buildRelease $ P.params cache
        top <- computeTopDir (P.params cache)
        eset <- runTopT top (envSet rel)
-       let (functions, flags) = partitionEithers (map (\ x -> case x of P.ModifyAtoms fn -> Left fn; _ -> Right x) pflags)
+       -- let (functions, flags) = partitionEithers (map (\ x -> case x of P.ModifyAtoms fn -> Left fn; _ -> Right x) pflags)
        v <- return 0 -- verbosity
        let args =
                groom $
@@ -173,7 +173,6 @@ instance CabalFlags P.PackageFlag where
     asCabalFlags P.OmitLTDeps = [] -- I think this exists
     asCabalFlags (P.AptPin _) = []
     asCabalFlags (P.CabalPin _) = []
-    asCabalFlags (P.ModifyAtoms _) = []
     asCabalFlags (P.DarcsTag _) = []
     asCabalFlags (P.GitBranch _) = []
     asCabalFlags P.KeepRCS = []

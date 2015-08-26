@@ -22,6 +22,7 @@ module Debian.AutoBuilder.Types.Packages
     , debianize
     , flag
     , mflag
+    , apply
     , patch
     , rename
     , bzr
@@ -53,6 +54,7 @@ import Control.Exception (SomeException, try)
 import Control.Lens (makeLenses)
 import Control.Monad.State (State)
 import Data.ByteString (ByteString)
+import Data.Function (on)
 import Data.Generics (Data, Typeable)
 import Data.Monoid (Monoid(mempty, mappend))
 import Data.String (IsString(fromString))
@@ -93,7 +95,15 @@ data Package
       , flags :: [PackageFlag]
       -- ^ These flags provide additional details about how to obtain
       -- the package.
-      } deriving (Show, Data, Typeable) -- We can't derive Eq while PackageFlag contains functions
+      , post :: [CabalInfo -> CabalInfo]
+      -- ^ Final transformations to perform on the package info.
+      } deriving (Show, Data, Typeable) -- We can't derive Eq because post contains functions
+
+instance Eq Package where
+    a == b = compare a b == EQ
+
+instance Ord Package where
+    compare = compare `on` (\x -> (spec x, flags x))
 
 data TargetState
     = TargetState
@@ -143,8 +153,6 @@ data PackageFlag
     -- ^ Pass the --no-hoogle flag to cabal-debian.
     | CabalDebian [String]
     -- ^ Pass some arbitrary arguments to cabal-debian
-    | ModifyAtoms (CabalInfo -> CabalInfo)
-    -- ^ Modify the cabal-debian configuration in a fully general way
     | MapDep String Relations
     -- ^ Tell cabal-debian to map the first argument (a name that
     -- appears in Extra-Libraries field of the cabal file) to the
@@ -179,7 +187,7 @@ data PackageFlag
     | KeepRCS
     -- ^ Don't clean out the subdirectory containing the revision control info,
     -- i.e. _darcs or .git or whatever.
-    deriving (Show, Data, Typeable)
+    deriving (Show, Data, Typeable, Eq, Ord)
 
 $(makeLenses ''TargetState)
 
@@ -258,7 +266,7 @@ relaxInfo flags' =
 -- Combinators for the Packages type
 
 method :: RetrieveMethod -> Package
-method m = Package { spec = m, flags = [] }
+method m = Package { spec = m, flags = [], post = [] }
 
 -- | Add a flag to every package in p
 flag :: TSt Package -> PackageFlag -> TSt Package
@@ -267,6 +275,9 @@ flag mp f = (\ p -> p {flags = f : flags p}) <$> mp
 mflag :: TSt Package -> Maybe PackageFlag -> TSt Package
 mflag mp Nothing = mp
 mflag mp (Just f) = flag mp f
+
+apply :: TSt Package -> (CabalInfo -> CabalInfo) -> TSt Package
+apply mp f = mp >>= \p -> return $ p {post = f : post p}
 
 patch :: TSt Package -> ByteString -> TSt Package
 patch mp s = (\ p -> p {spec = Patch (spec p) s}) <$> mp
@@ -284,7 +295,8 @@ apt :: String -> String -> TSt Package
 apt dist name = pure $
           Package
                { spec = Apt dist name
-               , flags = [] }
+               , flags = []
+               , post = [] }
 
 bzr :: String -> TSt Package
 bzr path = pure $ method (Bzr path)
@@ -292,7 +304,8 @@ bzr path = pure $ method (Bzr path)
 darcs :: String -> TSt Package
 darcs path = pure $
     Package { spec = Darcs path
-            , flags = [] }
+            , flags = []
+            , post = [] }
 
 datafiles :: RetrieveMethod -> RetrieveMethod -> FilePath -> TSt Package
 datafiles cabal files dest = pure $ method (DataFiles cabal files dest)
@@ -315,7 +328,8 @@ git path gitspecs = pure $ method (Git path gitspecs)
 hackage :: String -> TSt Package
 hackage s = pure $
     Package { spec = Hackage s
-            , flags = [] }
+            , flags = []
+            , post = [] }
 
 hg :: String -> TSt Package
 hg path = pure $ method (Hg path)

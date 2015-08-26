@@ -30,7 +30,7 @@ import qualified Debian.AutoBuilder.Types.CacheRec as C
 import Debian.AutoBuilder.Types.Download (Download(..), SomeDownload(..))
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
-import Debian.Debianize (CabalT)
+import Debian.Debianize (CabalT, CabalInfo)
 import Debian.Relation (SrcPkgName(..))
 import Debian.Repo.EnvPath (EnvRoot(rootPath))
 import qualified Debian.Repo.Fingerprint as P
@@ -100,38 +100,38 @@ instance Download ZeroDL where
 -- This wrapper ensures that /proc and /sys are mounted, even though the
 -- underlying code in retrieve' hasn't been updated to enforce this.
 retrieve :: forall m. (MonadOS m, MonadRepos m, MonadTop m, MonadCatch m) =>
-            CabalT IO () -> C.CacheRec -> P.RetrieveMethod -> [P.PackageFlag] -> WithProcAndSys m SomeDownload
-retrieve defaultAtoms cache method flags = lift $ retrieve' defaultAtoms cache method flags
+            CabalT IO () -> C.CacheRec -> P.RetrieveMethod -> [P.PackageFlag] -> [CabalInfo -> CabalInfo] -> WithProcAndSys m SomeDownload
+retrieve defaultAtoms cache method flags functions = lift $ retrieve' defaultAtoms cache method flags functions
 
 retrieve' :: forall m. (MonadOS m, MonadRepos m, MonadTop m, MonadCatch m) =>
-            CabalT IO () -> C.CacheRec -> P.RetrieveMethod -> [P.PackageFlag] -> m SomeDownload
-retrieve' defaultAtoms cache method flags =
+            CabalT IO () -> C.CacheRec -> P.RetrieveMethod -> [P.PackageFlag] -> [CabalInfo -> CabalInfo] -> m SomeDownload
+retrieve' defaultAtoms cache method flags functions =
     case method of
       P.Apt dist package -> Apt.prepare cache method flags dist (SrcPkgName package)
       P.Bzr string -> Bzr.prepare cache method flags string
 
       P.Cd dir spec' ->
-          retrieve' defaultAtoms cache spec' flags >>= \ target' ->
+          retrieve' defaultAtoms cache spec' flags functions >>= \ target' ->
           return $ SomeDownload $ CdDL { cd = method, fs = flags, dir = dir, parent = target' }
 
       P.Darcs uri -> Darcs.prepare method flags uri
 
       P.DataFiles base files loc ->
-          do base' <- retrieve' defaultAtoms cache base flags
-             files' <- retrieve' defaultAtoms cache files flags
+          do base' <- retrieve' defaultAtoms cache base flags functions
+             files' <- retrieve' defaultAtoms cache files flags functions
              baseTree <- liftIO (findSourceTree (T.getTop base') :: IO SourceTree)
              filesTree <- liftIO (findSourceTree (T.getTop files') :: IO SourceTree)
              _ <- liftIO $ copySourceTree filesTree (dir' baseTree </> loc)
              return base'
 
       P.DebDir upstream debian ->
-          do upstream' <- retrieve' defaultAtoms cache upstream flags
-             debian' <- retrieve' defaultAtoms cache debian flags
+          do upstream' <- retrieve' defaultAtoms cache upstream flags functions
+             debian' <- retrieve' defaultAtoms cache debian flags functions
              DebDir.prepare method flags upstream' debian'
       P.Debianize _ -> error "retrieve - old Debianize constructor"
       P.Debianize'' package _ ->
-          retrieve' defaultAtoms cache package flags >>=
-          Debianize.prepare defaultAtoms cache method flags
+          retrieve' defaultAtoms cache package flags functions >>=
+          Debianize.prepare defaultAtoms cache method flags functions
 
       -- Dir is a simple instance of BuildTarget representing building the
       -- debian source in a local directory.  This type of target is used
@@ -148,24 +148,24 @@ retrieve' defaultAtoms cache method flags =
       P.Hackage package -> Hackage.prepare cache method flags package
       P.Hg string -> Hg.prepare cache method flags string
       P.Patch base patch ->
-          retrieve' defaultAtoms cache base flags >>=
+          retrieve' defaultAtoms cache base flags functions >>=
           Patch.prepare method flags patch
 
       P.Proc spec' ->
-          retrieve' defaultAtoms cache spec' flags >>= \ base ->
+          retrieve' defaultAtoms cache spec' flags functions >>= \ base ->
           return $ SomeDownload $ ProcDL { procMethod = method
                                          , procFlags = flags
                                          , base = base }
       P.Quilt base patches ->
-          do base' <- retrieve' defaultAtoms cache base flags
-             patches' <- retrieve' defaultAtoms cache patches flags
+          do base' <- retrieve' defaultAtoms cache base flags functions
+             patches' <- retrieve' defaultAtoms cache patches flags functions
              Quilt.prepare method flags base' patches'
       P.SourceDeb spec' ->
-          retrieve' defaultAtoms cache spec' flags >>=
+          retrieve' defaultAtoms cache spec' flags functions >>=
           SourceDeb.prepare cache method flags
       P.Svn uri -> Svn.prepare cache method flags uri
       P.Tla string -> Tla.prepare cache method flags string
-      P.Twice base -> retrieve' defaultAtoms cache base flags >>=
+      P.Twice base -> retrieve' defaultAtoms cache base flags functions >>=
                       Twice.prepare method flags
       P.Uri uri sum -> SomeDownload <$> Uri.prepare method flags uri sum
       P.Zero -> return $ SomeDownload ZeroDL

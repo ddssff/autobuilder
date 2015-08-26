@@ -10,6 +10,7 @@ import Control.Arrow (first)
 import Control.Applicative (Applicative, (<$>))
 import Control.Applicative.Error (Failing(..), ErrorMsg)
 import Control.Exception(SomeException, AsyncException(UserInterrupt), fromException, toException, try)
+import Control.Lens (view, _1)
 import Control.Monad(foldM, when)
 import Control.Monad.Catch (MonadMask, catch, throwM)
 import Control.Monad.State (MonadIO(liftIO))
@@ -28,11 +29,11 @@ import Debian.AutoBuilder.Target (buildTargets, showTargets)
 import Debian.AutoBuilder.Types.Buildable (Target, Buildable(debianSourceTree), asBuildable)
 import Debian.AutoBuilder.Types.Download (SomeDownload(..), Download(..))
 import qualified Debian.AutoBuilder.Types.CacheRec as C
-import qualified Debian.AutoBuilder.Types.Packages as P (foldPackages, spec, flags, PackageFlag(CabalPin))
+import qualified Debian.AutoBuilder.Types.Packages as P (foldPackages, spec, flags, post, PackageFlag(CabalPin))
 import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec, getParams, doHelp, usage, verbosity, showParams, showSources, flushAll, doSSHExport, uploadURI, report, buildRelease, ifSourcesChanged, requiredVersion, prettyPrint, doUpload, doNewDist, newDistProgram, createRelease, buildPackages, flushSource, extraRepos)
 import qualified Debian.AutoBuilder.Version as V
 import Debian.Control.Policy (debianPackageNames, debianSourcePackageName)
-import Debian.Debianize (CabalT)
+import Debian.Debianize (CabalT, CabalInfo)
 import Debian.Pretty (prettyShow, ppShow)
 import Debian.Relation (BinPkgName(unBinPkgName), SrcPkgName(unSrcPkgName))
 import Debian.Release (ReleaseName(ReleaseName, relName), releaseName')
@@ -146,7 +147,7 @@ runParameterSet init cache =
       qPutStrLn "Preparing dependency environment"
       extraSlices <- mapM (either (return . (: [])) (liftIO . expandPPASlice (P.baseRelease params))) (P.extraRepos params) >>= return . concat
       dependOS <- prepareDependOS params buildRelease extraSlices
-      let allTargets = filter (notZero . fst) (P.foldPackages (\ p l -> (P.spec p, P.flags p) : l) (P.buildPackages params) [])
+      let allTargets = filter (notZero . view _1) (P.foldPackages (\ p l -> (P.spec p, P.flags p, P.post p) : l) (P.buildPackages params) [])
       qPutStrLn "Preparing build environment"
       buildOS <- evalMonadOS (do sources <- osBaseDistro <$> getOS
                                  updateCacheSources (P.ifSourcesChanged params) sources
@@ -178,10 +179,10 @@ runParameterSet init cache =
                         (Failure ms) -> Left ms
                         (Success a) -> Right a) xs
       notZero x = null (listify (\ x -> case x of P.Zero -> True; _ -> False) x)
-      retrieveTarget :: (MonadReposCached m) => EnvRoot -> Int -> Int -> (P.RetrieveMethod, [P.PackageFlag]) -> m (Either String (Buildable SomeDownload))
-      retrieveTarget dependOS count index (method, flags) = do
+      retrieveTarget :: (MonadReposCached m) => EnvRoot -> Int -> Int -> (P.RetrieveMethod, [P.PackageFlag], [CabalInfo -> CabalInfo]) -> m (Either String (Buildable SomeDownload))
+      retrieveTarget dependOS count index (method, flags, functions) = do
             liftIO (hPutStr stderr (printf "[%2d of %2d]" index count))
-            res <- (Right <$> evalMonadOS (do download <- withProcAndSys (rootPath dependOS) $ retrieve init cache method flags
+            res <- (Right <$> evalMonadOS (do download <- withProcAndSys (rootPath dependOS) $ retrieve init cache method flags functions
                                               when (P.flushSource params) (flushSource download)
                                               buildable <- liftIO (asBuildable download)
                                               let (src, bins) = debianPackageNames (debianSourceTree buildable)
@@ -307,12 +308,12 @@ handleRetrieveException method e =
 
 limit n s = if length s > n + 3 then take n s ++ "..." else s
 
-doReport :: [(P.RetrieveMethod, [P.PackageFlag])] -> String
+doReport :: [(P.RetrieveMethod, [P.PackageFlag], [CabalInfo -> CabalInfo])] -> String
 doReport =
     intercalate "\n" . concatMap doReport'
     where
-      doReport' :: (P.RetrieveMethod, [P.PackageFlag]) -> [String]
-      doReport' (spec, flags) =
+      doReport' :: (P.RetrieveMethod, [P.PackageFlag], [CabalInfo -> CabalInfo]) -> [String]
+      doReport' (spec, flags, fns) =
           patched spec ++ pinned flags
           where
             patched :: P.RetrieveMethod -> [String]
