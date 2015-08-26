@@ -1,4 +1,4 @@
-{-# LANGUAGE ExistentialQuantification, PackageImports, RankNTypes, TypeFamilies #-}
+{-# LANGUAGE CPP, ExistentialQuantification, PackageImports, RankNTypes, TypeFamilies #-}
 {-# OPTIONS -fwarn-unused-imports #-}
 module Debian.AutoBuilder.Types.Download
     ( Download(..)
@@ -9,18 +9,18 @@ import Control.Exception (SomeException)
 import Control.Monad.Catch (MonadMask)
 import Control.Monad.Trans (MonadIO)
 import qualified Data.ByteString.Lazy as L (ByteString)
+#if !MIN_VERSION_base(4,8,0)
 import Data.Monoid (mempty)
+#endif
 import Data.Set as Set (Set, empty)
 import Data.Time (NominalDiffTime)
 import Data.Version (Version)
 import Debian.AutoBuilder.Types.Packages (PackageFlag)
-import Debian.Repo.EnvPath (rootPath)
 import Debian.Repo.Fingerprint (RetrieveMethod(..), RetrieveAttribute(..))
-import Debian.Repo.MonadOS (MonadOS(getOS))
-import Debian.Repo.OSImage (OSImage(osRoot))
+import Debian.Repo.MonadOS (MonadOS)
 import Debian.Repo.Top (MonadTop)
 import System.Exit (ExitCode(ExitSuccess))
-import System.Unix.Mount (WithProcAndSys, withProcAndSys)
+import System.Unix.Mount (WithProcAndSys)
 
 class Download a where
     method :: a -> RetrieveMethod

@@ -1,4 +1,4 @@
-{-# LANGUAGE PackageImports #-}
+{-# LANGUAGE CPP, PackageImports #-}
 {-# OPTIONS -Wall #-}
 module Debian.AutoBuilder.BuildEnv
     ( prepareDependOS
@@ -6,7 +6,9 @@ module Debian.AutoBuilder.BuildEnv
     , envSet
     ) where
 
+#if !MIN_VERSION_base(4,8,0)
 import Control.Applicative (Applicative)
+#endif
 import Control.Monad (when)
 import Control.Monad.Catch (MonadMask)
 import Control.Monad.State (MonadIO)

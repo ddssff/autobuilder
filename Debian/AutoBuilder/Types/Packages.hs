@@ -6,9 +6,9 @@ module Debian.AutoBuilder.Types.Packages
     , Package(..)
     , GroupName(..)
     , TSt
-    , TargetState, release
+    , TargetState, release, deps, nodes
     , targetState
-    , edge
+    , depends
     , foldPackages
     , foldPackages'
     , filterPackages
@@ -223,6 +223,16 @@ edge pkg dep = do
   (pkgNode, _) <- node pkg
   (depNode, _) <- node dep
   deps %= insEdge (pkgNode, depNode, ())
+
+-- | Like edge, but also adds self edges.
+edge' :: TSt NodeLabel -> TSt NodeLabel -> TSt ()
+edge' pkg dep = do
+  edge pkg pkg
+  edge dep dep
+  edge pkg dep
+
+depends :: TSt Package -> [TSt Package] -> TSt Package
+depends p ps = mapM_ (edge' p) ps >> p
 
 -- instance Eq Packages where
 --     (APackage p1) == (APackage p2) = p1 == p2

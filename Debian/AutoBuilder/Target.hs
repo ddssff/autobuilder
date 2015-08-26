@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PackageImports #-}
@@ -20,7 +21,9 @@ module Debian.AutoBuilder.Target
     , decode
     ) where
 
+#if !MIN_VERSION_base(4,8,0)
 import Control.Applicative ((<$>))
+#endif
 import Control.Applicative.Error (Failing(..))
 import Control.Arrow (second)
 import Control.Exception (AsyncException(UserInterrupt), fromException, SomeException, throw, toException)
@@ -35,7 +38,10 @@ import Data.Function (on)
 import Data.List as List (intercalate, intersect, intersperse, isSuffixOf, nub, partition, sortBy, lookup, null)
 import Data.Map as Map (Map, fromList, lookup)
 import Data.Maybe (catMaybes, fromJust, isNothing, listToMaybe, isJust)
-import Data.Monoid ((<>), mempty)
+import Data.Monoid ((<>))
+#if !MIN_VERSION_base(4,8,0)
+import Data.Monoid (mempty)
+#endif
 import Data.Set as Set (difference, empty, fromList, insert, member, null, Set, size, toList, union)
 import qualified Data.Text as T (pack, unpack)
 import Data.Time (NominalDiffTime)

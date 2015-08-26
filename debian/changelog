@@ -1,3 +1,13 @@
+haskell-autobuilder (6.73) unstable; urgency=low
+
+  * Remove ModifyAtoms from PackageFlags so we can have an Ord instance
+  * Use Ord instance to build graph of suspected dependencies - this can
+    be used to pull in packages to build due to the presence of other
+    packages, it is not used to actually decide whether to build a
+    package.
+
+ -- David Fox <dsf@seereason.com>  Wed, 26 Aug 2015 09:45:24 -0700
+
 haskell-autobuilder (6.72) unstable; urgency=low
 
   * Add mapPackages
