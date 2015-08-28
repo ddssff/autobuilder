@@ -7,7 +7,9 @@ module Debian.AutoBuilder.Main
     ) where
 
 import Control.Arrow (first)
+#if !MIN_VERSION_base(4,8,0)
 import Control.Applicative (Applicative, (<$>))
+#endif
 import Control.Applicative.Error (Failing(..), ErrorMsg)
 import Control.Exception(SomeException, AsyncException(UserInterrupt), fromException, toException, try)
 import Control.Lens (view, _1)
@@ -147,7 +149,7 @@ runParameterSet init cache =
       qPutStrLn "Preparing dependency environment"
       extraSlices <- mapM (either (return . (: [])) (liftIO . expandPPASlice (P.baseRelease params))) (R.extraRepos params) >>= return . concat
       dependOS <- prepareDependOS params buildRelease extraSlices
-      let allTargets = filter (notZero . view _1) (P.foldPackages (\ p l -> (P.spec p, P.flags p, P.post p) : l) (R.buildPackages params) [])
+      let allTargets = filter (notZero . view _1) (P.foldPackages (\ p l -> (view P.spec p, view P.flags p, view P.post p) : l) (R.buildPackages params) [])
       qPutStrLn "Preparing build environment"
       buildOS <- evalMonadOS (do sources <- osBaseDistro <$> getOS
                                  updateCacheSources (R.ifSourcesChanged params) sources

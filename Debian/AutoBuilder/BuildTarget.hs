@@ -1,14 +1,18 @@
-{-# LANGUAGE GADTs, OverloadedStrings, PackageImports, RankNTypes, ScopedTypeVariables #-}
+{-# LANGUAGE CPP, GADTs, OverloadedStrings, PackageImports, RankNTypes, ScopedTypeVariables #-}
 module Debian.AutoBuilder.BuildTarget
     ( retrieve
     , targetDocumentation
     ) where
 
+#if !MIN_VERSION_base(4,8,0)
 import Control.Applicative ((<$>))
-import Control.Monad.Catch (MonadCatch(catch), MonadMask(mask), MonadThrow(throwM))
+#endif
+import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans (lift, liftIO)
 import Data.List (intersperse)
+#if !MIN_VERSION_base(4,8,0)
 import Data.Monoid (mempty)
+#endif
 import qualified Debian.AutoBuilder.BuildTarget.Apt as Apt
 import qualified Debian.AutoBuilder.BuildTarget.Cd as Cd
 import qualified Debian.AutoBuilder.BuildTarget.Darcs as Darcs
@@ -32,15 +36,13 @@ import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Debianize (CabalT, CabalInfo)
 import Debian.Relation (SrcPkgName(..))
-import Debian.Repo.EnvPath (EnvRoot(rootPath))
 import qualified Debian.Repo.Fingerprint as P
-import Debian.Repo.MonadOS (MonadOS, getOS)
-import Debian.Repo.OSImage (osRoot)
+import Debian.Repo.MonadOS (MonadOS)
 import Debian.Repo.SourceTree (SourceTree(dir'), copySourceTree, findSourceTree, topdir)
 import Debian.Repo.Internal.Repos (MonadRepos(..))
-import Debian.Repo.Top (MonadTop(askTop))
+import Debian.Repo.Top (MonadTop)
 import System.FilePath ((</>))
-import System.Unix.Mount (withProcAndSys, WithProcAndSys(runWithProcAndSys))
+import System.Unix.Mount (WithProcAndSys)
 
 data Download a => CdDL a
     = CdDL { cd :: P.RetrieveMethod

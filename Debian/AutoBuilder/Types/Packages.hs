@@ -4,7 +4,7 @@
 module Debian.AutoBuilder.Types.Packages
     ( Packages(..)
     , aPackage
-    , Package(..)
+    , Package(..), post, spec, flags
     , GroupName(..)
     , TSt
     , TargetState, release, deps, nodes
@@ -56,7 +56,7 @@ import Debug.Trace as D
 import Control.Applicative (pure, (<$>))
 #endif
 import Control.Exception (SomeException, try)
-import Control.Lens (makeLenses, use, (%=))
+import Control.Lens (makeLenses, over, use, view, (%=))
 import Control.Monad.State (State)
 import Data.ByteString (ByteString)
 import Data.Function (on)
@@ -101,21 +101,15 @@ data Packages
 
 data Package
     = Package
-      { spec :: RetrieveMethod
+      { _spec :: RetrieveMethod
       -- ^ This value describes the method used to download the
       -- package's source code.
-      , flags :: [PackageFlag]
+      , _flags :: [PackageFlag]
       -- ^ These flags provide additional details about how to obtain
       -- the package.
-      , post :: [CabalInfo -> CabalInfo]
+      , _post :: [CabalInfo -> CabalInfo]
       -- ^ Final transformations to perform on the package info.
       } deriving (Show, Data, Typeable) -- We can't derive Eq because post contains functions
-
-instance Eq Package where
-    a == b = compare a b == EQ
-
-instance Ord Package where
-    compare = compare `on` (\x -> (spec x, flags x))
 
 type NodeLabel = Package
 type EdgeLabel = ()
@@ -128,9 +122,6 @@ data TargetState
       , _next :: Node
       , _deps :: Gr NodeLabel EdgeLabel
       }
-
-targetState :: Release -> FilePath -> TargetState
-targetState rel path = TargetState {_release = rel, _home = path, _nodes = mempty, _next = 1, _deps = mkGraph [] []}
 
 type TSt = State TargetState
 
@@ -207,7 +198,17 @@ data PackageFlag
     -- i.e. _darcs or .git or whatever.
     deriving (Show, Data, Typeable, Eq, Ord)
 
+$(makeLenses ''Package)
 $(makeLenses ''TargetState)
+
+instance Eq Package where
+    a == b = compare a b == EQ
+
+instance Ord Package where
+    compare = compare `on` (\x -> (view spec x, view flags x))
+
+targetState :: Release -> FilePath -> TargetState
+targetState rel path = TargetState {_release = rel, _home = path, _nodes = mempty, _next = 1, _deps = mkGraph [] []}
 
 -- | Expand dependency list and turn a Package into a Packages.
 aPackage :: TSt Package -> TSt Packages
@@ -337,58 +338,58 @@ relaxInfo flags' =
 -- Combinators for the Packages type
 
 method :: RetrieveMethod -> Package
-method m = Package { spec = m, flags = [], post = [] }
+method m = Package { _spec = m, _flags = [], _post = [] }
 
 -- | Add a flag to every package in p
 flag :: TSt Package -> PackageFlag -> TSt Package
-flag mp f = (\ p -> p {flags = f : flags p}) <$> mp
+flag mp f = over flags (f :) <$> mp
 
 mflag :: TSt Package -> Maybe PackageFlag -> TSt Package
 mflag mp Nothing = mp
 mflag mp (Just f) = flag mp f
 
 apply :: TSt Package -> (CabalInfo -> CabalInfo) -> TSt Package
-apply mp f = mp >>= \p -> return $ p {post = f : post p}
+apply mp f = over post (f :) <$> mp
 
 patch :: TSt Package -> ByteString -> TSt Package
-patch mp s = (\ p -> p {spec = Patch (spec p) s}) <$> mp
+patch mp s = over spec (`Patch` s) <$> mp
 
 rename :: TSt Packages -> GroupName -> TSt Packages
 rename mps s = (\ ps -> ps {group = s}) <$> mps
 
 mapSpec :: (RetrieveMethod -> RetrieveMethod) -> Package -> Package
-mapSpec f p@(Package {spec = x}) = p {spec = f x}
+mapSpec f p = over spec f p
 
 cd :: TSt Package -> FilePath -> TSt Package
-cd mp path = mp >>= \ p -> pure $ p {spec = Cd path (spec p)}
+cd mp path = over spec (Cd path) <$> mp
 
 apt :: String -> String -> TSt Package
 apt dist name = pure $
           Package
-               { spec = Apt dist name
-               , flags = []
-               , post = [] }
+               { _spec = Apt dist name
+               , _flags = []
+               , _post = [] }
 
 bzr :: String -> TSt Package
 bzr path = pure $ method (Bzr path)
 
 darcs :: String -> TSt Package
 darcs path = pure $
-    Package { spec = Darcs path
-            , flags = []
-            , post = [] }
+    Package { _spec = Darcs path
+            , _flags = []
+            , _post = [] }
 
 datafiles :: RetrieveMethod -> RetrieveMethod -> FilePath -> TSt Package
 datafiles cabal files dest = pure $ method (DataFiles cabal files dest)
 
 debianize :: TSt Package -> TSt Package
-debianize mp = (\ p -> p { spec = Debianize'' (spec p) Nothing }) <$> mp
+debianize mp = over spec (\x -> Debianize'' x Nothing) <$> mp
 
 -- debdir :: String -> RetrieveMethod -> RetrieveMethod -> Packages
 -- debdir name method1 method2 = method name (DebDir method1 method1)
 
 debdir :: TSt Package -> RetrieveMethod -> TSt Package
-debdir mp debian = (\ p -> p {spec = DebDir (spec p) debian}) <$> mp
+debdir mp debian = over spec (\x -> DebDir x debian) <$> mp
 
 dir :: FilePath -> TSt Package
 dir path = pure $ method (Dir path)
@@ -398,9 +399,9 @@ git path gitspecs = pure $ method (Git path gitspecs)
 
 hackage :: String -> TSt Package
 hackage s = pure $
-    Package { spec = Hackage s
-            , flags = []
-            , post = [] }
+    Package { _spec = Hackage s
+            , _flags = []
+            , _post = [] }
 
 hg :: String -> TSt Package
 hg path = pure $ method (Hg path)
@@ -409,10 +410,10 @@ proc :: TSt Package -> TSt Package
 proc p = mapSpec Proc <$> p
 
 quilt :: RetrieveMethod -> TSt Package -> TSt Package
-quilt patchdir mp = (\ p -> p {spec = Quilt (spec p) patchdir}) <$> mp
+quilt patchdir mp = over spec (\x -> Quilt x patchdir)  <$> mp
 
 sourceDeb :: TSt Package -> TSt Package
-sourceDeb mp =  (\ p -> method (SourceDeb (spec p))) <$> mp
+sourceDeb mp =  (method . SourceDeb . view spec) <$> mp
 
 svn :: String -> TSt Package
 svn path = pure $ method (Svn path)
@@ -421,7 +422,7 @@ tla :: String -> TSt Package
 tla path = pure $ method (Tla path)
 
 twice :: TSt Package -> TSt Package
-twice mp = (\ p -> p {spec = Twice (spec p)}) <$> mp
+twice mp = over spec Twice <$> mp
 
 uri :: String -> String -> TSt Package
 uri tarball checksum = pure $ method (Uri tarball checksum)

@@ -1,10 +1,12 @@
-{-# LANGUAGE GADTs, OverloadedStrings, PackageImports, ScopedTypeVariables #-}
+{-# LANGUAGE CPP, GADTs, OverloadedStrings, PackageImports, ScopedTypeVariables #-}
 -- | The quilt target takes two other targets, one a base source
 -- directory and another a quilt-style patch directory, and creates
 -- a build target with the patches applied to the source directory.
 module Debian.AutoBuilder.BuildTarget.Quilt where
 
+#if !MIN_VERSION_base(4,8,0)
 import Control.Applicative ((<$>))
+#endif
 import Control.Applicative.Error (Failing(..))
 import Control.Monad (when)
 import Control.Monad.Error (catchError)

@@ -10,7 +10,9 @@ module Debian.AutoBuilder.Types.Buildable
     , getRelaxedDependencyInfo
     ) where
 
+#if !MIN_VERSION_base(4,8,0)
 import Control.Applicative ((<$>))
+#endif
 import Control.Applicative.Error (Failing(Success, Failure), ErrorMsg)
 import Control.Exception as E (SomeException, try, catch, throw)
 import Control.Monad (when)
@@ -97,7 +99,7 @@ relaxDepends :: (T.Download a) => C.CacheRec -> Buildable a -> SrcPkgName -> Bin
 relaxDepends c x s b =
     any (== b) (map BinPkgName (globalRelaxInfo (C.params c))) ||
     (debianSourcePackageName x == s &&
-     any (== b) (map BinPkgName (concatMap (P.relaxInfo . P.flags) (packageList (R.buildPackages (C.params c))))))
+     any (== b) (map BinPkgName (concatMap (P.relaxInfo . P._flags) (packageList (R.buildPackages (C.params c))))))
 
 packageList :: P.Packages -> [P.Package]
 packageList p = foldPackages (:) p []

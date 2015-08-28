@@ -1,4 +1,4 @@
-{-# LANGUAGE PackageImports, ScopedTypeVariables #-}
+{-# LANGUAGE CPP, PackageImports, ScopedTypeVariables #-}
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 -- |The intent is that this target debianize any cabal target, but currently
 -- it combines debianization with the hackage target.
@@ -7,15 +7,15 @@ module Debian.AutoBuilder.BuildTarget.Debianize
     , documentation
     ) where
 
-import Control.Lens (set, (.=))
+import Control.Lens ((.=))
 import Control.Monad (when)
-import Control.Monad.State (evalStateT, modify)
+import Control.Monad.State (modify)
 import Control.Monad.Catch (MonadMask, bracket)
 import Control.Monad.Trans (MonadIO, liftIO)
-import Data.Either (partitionEithers)
-import Data.List (isSuffixOf, intercalate, partition)
-import Data.Maybe (mapMaybe)
+import Data.List (isSuffixOf, partition)
+#if !MIN_VERSION_base(4,8,0)
 import Data.Monoid ((<>))
+#endif
 import Data.Version (Version)
 import Debian.AutoBuilder.BuildEnv (envSet)
 import Debian.AutoBuilder.Params (computeTopDir)
@@ -24,15 +24,10 @@ import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P (buildRelease)
 import Debian.Debianize as Cabal hiding (package) -- (CabalT, compileArgs, debianize, evalCabalT, makeAtoms, runDebianizeScript, SourceFormat(Native3), sourceFormat, sourcePackageName, writeDebianization, (~?=), debInfo)
-import Debian.Debianize.Optparse (handleBehaviorAdjustment, parseProgramArguments, parseProgramArguments', CommandLineOptions(..))
---import Debian.Debianize.InputCabal (dependOS, newFlags, buildEnv)
---import Debian.Debianize.Monad (liftCabal)
---import Debian.Debianize.Types.Atoms (newAtoms)
 import Debian.Pretty (ppShow)
 import Debian.Relation (SrcPkgName(..))
 import Debian.Repo.Fingerprint (RetrieveMethod(Debianize''), retrieveMethodMD5)
 import Debian.Repo.Internal.Repos (MonadRepos)
-import Debian.Repo.Prelude.Verbosity (qPutStrLn)
 import Debian.Repo.Rsync (rsyncOld)
 import Debian.Repo.Top (MonadTop, sub, runTopT)
 import Distribution.Verbosity (normal)
@@ -42,9 +37,7 @@ import Distribution.PackageDescription.Parse (readPackageDescription)
 import System.Directory (getDirectoryContents, createDirectoryIfMissing, getCurrentDirectory, setCurrentDirectory)
 import System.Environment (withArgs)
 import System.FilePath ((</>), takeDirectory)
-import System.Process (showCommandForUser)
 import System.Unix.Directory (removeRecursiveSafely)
-import System.Unix.Mount (withProcAndSys)
 
 documentation :: [String]
 documentation = [ "hackage:<name> or hackage:<name>=<version> - a target of this form"
