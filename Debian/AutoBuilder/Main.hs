@@ -30,7 +30,7 @@ import Debian.AutoBuilder.Types.Buildable (Target, Buildable(debianSourceTree), 
 import Debian.AutoBuilder.Types.Download (SomeDownload(..), Download(..))
 import qualified Debian.AutoBuilder.Types.CacheRec as C
 import qualified Debian.AutoBuilder.Types.Packages as P (foldPackages, spec, flags, post, PackageFlag(CabalPin))
-import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec, getParams, doHelp, usage, verbosity, showParams, showSources, flushAll, doSSHExport, uploadURI, report, buildRelease, ifSourcesChanged, requiredVersion, prettyPrint, doUpload, doNewDist, newDistProgram, createRelease, buildPackages, flushSource, extraRepos)
+import qualified Debian.AutoBuilder.Types.ParamRec as R (ParamRec, getParams, doHelp, usage, verbosity, showParams, showSources, flushAll, doSSHExport, uploadURI, report, buildRelease, ifSourcesChanged, requiredVersion, prettyPrint, doUpload, doNewDist, newDistProgram, createRelease, buildPackages, flushSource, extraRepos)
 import qualified Debian.AutoBuilder.Version as V
 import Debian.Control.Policy (debianPackageNames, debianSourcePackageName)
 import Debian.Debianize (CabalT, CabalInfo)
@@ -72,7 +72,7 @@ import System.Unix.Directory(removeRecursiveSafely)
 import System.Unix.Mount (withProcAndSys)
 import Text.Printf ( printf )
 
-main :: CabalT IO () -> (FilePath -> String -> P.ParamRec) -> IO ()
+main :: CabalT IO () -> (FilePath -> String -> R.ParamRec) -> IO ()
 main init myParams =
     do IO.hPutStrLn IO.stderr "Autobuilder starting..."
        args <- getArgs
@@ -80,8 +80,8 @@ main init myParams =
        -- Compute all the ParamRecs implied by the command line
        -- argument, using myParams to create each default ParamRec
        -- value.
-       let recs = P.getParams args (myParams home)
-       when (any P.doHelp recs) (IO.hPutStr IO.stderr (P.usage "Usage: ") >> exitWith ExitSuccess)
+       let recs = R.getParams args (myParams home)
+       when (any R.doHelp recs) (IO.hPutStr IO.stderr (R.usage "Usage: ") >> exitWith ExitSuccess)
        tops <- nub <$> mapM P.computeTopDir recs
        case tops of
          -- All the work for a given run must occur in the same top
@@ -112,12 +112,12 @@ isFailure _ = False
 
 -- |Process one set of parameters.  Usually there is only one, but there
 -- can be several which are run sequentially.  Stop on first failure.
-doParameterSet :: (Applicative m, MonadReposCached m, MonadMask m) => CabalT IO () -> [Failing (ExitCode, L.ByteString, L.ByteString)] -> P.ParamRec -> m [Failing (ExitCode, L.ByteString, L.ByteString)]
+doParameterSet :: (Applicative m, MonadReposCached m, MonadMask m) => CabalT IO () -> [Failing (ExitCode, L.ByteString, L.ByteString)] -> R.ParamRec -> m [Failing (ExitCode, L.ByteString, L.ByteString)]
 -- If one parameter set fails, don't try the rest.  Not sure if
 -- this is the right thing, but it is safe.
 doParameterSet _ results _ | any isFailure results = return results
 doParameterSet init results params = do
-  result <- withVerbosity (P.verbosity params)
+  result <- withVerbosity (R.verbosity params)
             (do top <- askTop
                 withLock (top </> "lockfile") (P.buildCache params >>= runParameterSet init))
               `catch` (\ (e :: SomeException) -> return (Failure [show e]))
@@ -139,21 +139,21 @@ runParameterSet init cache =
       top <- askTop
       liftIO doRequiredVersion
       doVerifyBuildRepo cache
-      when (P.showParams params) (withVerbosity 1 (liftIO doShowParams))
-      when (P.showSources params) (withVerbosity 1 (liftIO doShowSources))
-      when (P.flushAll params) (liftIO $ doFlush top)
+      when (R.showParams params) (withVerbosity 1 (liftIO doShowParams))
+      when (R.showSources params) (withVerbosity 1 (liftIO doShowSources))
+      when (R.flushAll params) (liftIO $ doFlush top)
       liftIO checkPermissions
-      maybe (return ()) (verifyUploadURI (P.doSSHExport $ params)) (P.uploadURI params)
+      maybe (return ()) (verifyUploadURI (R.doSSHExport $ params)) (R.uploadURI params)
       qPutStrLn "Preparing dependency environment"
-      extraSlices <- mapM (either (return . (: [])) (liftIO . expandPPASlice (P.baseRelease params))) (P.extraRepos params) >>= return . concat
+      extraSlices <- mapM (either (return . (: [])) (liftIO . expandPPASlice (P.baseRelease params))) (R.extraRepos params) >>= return . concat
       dependOS <- prepareDependOS params buildRelease extraSlices
-      let allTargets = filter (notZero . view _1) (P.foldPackages (\ p l -> (P.spec p, P.flags p, P.post p) : l) (P.buildPackages params) [])
+      let allTargets = filter (notZero . view _1) (P.foldPackages (\ p l -> (P.spec p, P.flags p, P.post p) : l) (R.buildPackages params) [])
       qPutStrLn "Preparing build environment"
       buildOS <- evalMonadOS (do sources <- osBaseDistro <$> getOS
-                                 updateCacheSources (P.ifSourcesChanged params) sources
-                                 when (P.report params) (ePutStrLn . doReport $ allTargets)
+                                 updateCacheSources (R.ifSourcesChanged params) sources
+                                 when (R.report params) (ePutStrLn . doReport $ allTargets)
                                  qPutStr ("\n" ++ showTargets allTargets ++ "\n")
-                                 getOS >>= prepareBuildOS (P.buildRelease params)) dependOS
+                                 getOS >>= prepareBuildOS (R.buildRelease params)) dependOS
       qPutStrLn "Retrieving all source code:\n"
       (failures, targets) <- partitionEithers <$> (mapM (uncurry (retrieveTarget dependOS (length allTargets))) (zip [1..] allTargets))
       when (not $ List.null $ failures) (error $ unlines $ "Some targets could not be retrieved:" : map ("  " ++) failures)
@@ -166,7 +166,7 @@ runParameterSet init cache =
       let poolSources = NamedSliceList { sliceListName = ReleaseName (relName (sliceListName buildRelease) ++ "-all")
                                        , sliceList = appendSliceLists [buildRepoSources, localSources] }
 
-      withAptImage (P.ifSourcesChanged params) poolSources $ do
+      withAptImage (R.ifSourcesChanged params) poolSources $ do
         buildResult <- buildTargets cache dependOS buildOS local targets
         uploadResult <- noisier 1 $ upload buildResult
         liftIO $ newDist (partitionFailing uploadResult)
@@ -183,7 +183,7 @@ runParameterSet init cache =
       retrieveTarget dependOS count index (method, flags, functions) = do
             liftIO (hPutStr stderr (printf "[%2d of %2d]" index count))
             res <- (Right <$> evalMonadOS (do download <- withProcAndSys (rootPath dependOS) $ retrieve init cache method flags functions
-                                              when (P.flushSource params) (flushSource download)
+                                              when (R.flushSource params) (flushSource download)
                                               buildable <- liftIO (asBuildable download)
                                               let (src, bins) = debianPackageNames (debianSourceTree buildable)
                                               liftIO (hPutStrLn stderr (printf " %s - %s:" (unSrcPkgName src) (limit 100 (show method) :: String)))
@@ -193,13 +193,13 @@ runParameterSet init cache =
       params = C.params cache
       baseRelease =  either (error . show) id (P.findSlice cache (P.baseRelease params))
       buildRepoSources = C.buildRepoSources cache
-      buildReleaseSources = releaseSlices (P.buildRelease params) (inexactPathSlices buildRepoSources)
-      buildRelease = NamedSliceList { sliceListName = ReleaseName (releaseName' (P.buildRelease params))
+      buildReleaseSources = releaseSlices (R.buildRelease params) (inexactPathSlices buildRepoSources)
+      buildRelease = NamedSliceList { sliceListName = ReleaseName (releaseName' (R.buildRelease params))
                                     , sliceList = appendSliceLists [sliceList baseRelease, buildReleaseSources] }
       doRequiredVersion :: IO ()
       doRequiredVersion =
           let abv = parseDebianVersion V.autoBuilderVersion
-              rqvs = P.requiredVersion params in
+              rqvs = R.requiredVersion params in
           case filter (\ (v, _) -> v > abv) rqvs of
             [] -> return ()
             reasons ->
@@ -210,9 +210,9 @@ runParameterSet init cache =
             printReason :: (DebianVersion, Maybe String) -> IO ()
             printReason (v, s) =
                 ePutStr (" Version >= " ++ show (prettyDebianVersion v) ++ " is required" ++ maybe "" ((++) ":") s)
-      doShowParams = ePutStr $ "Configuration parameters:\n" ++ P.prettyPrint params
+      doShowParams = ePutStr $ "Configuration parameters:\n" ++ R.prettyPrint params
       doShowSources =
-          either (error . show) doShow (P.findSlice cache (ReleaseName (releaseName' (P.buildRelease params))))
+          either (error . show) doShow (P.findSlice cache (ReleaseName (releaseName' (R.buildRelease params))))
           where
             doShow sources =
                 do qPutStrLn $ (relName . sliceListName $ sources) ++ ":"
@@ -230,32 +230,32 @@ runParameterSet init cache =
                            liftIO $ exitWith (ExitFailure 1)
       upload :: MonadRepos m => (LocalRepository, [Target SomeDownload]) -> m [Failing (ExitCode, L.ByteString, L.ByteString)]
       upload (repo, [])
-          | P.doUpload params =
-              case P.uploadURI params of
+          | R.doUpload params =
+              case R.uploadURI params of
                 Nothing -> error "Cannot upload, no 'Upload-URI' parameter given"
                 Just uri -> qPutStrLn "Uploading from local repository to remote" >> liftIO (uploadRemote repo uri)
           | True = return []
       upload (_, failed) =
           do let msg = ("Some targets failed to build:\n  " ++ intercalate "\n  " (map (ppShow . debianSourcePackageName) failed))
              qPutStrLn msg
-             case P.doUpload params of
+             case R.doUpload params of
                True -> qPutStrLn "Skipping upload."
                False -> return ()
              error msg
       newDist :: ([ErrorMsg], [(ExitCode, L.ByteString, L.ByteString)]) -> IO (Failing (ExitCode, L.ByteString, L.ByteString))
       newDist ([], _)
-          | P.doNewDist params =
-              case P.uploadURI params of
+          | R.doNewDist params =
+              case R.uploadURI params of
                 Just uri ->
                     do let p = case uriAuthority uri of
                                  Just auth ->
                                      let cmd = "ssh"
-                                         args = [uriUserInfo auth ++ uriRegName auth, P.newDistProgram params,
+                                         args = [uriUserInfo auth ++ uriRegName auth, R.newDistProgram params,
                                                  "--sign", "--root", uriPath uri] ++
-                                                (concat . map (\ rel -> ["--create", rel]) . P.createRelease $ params) in
+                                                (concat . map (\ rel -> ["--create", rel]) . R.createRelease $ params) in
                                      (proc cmd args)
                                  _ ->
-                                     let cmd = P.newDistProgram params
+                                     let cmd = R.newDistProgram params
                                          args = ["--sign", "--root", uriPath uri] in
                                      (proc cmd args)
                        qPutStrLn (" -> " ++ showCmdSpecForUser (cmdspec p))
@@ -279,18 +279,18 @@ runParameterSet init cache =
 doVerifyBuildRepo :: MonadRepos m => C.CacheRec -> m ()
 doVerifyBuildRepo cache =
     do repoNames <- mapM (foldRepository f g) (map sliceRepoKey . slices . C.buildRepoSources $ cache) >>= return . map releaseName . concat
-       when (not (any (== (P.buildRelease params)) repoNames))
-            (case P.uploadURI params of
+       when (not (any (== (R.buildRelease params)) repoNames))
+            (case R.uploadURI params of
                Nothing -> error "No uploadURI?"
                Just uri ->
                    let ssh = case uriAuthority uri of
                                Just auth -> uriUserInfo auth ++ uriRegName auth ++ uriPort auth
                                Nothing -> "user@hostname"
-                       rel = releaseName' (P.buildRelease params)
+                       rel = releaseName' (R.buildRelease params)
                        top = uriPath uri in -- "/home/autobuilder/deb-private/debian"
                    error $ "Build repository does not exist on remote server: " ++ rel ++ "\nUse newdist there to create it:" ++
-                           "\n  ssh " ++ ssh ++ " " ++ P.newDistProgram params ++ " --root=" ++ top ++ " --create-release=" ++ rel ++
-                           "\n  ssh " ++ ssh ++ " " ++ P.newDistProgram params ++ " --root=" ++ top ++ " --create-section=" ++ rel ++ ",main" ++
+                           "\n  ssh " ++ ssh ++ " " ++ R.newDistProgram params ++ " --root=" ++ top ++ " --create-release=" ++ rel ++
+                           "\n  ssh " ++ ssh ++ " " ++ R.newDistProgram params ++ " --root=" ++ top ++ " --create-section=" ++ rel ++ ",main" ++
                            "\nYou will also need to remove the local file ~/.autobuilder/repoCache." ++
                            "\n(Available: " ++ show repoNames ++ ")")
     where
