@@ -76,6 +76,7 @@ instance Download a => Download (ProcDL a) where
     -- A no op - as of now we always mount /proc and /sys
     buildWrapper _ = id -- getOS >>= \ os -> withProcAndSys (rootPath . osRoot $ os) go
     attrs = attrs . base
+    origTarball x = origTarball (base x)
 
 data DirDL
     = DirDL { dirMethod :: P.RetrieveMethod
