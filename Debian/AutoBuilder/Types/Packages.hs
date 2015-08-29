@@ -148,6 +148,8 @@ data PackageFlag
     -- ^ Build dependencies which should be added to the
     -- debian/control file via the --build-dep flag of cabal-debian.
     -- (Formerly ExtraDep.)
+    | SetupDep String
+    -- ^ A package required to run this package's setup script.
     | DevelDep String
     -- ^ Packages which should be added to the Depends entry for the
     -- dev package in the debian/control file via the --dev-dep flag

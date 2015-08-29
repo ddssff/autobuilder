@@ -148,6 +148,7 @@ instance CabalFlags P.PackageFlag where
     asCabalFlags (P.Maintainer s) = ["--maintainer", s]
     asCabalFlags (P.BuildDep s) = ["--build-dep", s]
     asCabalFlags (P.DevelDep s) = ["--build-dep", s, "--dev-dep", s]
+    asCabalFlags (P.SetupDep s) = []
     asCabalFlags (P.MapDep c d) = ["--dep-map", c ++ ":" ++ ppShow d]
     asCabalFlags (P.DebVersion s) = ["--deb-version", s]
     asCabalFlags (P.SkipVersion _) = []
