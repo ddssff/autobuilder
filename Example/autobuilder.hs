@@ -15,7 +15,7 @@ import Debian.Release (Arch(Binary))
 import Debian.Repo.Cache (SourcesChangedAction(SourcesChangedError))
 import Debian.Repo.Types (ReleaseName(ReleaseName, relName))
 import Debian.URI
-import Debian.Version (parseDebianVersion)
+import Debian.Version (parseDebianVersion')
 import System.Console.GetOpt
 import System.Environment (getArgs)
 import System.Exit
@@ -348,7 +348,7 @@ params myBuildRelease =
     , archList = [Binary "i386",Binary "amd64"]
     , newDistProgram = "newdist -v"
     -- Things that are probably obsolete
-    , requiredVersion = [(parseDebianVersion "5.2", Nothing)]
+    , requiredVersion = [(parseDebianVersion' "5.2", Nothing)]
     , debug = False
     , omitTargets = []
     , extraReleaseTag = Nothing

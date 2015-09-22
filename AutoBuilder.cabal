@@ -251,7 +251,7 @@ Library
     Other-Modules:
         Debian.Version.Internal
   else
-    Build-Depends: debian >= 3.87
+    Build-Depends: debian >= 3.89
 
 Test-Suite autobuilder-tests
   Type: exitcode-stdio-1.0
@@ -274,4 +274,4 @@ Test-Suite autobuilder-tests
   if flag (local-debian)
     Hs-Source-Dirs: debian-haskell
   else
-    Build-Depends: debian >= 3.87
+    Build-Depends: debian >= 3.89

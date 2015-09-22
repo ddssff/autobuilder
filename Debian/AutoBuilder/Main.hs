@@ -58,7 +58,7 @@ import Debian.Repo.Top (MonadTop(askTop))
 import Debian.Repo.EnvPath (EnvPath(..))
 import Debian.Repo.LocalRepository (LocalRepository, repoRoot)
 import Debian.URI(URI(uriPath, uriAuthority), URIAuth(uriUserInfo, uriRegName, uriPort), parseURI)
-import Debian.Version(DebianVersion, parseDebianVersion, prettyDebianVersion)
+import Debian.Version(DebianVersion, parseDebianVersion', prettyDebianVersion)
 import Extra.Lock(withLock)
 import Extra.Misc(checkSuperUser)
 import Prelude hiding (null)
@@ -200,7 +200,7 @@ runParameterSet init cache =
                                     , sliceList = appendSliceLists [sliceList baseRelease, buildReleaseSources] }
       doRequiredVersion :: IO ()
       doRequiredVersion =
-          let abv = parseDebianVersion V.autoBuilderVersion
+          let abv = parseDebianVersion' V.autoBuilderVersion
               rqvs = R.requiredVersion params in
           case filter (\ (v, _) -> v > abv) rqvs of
             [] -> return ()

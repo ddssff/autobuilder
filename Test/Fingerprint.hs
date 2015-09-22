@@ -33,32 +33,32 @@ fingerprint0a =
     Fingerprint
     { method = Dir "/tmp/foo"
     , retrievedAttributes = Data.Set.fromList []
-    , upstreamVersion = parseDebianVersion ("1.0" :: String)
+    , upstreamVersion = parseDebianVersion' ("1.0" :: String)
     , buildDependencyVersions =
         Data.Set.fromList [PackageID {packageName = BinPkgName {unBinPkgName = "ghc"},
-                                      packageVersion = (parseDebianVersion ("7.8.20140710-2+seereason1~precise1" :: String))}] }
+                                      packageVersion = (parseDebianVersion' ("7.8.20140710-2+seereason1~precise1" :: String))}] }
 
 fingerprint0b =
     Fingerprint
     { method = Dir "/tmp/foo"
-    , upstreamVersion = parseDebianVersion ("1.0" :: String)
+    , upstreamVersion = parseDebianVersion' ("1.0" :: String)
     , retrievedAttributes = Data.Set.fromList [GitCommit "520591876ee57dbecba1b2de602dc79f4f67ecce",
                                                GitCommit "907be0999fb8801d9560f90f39fb2ef6f8ef7c6b"]
     , buildDependencyVersions = Data.Set.fromList [PackageID {packageName = BinPkgName {unBinPkgName = "ghc"},
-                                                              packageVersion = (parseDebianVersion ("7.8.20140710-2+seereason1~precise1" :: String))}] }
+                                                              packageVersion = (parseDebianVersion' ("7.8.20140710-2+seereason1~precise1" :: String))}] }
 -- no retrieve attributes
 
 fingerprint1 =
     Fingerprint
     { method = cabalMethod
-    , upstreamVersion = parseDebianVersion ("1.21.0.0-2" :: String)
+    , upstreamVersion = parseDebianVersion' ("1.21.0.0-2" :: String)
     , retrievedAttributes = Data.Set.fromList []
     , buildDependencyVersions = Data.Set.fromList deps }
 
 fingerprint2 =
     Fingerprint
     { method = cabalMethod
-    , upstreamVersion = parseDebianVersion ("1.21.0.0-2" :: String)
+    , upstreamVersion = parseDebianVersion' ("1.21.0.0-2" :: String)
     , retrievedAttributes = Data.Set.fromList attrs
     , buildDependencyVersions = Data.Set.fromList deps }
 
@@ -68,38 +68,38 @@ cabalMethod =
 
 attrs = [GitCommit "520591876ee57dbecba1b2de602dc79f4f67ecce",GitCommit "907be0999fb8801d9560f90f39fb2ef6f8ef7c6b"]
 
-deps = [PackageID {packageName = BinPkgName {unBinPkgName = "base-files"}, packageVersion = (Debian.Version.parseDebianVersion ("6.5ubuntu6.8" :: String))}
-       ,PackageID {packageName = BinPkgName {unBinPkgName = "base-passwd"}, packageVersion = (Debian.Version.parseDebianVersion ("3.5.24" :: String))}
-       ,PackageID {packageName = BinPkgName {unBinPkgName = "bash"}, packageVersion = (Debian.Version.parseDebianVersion ("4.2-2ubuntu2.1" :: String))}
-       ,PackageID {packageName = BinPkgName {unBinPkgName = "bsdutils"}, packageVersion = (Debian.Version.parseDebianVersion ("1:2.20.1-1ubuntu3.1" :: String))}
-       ,PackageID {packageName = BinPkgName {unBinPkgName = "cdbs"}, packageVersion = (Debian.Version.parseDebianVersion ("0.4.100ubuntu2" :: String))}
-       ,PackageID {packageName = BinPkgName {unBinPkgName = "coreutils"}, packageVersion = (Debian.Version.parseDebianVersion ("8.13-3ubuntu3.2" :: String))}
-       ,PackageID {packageName = BinPkgName {unBinPkgName = "dash"}, packageVersion = (Debian.Version.parseDebianVersion ("0.5.7-2ubuntu2" :: String))}
-       ,PackageID {packageName = BinPkgName {unBinPkgName = "debhelper"}, packageVersion = (Debian.Version.parseDebianVersion ("9.20120115ubuntu3" :: String))}
-       ,PackageID {packageName = BinPkgName {unBinPkgName = "debianutils"}, packageVersion = (Debian.Version.parseDebianVersion ("4.2.1ubuntu2" :: String))}
-       ,PackageID {packageName = BinPkgName {unBinPkgName = "diffutils"}, packageVersion = (Debian.Version.parseDebianVersion ("1:3.2-1ubuntu1" :: String))}
-       ,PackageID {packageName = BinPkgName {unBinPkgName = "dpkg"}, packageVersion = (Debian.Version.parseDebianVersion ("1.16.1.2ubuntu7.5" :: String))}
-       ,PackageID {packageName = BinPkgName {unBinPkgName = "dpkg-dev"}, packageVersion = (Debian.Version.parseDebianVersion ("1.16.1.2ubuntu7.5" :: String))}
-       ,PackageID {packageName = BinPkgName {unBinPkgName = "e2fsprogs"}, packageVersion = (Debian.Version.parseDebianVersion ("1.42-1ubuntu2" :: String))}
-       ,PackageID {packageName = BinPkgName {unBinPkgName = "findutils"}, packageVersion = (Debian.Version.parseDebianVersion ("4.4.2-4ubuntu1" :: String))}
-       ,PackageID {packageName = BinPkgName {unBinPkgName = "g++"}, packageVersion = (Debian.Version.parseDebianVersion ("4:4.6.3-1ubuntu5" :: String))}
-       ,PackageID {packageName = BinPkgName {unBinPkgName = "gcc"}, packageVersion = (Debian.Version.parseDebianVersion ("4:4.6.3-1ubuntu5" :: String))}
-       ,PackageID {packageName = BinPkgName {unBinPkgName = "ghc"}, packageVersion = (Debian.Version.parseDebianVersion ("7.8.20140710-2+seereason1~precise1" :: String))}
-       ,PackageID {packageName = BinPkgName {unBinPkgName = "ghc-doc"}, packageVersion = (Debian.Version.parseDebianVersion ("7.8.20140710-2+seereason1~precise1" :: String))}
-       ,PackageID {packageName = BinPkgName {unBinPkgName = "ghc-prof"}, packageVersion = (Debian.Version.parseDebianVersion ("7.8.20140710-2+seereason1~precise1" :: String))}
-       ,PackageID {packageName = BinPkgName {unBinPkgName = "grep"}, packageVersion = (Debian.Version.parseDebianVersion ("2.10-1" :: String))}
-       ,PackageID {packageName = BinPkgName {unBinPkgName = "gzip"}, packageVersion = (Debian.Version.parseDebianVersion ("1.4-1ubuntu2" :: String))}
-       ,PackageID {packageName = BinPkgName {unBinPkgName = "haskell-devscripts"}, packageVersion = (Debian.Version.parseDebianVersion ("0.8.21.3-0+seereason1~precise1" :: String))}
-       ,PackageID {packageName = BinPkgName {unBinPkgName = "hostname"}, packageVersion = (Debian.Version.parseDebianVersion ("3.06ubuntu1" :: String))}
-       ,PackageID {packageName = BinPkgName {unBinPkgName = "libc6-dev"}, packageVersion = (Debian.Version.parseDebianVersion ("2.15-0ubuntu10.6" :: String))}
-       ,PackageID {packageName = BinPkgName {unBinPkgName = "login"}, packageVersion = (Debian.Version.parseDebianVersion ("1:4.1.4.2+svn3283-3ubuntu5.1" :: String))}
-       ,PackageID {packageName = BinPkgName {unBinPkgName = "make"}, packageVersion = (Debian.Version.parseDebianVersion ("3.81-8.1ubuntu1.1" :: String))}
-       ,PackageID {packageName = BinPkgName {unBinPkgName = "mount"}, packageVersion = (Debian.Version.parseDebianVersion ("2.20.1-1ubuntu3.1" :: String))}
-       ,PackageID {packageName = BinPkgName {unBinPkgName = "ncurses-base"}, packageVersion = (Debian.Version.parseDebianVersion ("5.9-4" :: String))}
-       ,PackageID {packageName = BinPkgName {unBinPkgName = "ncurses-bin"}, packageVersion = (Debian.Version.parseDebianVersion ("5.9-4" :: String))}
-       ,PackageID {packageName = BinPkgName {unBinPkgName = "perl-base"}, packageVersion = (Debian.Version.parseDebianVersion ("5.14.2-6ubuntu2.4" :: String))}
-       ,PackageID {packageName = BinPkgName {unBinPkgName = "python-minimal"}, packageVersion = (Debian.Version.parseDebianVersion ("2.7.3-0ubuntu2.2" :: String))}
-       ,PackageID {packageName = BinPkgName {unBinPkgName = "sed"}, packageVersion = (Debian.Version.parseDebianVersion ("4.2.1-9" :: String))}
-       ,PackageID {packageName = BinPkgName {unBinPkgName = "tar"}, packageVersion = (Debian.Version.parseDebianVersion ("1.26-4ubuntu1" :: String))}
-       ,PackageID {packageName = BinPkgName {unBinPkgName = "util-linux"}, packageVersion = (Debian.Version.parseDebianVersion ("2.20.1-1ubuntu3.1" :: String))}
+deps = [PackageID {packageName = BinPkgName {unBinPkgName = "base-files"}, packageVersion = (Debian.Version.parseDebianVersion' ("6.5ubuntu6.8" :: String))}
+       ,PackageID {packageName = BinPkgName {unBinPkgName = "base-passwd"}, packageVersion = (Debian.Version.parseDebianVersion' ("3.5.24" :: String))}
+       ,PackageID {packageName = BinPkgName {unBinPkgName = "bash"}, packageVersion = (Debian.Version.parseDebianVersion' ("4.2-2ubuntu2.1" :: String))}
+       ,PackageID {packageName = BinPkgName {unBinPkgName = "bsdutils"}, packageVersion = (Debian.Version.parseDebianVersion' ("1:2.20.1-1ubuntu3.1" :: String))}
+       ,PackageID {packageName = BinPkgName {unBinPkgName = "cdbs"}, packageVersion = (Debian.Version.parseDebianVersion' ("0.4.100ubuntu2" :: String))}
+       ,PackageID {packageName = BinPkgName {unBinPkgName = "coreutils"}, packageVersion = (Debian.Version.parseDebianVersion' ("8.13-3ubuntu3.2" :: String))}
+       ,PackageID {packageName = BinPkgName {unBinPkgName = "dash"}, packageVersion = (Debian.Version.parseDebianVersion' ("0.5.7-2ubuntu2" :: String))}
+       ,PackageID {packageName = BinPkgName {unBinPkgName = "debhelper"}, packageVersion = (Debian.Version.parseDebianVersion' ("9.20120115ubuntu3" :: String))}
+       ,PackageID {packageName = BinPkgName {unBinPkgName = "debianutils"}, packageVersion = (Debian.Version.parseDebianVersion' ("4.2.1ubuntu2" :: String))}
+       ,PackageID {packageName = BinPkgName {unBinPkgName = "diffutils"}, packageVersion = (Debian.Version.parseDebianVersion' ("1:3.2-1ubuntu1" :: String))}
+       ,PackageID {packageName = BinPkgName {unBinPkgName = "dpkg"}, packageVersion = (Debian.Version.parseDebianVersion' ("1.16.1.2ubuntu7.5" :: String))}
+       ,PackageID {packageName = BinPkgName {unBinPkgName = "dpkg-dev"}, packageVersion = (Debian.Version.parseDebianVersion' ("1.16.1.2ubuntu7.5" :: String))}
+       ,PackageID {packageName = BinPkgName {unBinPkgName = "e2fsprogs"}, packageVersion = (Debian.Version.parseDebianVersion' ("1.42-1ubuntu2" :: String))}
+       ,PackageID {packageName = BinPkgName {unBinPkgName = "findutils"}, packageVersion = (Debian.Version.parseDebianVersion' ("4.4.2-4ubuntu1" :: String))}
+       ,PackageID {packageName = BinPkgName {unBinPkgName = "g++"}, packageVersion = (Debian.Version.parseDebianVersion' ("4:4.6.3-1ubuntu5" :: String))}
+       ,PackageID {packageName = BinPkgName {unBinPkgName = "gcc"}, packageVersion = (Debian.Version.parseDebianVersion' ("4:4.6.3-1ubuntu5" :: String))}
+       ,PackageID {packageName = BinPkgName {unBinPkgName = "ghc"}, packageVersion = (Debian.Version.parseDebianVersion' ("7.8.20140710-2+seereason1~precise1" :: String))}
+       ,PackageID {packageName = BinPkgName {unBinPkgName = "ghc-doc"}, packageVersion = (Debian.Version.parseDebianVersion' ("7.8.20140710-2+seereason1~precise1" :: String))}
+       ,PackageID {packageName = BinPkgName {unBinPkgName = "ghc-prof"}, packageVersion = (Debian.Version.parseDebianVersion' ("7.8.20140710-2+seereason1~precise1" :: String))}
+       ,PackageID {packageName = BinPkgName {unBinPkgName = "grep"}, packageVersion = (Debian.Version.parseDebianVersion' ("2.10-1" :: String))}
+       ,PackageID {packageName = BinPkgName {unBinPkgName = "gzip"}, packageVersion = (Debian.Version.parseDebianVersion' ("1.4-1ubuntu2" :: String))}
+       ,PackageID {packageName = BinPkgName {unBinPkgName = "haskell-devscripts"}, packageVersion = (Debian.Version.parseDebianVersion' ("0.8.21.3-0+seereason1~precise1" :: String))}
+       ,PackageID {packageName = BinPkgName {unBinPkgName = "hostname"}, packageVersion = (Debian.Version.parseDebianVersion' ("3.06ubuntu1" :: String))}
+       ,PackageID {packageName = BinPkgName {unBinPkgName = "libc6-dev"}, packageVersion = (Debian.Version.parseDebianVersion' ("2.15-0ubuntu10.6" :: String))}
+       ,PackageID {packageName = BinPkgName {unBinPkgName = "login"}, packageVersion = (Debian.Version.parseDebianVersion' ("1:4.1.4.2+svn3283-3ubuntu5.1" :: String))}
+       ,PackageID {packageName = BinPkgName {unBinPkgName = "make"}, packageVersion = (Debian.Version.parseDebianVersion' ("3.81-8.1ubuntu1.1" :: String))}
+       ,PackageID {packageName = BinPkgName {unBinPkgName = "mount"}, packageVersion = (Debian.Version.parseDebianVersion' ("2.20.1-1ubuntu3.1" :: String))}
+       ,PackageID {packageName = BinPkgName {unBinPkgName = "ncurses-base"}, packageVersion = (Debian.Version.parseDebianVersion' ("5.9-4" :: String))}
+       ,PackageID {packageName = BinPkgName {unBinPkgName = "ncurses-bin"}, packageVersion = (Debian.Version.parseDebianVersion' ("5.9-4" :: String))}
+       ,PackageID {packageName = BinPkgName {unBinPkgName = "perl-base"}, packageVersion = (Debian.Version.parseDebianVersion' ("5.14.2-6ubuntu2.4" :: String))}
+       ,PackageID {packageName = BinPkgName {unBinPkgName = "python-minimal"}, packageVersion = (Debian.Version.parseDebianVersion' ("2.7.3-0ubuntu2.2" :: String))}
+       ,PackageID {packageName = BinPkgName {unBinPkgName = "sed"}, packageVersion = (Debian.Version.parseDebianVersion' ("4.2.1-9" :: String))}
+       ,PackageID {packageName = BinPkgName {unBinPkgName = "tar"}, packageVersion = (Debian.Version.parseDebianVersion' ("1.26-4ubuntu1" :: String))}
+       ,PackageID {packageName = BinPkgName {unBinPkgName = "util-linux"}, packageVersion = (Debian.Version.parseDebianVersion' ("2.20.1-1ubuntu3.1" :: String))}
        ]

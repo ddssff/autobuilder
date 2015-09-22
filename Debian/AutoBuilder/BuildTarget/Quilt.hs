@@ -240,8 +240,8 @@ mergeChangelogs baseText patchText =
           where newEntry = entry {logVersion = buildQuiltVersion (logVersion entry) patchVersion}
       buildQuiltVersion baseVersion patchVersion =
           case Debian.Version.revision baseVersion of
-            Just _ -> parseDebianVersion (show (prettyDebianVersion baseVersion) ++ "++" ++ show (prettyDebianVersion patchVersion))
-            Nothing -> parseDebianVersion (show (prettyDebianVersion baseVersion) ++ "-" ++ show (prettyDebianVersion patchVersion))
+            Just _ -> parseDebianVersion' (show (prettyDebianVersion baseVersion) ++ "++" ++ show (prettyDebianVersion patchVersion))
+            Nothing -> parseDebianVersion' (show (prettyDebianVersion baseVersion) ++ "-" ++ show (prettyDebianVersion patchVersion))
 
 partitionChangelog :: UTCTime -> String -> ([ChangeLogEntry], String)
 partitionChangelog date text =

@@ -13,7 +13,7 @@ import Debian.Release (ReleaseName(ReleaseName, relName))
 import Debian.Repo (SourcesChangedAction(SourcesChangedError))
 import Debian.Sources (DebSource, parseSourceLine)
 import Debian.URI
-import Debian.Version (parseDebianVersion)
+import Debian.Version (parseDebianVersion')
 import Prelude hiding (map)
 import System.FilePath ((</>))
 
@@ -107,7 +107,7 @@ defaultParams myBuildRelease -- e.g. wheezy or precise
     -- 6.18 renames type Spec -> RetrieveMethod
     -- 6.35 added the CabalDebian flag
     -- 6.61 adds this defaultParams function
-    , requiredVersion = [(parseDebianVersion ("6.60" :: String), Nothing)]
+    , requiredVersion = [(parseDebianVersion' ("6.60" :: String), Nothing)]
     , hackageServer = "hackage.haskell.org"
     -- Things that are probably obsolete
     , debug = False

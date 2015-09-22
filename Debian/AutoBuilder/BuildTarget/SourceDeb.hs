@@ -53,7 +53,7 @@ prepare _cache method flags base =
     where
       top = T.getTop base
       makeTarget dscInfo dscName =
-          case (S.fieldValue "Source" dscInfo, maybe Nothing (Just . V.parseDebianVersion)
+          case (S.fieldValue "Source" dscInfo, maybe Nothing (Just . V.parseDebianVersion')
                      (S.fieldValue "Version" dscInfo)) of
             (Just _package, Just _version) ->
                 return $ T.SomeDownload $ SourceDebDL { method = method
@@ -65,6 +65,6 @@ prepare _cache method flags base =
       compareVersions (name2, info2) (name1, info1) =
           case (info1, info2) of
             (Right (S.Control (para1 : _)), Right (S.Control (para2 : _))) ->
-                compare (maybe Nothing (Just . V.parseDebianVersion) (S.fieldValue "Version" para1))
-                        (maybe Nothing (Just . V.parseDebianVersion) (S.fieldValue "Version" para2))
+                compare (maybe Nothing (Just . V.parseDebianVersion') (S.fieldValue "Version" para1))
+                        (maybe Nothing (Just . V.parseDebianVersion') (S.fieldValue "Version" para2))
             _  -> error $ "Invalid .dsc file: " ++ name1 ++ " or " ++ name2

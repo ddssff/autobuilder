@@ -18,7 +18,7 @@ import Debian.Repo.SourceTree (topdir, DebianBuildTree, entry, debTree')
 import Debian.Repo.Internal.Repos (MonadRepos)
 import Debian.Repo.State.AptImage (withAptImage, prepareSource)
 import Debian.Repo.Top (MonadTop)
-import Debian.Version (parseDebianVersion, prettyDebianVersion)
+import Debian.Version (parseDebianVersion', prettyDebianVersion)
 import System.Unix.Directory (removeRecursiveSafely)
 
 documentation = [ "apt:<distribution>:<packagename> - a target of this form looks up"
@@ -68,7 +68,7 @@ prepare cache method flags dist package =
       dist' = ReleaseName dist
       version' = case mapMaybe P.aptPin flags of
                    [] -> Nothing
-                   [v] -> Just (parseDebianVersion v)
+                   [v] -> Just (parseDebianVersion' v)
                    vs -> error ("Conflicting pin versions for apt-get: " ++ show vs)
       findRelease distros dist =
           case filter ((== dist) . sliceListName) distros of

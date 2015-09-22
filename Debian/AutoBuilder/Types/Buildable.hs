@@ -84,8 +84,8 @@ asBuildable x =
                         findDebianBuildTrees (getTop x) >>= \ trees ->
                         case trees of
                           [tree] -> return (Buildable { download = x, debianSourceTree = debTree' tree})
-                          [] -> error $ "No build trees found in " ++ getTop x
-                          _ -> error $ "Multiple build trees found in " ++ getTop x)
+                          [] -> error $ "No Debian build trees found in " ++ getTop x
+                          _ -> error $ "Multiple Debian build trees found in " ++ getTop x)
                    (\ tree -> return (Buildable { download = x, debianSourceTree = tree}))
 
 -- | Prevent the appearance of a new binary package from

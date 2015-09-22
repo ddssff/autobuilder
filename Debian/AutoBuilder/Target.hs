@@ -83,7 +83,7 @@ import Debian.Repo.State.OSImage (osSourcePackages, osBinaryPackages, updateOS, 
 import Debian.Repo.State.Package (scanIncoming, InstallResult(Ok), showErrors, MonadInstall, evalInstall)
 import Debian.Repo.Top (MonadTop)
 import Debian.Time (getCurrentLocalRFC822Time)
-import Debian.Version (DebianVersion, parseDebianVersion, prettyDebianVersion)
+import Debian.Version (DebianVersion, parseDebianVersion', prettyDebianVersion)
 import Debian.VersionPolicy (parseTag, setTag)
 import Extra.Files (replaceFile)
 import Extra.List (dropPrefix)
@@ -582,14 +582,14 @@ getReleaseControlInfo target = do
 
       sourcePackageVersion package =
           case ((fieldValue "Package" . sourceParagraph $ package), (fieldValue "Version" . sourceParagraph $ package)) of
-            (Just name, Just version) -> (T.unpack name, parseDebianVersion (T.unpack version))
+            (Just name, Just version) -> (T.unpack name, parseDebianVersion' (T.unpack version))
             _ -> error "Missing Package or Version field"
       binaryPackageVersion package =
           case ((fieldValue "Package" . packageInfo $ package), (fieldValue "Version" . packageInfo $ package)) of
-            (Just name, Just version) -> (BinPkgName (T.unpack name), parseDebianVersion (T.unpack version))
+            (Just name, Just version) -> (BinPkgName (T.unpack name), parseDebianVersion' (T.unpack version))
             _ -> error "Missing Package or Version field"
       -- compareVersion a b = case ((fieldValue "Version" . sourceParagraph $ a), (fieldValue "Version" . sourceParagraph $ b)) of
-      --                        (Just a', Just b') -> compare (parseDebianVersion . T.unpack $ b') (parseDebianVersion . T.unpack $ a')
+      --                        (Just a', Just b') -> compare (parseDebianVersion' . T.unpack $ b') (parseDebianVersion . T.unpack $ a')
       --                        _ -> error "Missing Version field"
       -- The source package is complete if the correct versions of the
       -- required binary packages are all available, either as debs or
@@ -648,7 +648,7 @@ computeNewVersion :: (MonadApt m, MonadRepos m, MonadOS m, MonadMask m, T.Downlo
                      P.CacheRec -> Target a -> ReleaseControlInfo -> m (Failing DebianVersion)
 computeNewVersion cache target info = do
   let current = if buildTrumped then Nothing else releaseSourcePackage info
-      currentVersion = maybe Nothing (Just . parseDebianVersion . T.unpack) (maybe Nothing (fieldValue "Version" . sourceParagraph) current)
+      currentVersion = maybe Nothing (Just . parseDebianVersion' . T.unpack) (maybe Nothing (fieldValue "Version" . sourceParagraph) current)
       checkVersion :: DebianVersion -> Failing DebianVersion
       checkVersion result =
           maybe (Success result)
@@ -694,7 +694,7 @@ computeNewVersion cache target info = do
       sourceVersion = logVersion sourceLog
       sourceLog = entry . cleanSource $ target
       getVersion paragraph =
-          maybe Nothing (Just . parseDebianVersion . T.unpack) (fieldValue "Version" . sourceParagraph $ paragraph)
+          maybe Nothing (Just . parseDebianVersion' . T.unpack) (fieldValue "Version" . sourceParagraph $ paragraph)
       buildTrumped = elem (debianSourcePackageName target) (P.buildTrumped (P.params cache))
 
 -- | Return the first build dependency solution if it can be computed.
