@@ -7,7 +7,8 @@ module Debian.AutoBuilder.Types.Packages
     , Package(..), post, spec, flags
     , GroupName(..)
     , TSt
-    , TargetState, release, deps, nodes
+    , TargetState, release, deps, nodes, groups
+    , inGroup, inGroups
     , targetState
     , depends
     , foldPackages
@@ -57,24 +58,26 @@ import Control.Applicative (pure, (<$>))
 #endif
 import Control.Exception (SomeException, try)
 import Control.Lens (makeLenses, over, use, view, (%=))
+import Control.Monad (foldM)
 import Control.Monad.State (State)
 import Data.ByteString (ByteString)
 import Data.Function (on)
 import Data.Generics (Data, Typeable)
 import Data.Graph.Inductive (Node, LNode, insEdge, insNode, lab, mkGraph, reachable)
 import Data.Graph.Inductive.PatriciaTree (Gr)
-import Data.Map as Map (insert, lookup, Map)
+import Data.Map as Map (insert, insertWith, lookup, Map)
 import Data.Maybe (fromJust)
 #if !MIN_VERSION_base(4,8,0)
 import Data.Monoid (Monoid(mempty, mappend))
 #endif
-import Data.Set as Set (fromList, Set, singleton, toList, unions)
+import Data.Set as Set (fromList, Set, singleton, toList, union, unions)
 import Data.String (IsString(fromString))
 import Debian.Debianize (CabalInfo)
-import Debian.Relation (Relations)
+import Debian.Relation as Debian (Relations, SrcPkgName)
 import Debian.Releases (Release(..))
 import Debian.Repo (DebianSourceTree, findDebianSourceTrees)
 import Debian.Repo.Fingerprint (RetrieveMethod(..), GitSpec(..))
+import Distribution.Package as Cabal (PackageName)
 import System.FilePath ((</>))
 
 -- | A type for the group name of a Packages record, used to reference
@@ -99,6 +102,7 @@ data Packages
       } deriving (Show, Data, Typeable)
     -- deriving (Show, Eq, Ord)
 
+-- | Collected information about a package.
 data Package
     = Package
       { _spec :: RetrieveMethod
@@ -121,6 +125,7 @@ data TargetState
       , _nodes :: Map NodeLabel Node
       , _next :: Node
       , _deps :: Gr NodeLabel EdgeLabel
+      , _groups :: Map GroupName (Set Package)
       }
 
 type TSt = State TargetState
@@ -198,10 +203,20 @@ data PackageFlag
     | KeepRCS
     -- ^ Don't clean out the subdirectory containing the revision control info,
     -- i.e. _darcs or .git or whatever.
+    | InGroup GroupName
+    -- ^ Include this package in the named group
     deriving (Show, Data, Typeable, Eq, Ord)
 
 $(makeLenses ''Package)
 $(makeLenses ''TargetState)
+
+-- | Add a package to a package group
+inGroup :: TSt Package -> GroupName -> TSt Package
+inGroup p g = p >>= \p' -> groups %= Map.insertWith Set.union g (singleton p') >> p
+
+-- | Add a list of packages to a package group
+inGroups :: TSt Package -> [GroupName] -> TSt Package
+inGroups p gs = mapM_ (inGroup p) gs >> p
 
 instance Eq Package where
     a == b = compare a b == EQ
@@ -210,7 +225,12 @@ instance Ord Package where
     compare = compare `on` (\x -> (view spec x, view flags x))
 
 targetState :: Release -> FilePath -> TargetState
-targetState rel path = TargetState {_release = rel, _home = path, _nodes = mempty, _next = 1, _deps = mkGraph [] []}
+targetState rel path = TargetState { _release = rel
+                                   , _home = path
+                                   , _nodes = mempty
+                                   , _next = 1
+                                   , _deps = mkGraph [] []
+                                   , _groups = mempty }
 
 -- | Expand dependency list and turn a Package into a Packages.
 aPackage :: TSt Package -> TSt Packages
@@ -233,14 +253,14 @@ plist ps = mapM reach ps >>= return . Set.toList . Set.unions
       -- tr _p n ns = trace ("edges: " ++ show n ++ " -> " ++ show ns) ns
 
 -- | If necessary, allocate a new Node and associate it with the argument package.
-node :: TSt NodeLabel -> TSt (LNode NodeLabel)
+node :: NodeLabel -> TSt (LNode NodeLabel)
 node pkg = do
-  (,) <$> node' <*> pkg
+  (,) <$> node' <*> pure pkg
     where
       node' = do
-        mn <- Map.lookup <$> pkg <*> use nodes
+        mn <- Map.lookup <$> pure pkg <*> use nodes
         maybe (do n' <- use next
-                  pkg' <- pkg
+                  pkg' <- pure pkg
                   next %= succ
                   nodes %= Map.insert pkg' n'
                   deps %= insNode (n', pkg')
@@ -249,21 +269,25 @@ node pkg = do
               mn
 
 -- | Record the fact that PKG has a build dependency on DEP.
-edge :: TSt NodeLabel -> TSt NodeLabel -> TSt ()
+edge :: NodeLabel -> NodeLabel -> TSt ()
 edge pkg dep = do
   (pkgNode, _) <- node pkg
   (depNode, _) <- node dep
   deps %= insEdge (pkgNode, depNode, ())
 
 -- | Like edge, but also adds self edges.
-edge' :: TSt NodeLabel -> TSt NodeLabel -> TSt ()
+edge' :: NodeLabel -> NodeLabel -> TSt ()
 edge' pkg dep = do
   edge pkg pkg
   edge dep dep
   edge pkg dep
 
-depends :: TSt Package -> [TSt Package] -> TSt Package
-depends p ps = mapM_ (edge' p) ps >> p
+-- A bit of a monad-y mess
+-- depends :: TSt Package -> [TSt Package] -> TSt Package
+-- depends p ps = mapM_ (edge' p) ps >> p
+
+depends :: Package -> [Package] -> TSt ()
+depends p ps = mapM_ (edge' p) ps
 
 -- instance Eq Packages where
 --     (APackage p1) == (APackage p2) = p1 == p2
@@ -322,6 +346,7 @@ filterPackages f xs =
 packageCount :: Packages -> Int
 packageCount ps = foldPackages (\ _ n -> n + 1) ps 0
 
+-- | Apply a function to every Package embedded in a Packages.
 mapPackages :: Monad m => (m Package -> m Package) -> m Packages -> m Packages
 mapPackages f ps =
     ps >>= \ x ->
