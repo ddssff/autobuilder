@@ -119,11 +119,10 @@ prepare method flags theUri gitspecs =
                    setBranch dir
       setBranch dir (Right (ExitSuccess, _, _)) =
           let branch = mapMaybe (\ x -> case x of (Branch s) -> Just s; _ -> Nothing) gitspecs in
-          case branch of
-            [] -> readProcessVE (proc "git" ["checkout", "-f", (case branch of
-                                                                  [] -> "master"
-                                                                  [x] -> x
-                                                                  _ -> error "Multiple branches")]) {cwd = Just dir} B.empty >>= test1
+          readProcessVE (proc "git" ["checkout", "-f", (case branch of
+                                                          [] -> "master"
+                                                          [x] -> x
+                                                          _ -> error "Multiple branches")]) {cwd = Just dir} B.empty >>= test1
 
       cloneSource dir =
           do let (parent, _) = splitFileName dir
