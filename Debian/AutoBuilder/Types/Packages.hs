@@ -7,7 +7,7 @@ module Debian.AutoBuilder.Types.Packages
     , Package(..), post, spec, flags
     , GroupName(..)
     , TSt
-    , TargetState, release, deps, nodes, groups
+    , TargetState, release, deps, nodes, packageMap, groups
     , inGroup, inGroups
     , targetState
     , depends
@@ -102,10 +102,18 @@ data Packages
       } deriving (Show, Data, Typeable)
     -- deriving (Show, Eq, Ord)
 
+newtype PackageId = PackageId Int deriving (Eq, Ord, Read, Show, Data, Typeable)
+
+instance Enum PackageId where
+    toEnum = PackageId
+    fromEnum (PackageId n) = n
+    succ (PackageId n) = PackageId (succ n)
+
 -- | Collected information about a package.
 data Package
     = Package
-      { _spec :: RetrieveMethod
+      { _id :: PackageId
+      , _spec :: RetrieveMethod
       -- ^ This value describes the method used to download the
       -- package's source code.
       , _flags :: [PackageFlag]
@@ -125,7 +133,9 @@ data TargetState
       , _nodes :: Map NodeLabel Node
       , _next :: Node
       , _deps :: Gr NodeLabel EdgeLabel
+      , _nextPackageId :: PackageId
       , _groups :: Map GroupName (Set Package)
+      , _packageMap :: Map PackageId Package
       }
 
 type TSt = State TargetState
@@ -225,12 +235,17 @@ instance Ord Package where
     compare = compare `on` (\x -> (view spec x, view flags x))
 
 targetState :: Release -> FilePath -> TargetState
-targetState rel path = TargetState { _release = rel
+targetState rel path = TargetState { _nextPackageId = PackageId 1
+                                   , _packageMap = mempty
+                                   , _groups = mempty
+                                   , _release = rel
                                    , _home = path
                                    , _nodes = mempty
                                    , _next = 1
-                                   , _deps = mkGraph [] []
-                                   , _groups = mempty }
+                                   , _deps = mkGraph [] [] }
+
+newId :: TSt PackageId
+newId = use nextPackageId >>= \r -> nextPackageId %= succ >> return r
 
 -- | Expand dependency list and turn a Package into a Packages.
 aPackage :: TSt Package -> TSt Packages
@@ -364,8 +379,12 @@ relaxInfo flags' =
 
 -- Combinators for the Packages type
 
-method :: RetrieveMethod -> Package
-method m = Package { _spec = m, _flags = [], _post = [] }
+method :: RetrieveMethod -> TSt Package
+method m = do
+  i <- newId
+  let p = Package { _id = i, _spec = m, _flags = [], _post = [] }
+  packageMap %= Map.insert i p
+  return p
 
 -- | Add a flag to every package in p
 flag :: TSt Package -> PackageFlag -> TSt Package
@@ -391,23 +410,31 @@ cd :: TSt Package -> FilePath -> TSt Package
 cd mp path = over spec (Cd path) <$> mp
 
 apt :: String -> String -> TSt Package
-apt dist name = pure $
-          Package
-               { _spec = Apt dist name
+apt dist name = do
+  i <- newId
+  let p = Package
+               { _id = i
+               , _spec = Apt dist name
                , _flags = []
                , _post = [] }
+  packageMap %= Map.insert i p
+  return p
 
 bzr :: String -> TSt Package
-bzr path = pure $ method (Bzr path)
+bzr path = method (Bzr path)
 
 darcs :: String -> TSt Package
-darcs path = pure $
-    Package { _spec = Darcs path
-            , _flags = []
-            , _post = [] }
+darcs path = do
+  i <- newId
+  let p = Package { _id = i
+                  , _spec = Darcs path
+                  , _flags = []
+                  , _post = [] }
+  packageMap %= Map.insert i p
+  return p
 
 datafiles :: RetrieveMethod -> RetrieveMethod -> FilePath -> TSt Package
-datafiles cabal files dest = pure $ method (DataFiles cabal files dest)
+datafiles cabal files dest = method (DataFiles cabal files dest)
 
 debianize :: TSt Package -> TSt Package
 debianize mp = over spec (\x -> Debianize'' x Nothing) <$> mp
@@ -419,19 +446,23 @@ debdir :: TSt Package -> RetrieveMethod -> TSt Package
 debdir mp debian = over spec (\x -> DebDir x debian) <$> mp
 
 dir :: FilePath -> TSt Package
-dir path = pure $ method (Dir path)
+dir path = method (Dir path)
 
 git :: String -> [GitSpec] -> TSt Package
-git path gitspecs = pure $ method (Git path gitspecs)
+git path gitspecs = method (Git path gitspecs)
 
 hackage :: String -> TSt Package
-hackage s = pure $
-    Package { _spec = Hackage s
-            , _flags = []
-            , _post = [] }
+hackage s = do
+  i <- newId
+  let p = Package { _id = i
+                  , _spec = Hackage s
+                  , _flags = []
+                  , _post = [] }
+  packageMap %= Map.insert i p
+  return p
 
 hg :: String -> TSt Package
-hg path = pure $ method (Hg path)
+hg path = method (Hg path)
 
 proc :: TSt Package -> TSt Package
 proc p = mapSpec Proc <$> p
@@ -440,19 +471,19 @@ quilt :: RetrieveMethod -> TSt Package -> TSt Package
 quilt patchdir mp = over spec (\x -> Quilt x patchdir)  <$> mp
 
 sourceDeb :: TSt Package -> TSt Package
-sourceDeb mp =  (method . SourceDeb . view spec) <$> mp
+sourceDeb mp =  mp >>= method . SourceDeb . view spec
 
 svn :: String -> TSt Package
-svn path = pure $ method (Svn path)
+svn path = method (Svn path)
 
 tla :: String -> TSt Package
-tla path = pure $ method (Tla path)
+tla path = method (Tla path)
 
 twice :: TSt Package -> TSt Package
 twice mp = over spec Twice <$> mp
 
 uri :: String -> String -> TSt Package
-uri tarball checksum = pure $ method (Uri tarball checksum)
+uri tarball checksum = method (Uri tarball checksum)
 
 -- | The target name returned is only used by the autobuilder command
 -- line interface to choose targets.  They look a lot like debian

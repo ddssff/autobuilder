@@ -107,11 +107,23 @@ prepare method flags theUri gitspecs =
       pullSource dir =
           let commit = mapMaybe (\ x -> case x of (Commit s) -> Just s; _ -> Nothing) gitspecs in
           do exists <- doesDirectoryExist dir
-             case (exists, commit) of
-               (False, _) -> return False
-               (True, []) -> readProcessVE ((proc "git" ["pull", "--all"]) {cwd = Just dir}) B.empty >>= test1
-               (True, [commit]) -> readProcessVE ((proc "git" (["reset", "--hard", commit])) {cwd = Just dir}) B.empty >>= test1
-               (True, commits) -> error $ "Multiple commit arguments for " ++ show method ++ ": " ++ show commits
+             case exists of
+               False -> return False
+               True ->
+                   let args :: [String]
+                       args = (case commit of
+                                 [] -> ["pull", "--all"]
+                                 [x] -> ["reset", "--hard", x]
+                                 _ -> error $ "Multiple commit arguments for " ++ show method ++ ": " ++ show commit) in
+                   readProcessVE (proc "git" args) {cwd = Just dir} B.empty >>=
+                   setBranch dir
+      setBranch dir (Right (ExitSuccess, _, _)) =
+          let branch = mapMaybe (\ x -> case x of (Branch s) -> Just s; _ -> Nothing) gitspecs in
+          case branch of
+            [] -> readProcessVE (proc "git" ["checkout", "-f", (case branch of
+                                                                  [] -> "master"
+                                                                  [x] -> x
+                                                                  _ -> error "Multiple branches")]) {cwd = Just dir} B.empty >>= test1
 
       cloneSource dir =
           do let (parent, _) = splitFileName dir
