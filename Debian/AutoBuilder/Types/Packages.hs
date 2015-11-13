@@ -20,20 +20,16 @@ module Debian.AutoBuilder.Types.Packages
     , PackageFlag(..)
     , createPackage
     , modifyPackage
-    , modifyPackage'
     , clonePackage
-    , clonePackage'
     , plist
     , relaxInfo
     , hackage
     , method
     , deletePackage
-    , deletePackage'
     , darcs
     , apt
     , debianize
     , flag
-    , flag'
     , mflag
     , apply
     , patch
@@ -74,7 +70,7 @@ import Data.Graph.Inductive (Node, LNode, insEdge, insNode, lab, mkGraph, reacha
 import Data.Graph.Inductive.PatriciaTree (Gr)
 import Data.Map.Strict as Map (delete, insert, insertWith, lookup, Map)
 import Data.Maybe (fromJust)
-import Data.Set as Set (fromList, Set, singleton, toList, union, unions)
+import Data.Set as Set (fromList, insert, Set, singleton, toList, union, unions)
 import Data.String (IsString(fromString))
 import Debian.Debianize (CabalInfo)
 import Debian.Relation as Debian (Relations, SrcPkgName)
@@ -125,6 +121,7 @@ data Package
       -- the package.
       , _post :: [CabalInfo -> CabalInfo]
       -- ^ Final transformations to perform on the package info.
+      , _groups :: Set GroupName
       } deriving (Show, Data, Typeable) -- We can't derive Eq because post contains functions
 
 type NodeLabel = PackageId
@@ -138,7 +135,7 @@ data TargetState
       , _next :: Node
       , _deps :: Gr NodeLabel EdgeLabel
       , _nextPackageId :: PackageId
-      , _groups :: Map GroupName (Set PackageId)
+      -- , _groups :: Map GroupName (Set PackageId)
       , _packageMap :: Map PackageId Package
       }
 
@@ -227,9 +224,7 @@ $(makeLenses ''TargetState)
 -- | Add a package to a package group
 inGroup :: GroupName -> PackageId -> TSt PackageId
 -- inGroup p g = modifyPackage (\p' -> over groups (Map.insertWith Set.union g (singleton p')) p') p
-inGroup g i = do
-  groups %= Map.insertWith Set.union g (singleton i)
-  return i
+inGroup g i = modifyPackage (over groups (Set.insert g)) i
 
 -- | Add a list of packages to a package group
 inGroups :: [GroupName] -> PackageId -> TSt PackageId
@@ -244,7 +239,7 @@ instance Ord Package where
 targetState :: Release -> FilePath -> TargetState
 targetState rel path = TargetState { _nextPackageId = PackageId 1
                                    , _packageMap = mempty
-                                   , _groups = mempty
+                                   -- , _groups = mempty
                                    , _release = rel
                                    , _home = path
                                    , _nodes = mempty
@@ -384,7 +379,7 @@ relaxInfo flags' =
 method :: Int -> RetrieveMethod -> TSt PackageId
 method n m = do
   i <- newId
-  let p = Package { _pid = i, _spec = m, _flags = [], _post = [] }
+  let p = Package { _pid = i, _spec = m, _flags = mempty, _post = mempty, _groups = mempty }
   packageMap %= Map.insert i p
   return i
 
@@ -398,33 +393,18 @@ modifyPackage :: (Package -> Package) -> PackageId -> TSt PackageId
 modifyPackage f i = do
   (packageMap . at i) %= maybe Nothing (Just . f)
   return i
-{-
-  p <- (!) <$> use packageMap <*> pure i
-  let p' = f p
-  packageMap %= Map.insert i p'
-  return i
--}
-
-modifyPackage' :: (Package -> Package) -> PackageId -> TSt PackageId
-modifyPackage' f i = do
-  Just p <- Map.lookup i <$> use packageMap
-  packageMap %= Map.insert i (f p)
-  return i
 
 clonePackage :: (Package -> Package) -> PackageId -> TSt PackageId
 clonePackage f i = do
   j <- newId
-  modifyPackage (set pid j . f) i
-
-clonePackage' :: (Package -> Package) -> PackageId -> TSt PackageId
-clonePackage' f i = do
-  j <- newId
-  modifyPackage' (set pid j . f) i
+  Just p <- use (packageMap . at i)
+  packageMap %= Map.insert j (set pid j (f p))
+  return j
 
 createPackage :: RetrieveMethod -> [PackageFlag] -> [CabalInfo -> CabalInfo] -> TSt PackageId
 createPackage s f p = do
   i <- newId
-  let r = Package {_spec = s, _flags = f, _post = p, _pid = i}
+  let r = Package {_spec = s, _flags = f, _post = p, _pid = i, _groups = mempty}
   packageMap %= Map.insert i r
   return i
 
@@ -449,10 +429,6 @@ mergePackages' f i j = do
 -- | Add a flag to p
 flag :: PackageFlag -> PackageId -> TSt PackageId
 flag f i = modifyPackage (over flags (f :)) i
-
--- | Add a flag to p
-flag' :: PackageFlag -> PackageId -> TSt PackageId
-flag' f i = modifyPackage' (over flags (f :)) i
 
 mflag :: Maybe PackageFlag -> PackageId -> TSt PackageId
 mflag Nothing i = return i

@@ -13,9 +13,6 @@ module Debian.AutoBuilder.Types.ParamRec
 import Control.Arrow (first)
 import Data.Generics (listify)
 import Data.List as List (map, isInfixOf)
-#if !MIN_VERSION_base(4,8,0)
-import Data.Monoid (mempty, mappend)
-#endif
 import Data.Set as Set (Set, insert, toList)
 import Debian.Arch (Arch)
 import Debian.AutoBuilder.Types.Packages (Packages(Packages, list, APackage), Package, GroupName(GroupName), foldPackages, foldPackages')
