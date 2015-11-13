@@ -127,7 +127,7 @@ data Package
       -- ^ Final transformations to perform on the package info.
       } deriving (Show, Data, Typeable) -- We can't derive Eq because post contains functions
 
-type NodeLabel = Package
+type NodeLabel = PackageId
 type EdgeLabel = ()
 
 data TargetState
@@ -225,15 +225,15 @@ $(makeLenses ''Package)
 $(makeLenses ''TargetState)
 
 -- | Add a package to a package group
-inGroup :: GroupName -> Package -> TSt Package
+inGroup :: GroupName -> PackageId -> TSt PackageId
 -- inGroup p g = modifyPackage (\p' -> over groups (Map.insertWith Set.union g (singleton p')) p') p
-inGroup g p = do
-  groups %= Map.insertWith Set.union g (singleton (view pid p))
-  return p
+inGroup g i = do
+  groups %= Map.insertWith Set.union g (singleton i)
+  return i
 
 -- | Add a list of packages to a package group
-inGroups :: [GroupName] -> Package -> TSt Package
-inGroups gs p = mapM_ (`inGroup` p) gs >> return p
+inGroups :: [GroupName] -> PackageId -> TSt PackageId
+inGroups gs i = mapM_ (`inGroup` i) gs >> return i
 
 instance Eq Package where
     a == b = compare a b == EQ
@@ -259,10 +259,10 @@ aPackage :: Package -> TSt Packages
 aPackage p = return $ APackage p
 
 -- | Expand a package list using the suspected dependency graph
-plist :: [Package] -> TSt [Package]
+plist :: [PackageId] -> TSt [PackageId]
 plist ps = mapM reach ps >>= return . Set.toList . Set.unions
     where
-      reach :: Package -> TSt (Set Package)
+      reach :: PackageId -> TSt (Set PackageId)
       reach p = use nodes >>= maybe (return (singleton p)) (reach' p) . Map.lookup p
       reach' p n = do
         g <- use deps
@@ -306,7 +306,7 @@ edge' pkg dep = do
 -- depends :: TSt Package -> [TSt Package] -> TSt Package
 -- depends p ps = mapM_ (edge' p) ps >> p
 
-depends :: Package -> [Package] -> TSt ()
+depends :: PackageId -> [PackageId] -> TSt ()
 depends p ps = mapM_ (edge' p) ps
 
 -- instance Eq Packages where
@@ -381,24 +381,29 @@ relaxInfo flags' =
 
 -- Combinators for the Packages type
 
-method :: Int -> RetrieveMethod -> TSt Package
+method :: Int -> RetrieveMethod -> TSt PackageId
 method n m = do
   i <- newId
   let p = Package { _pid = i, _spec = m, _flags = [], _post = [] }
   packageMap %= Map.insert i p
-  return p
+  return i
 
-deletePackage :: Package -> TSt ()
-deletePackage p = packageMap %= Map.delete (view pid p)
+deletePackage :: PackageId -> TSt ()
+deletePackage i = packageMap %= Map.delete i
 
 deletePackage' :: PackageId -> TSt ()
 deletePackage' i = packageMap %= Map.delete i
 
-modifyPackage :: (Package -> Package) -> Package -> TSt Package
-modifyPackage f p = do
+modifyPackage :: (Package -> Package) -> PackageId -> TSt PackageId
+modifyPackage f i = do
+  (packageMap . at i) %= maybe Nothing (Just . f)
+  return i
+{-
+  p <- (!) <$> use packageMap <*> pure i
   let p' = f p
-  packageMap %= Map.insert (view pid p') p'
-  return p'
+  packageMap %= Map.insert i p'
+  return i
+-}
 
 modifyPackage' :: (Package -> Package) -> PackageId -> TSt PackageId
 modifyPackage' f i = do
@@ -406,29 +411,31 @@ modifyPackage' f i = do
   packageMap %= Map.insert i (f p)
   return i
 
-clonePackage :: (Package -> Package) -> Package -> TSt Package
-clonePackage f p = do
-  i <- newId
-  modifyPackage (set pid i . f) p
+clonePackage :: (Package -> Package) -> PackageId -> TSt PackageId
+clonePackage f i = do
+  j <- newId
+  modifyPackage (set pid j . f) i
 
 clonePackage' :: (Package -> Package) -> PackageId -> TSt PackageId
 clonePackage' f i = do
   j <- newId
   modifyPackage' (set pid j . f) i
 
-createPackage :: RetrieveMethod -> [PackageFlag] -> [CabalInfo -> CabalInfo] -> TSt Package
+createPackage :: RetrieveMethod -> [PackageFlag] -> [CabalInfo -> CabalInfo] -> TSt PackageId
 createPackage s f p = do
   i <- newId
   let r = Package {_spec = s, _flags = f, _post = p, _pid = i}
   packageMap %= Map.insert i r
-  return r
+  return i
 
-mergePackages :: (Package -> Package -> Package) -> Package -> Package -> TSt Package
-mergePackages f p1 p2 = do
+mergePackages :: (Package -> Package -> Package) -> PackageId -> PackageId -> TSt PackageId
+mergePackages f i1 i2 = do
+  Just p1 <- use (packageMap . at i1)
+  Just p2 <- use (packageMap . at i2)
   let r = f p1 p2
-  packageMap %= Map.delete (view pid p2)
-  packageMap %= Map.insert (view pid p1) r
-  return r
+  packageMap %= Map.delete i2
+  packageMap %= Map.insert i1 r
+  return i1
 
 mergePackages' :: (Package -> Package -> Package) -> PackageId -> PackageId -> TSt PackageId
 mergePackages' f i j = do
@@ -440,89 +447,90 @@ mergePackages' f i j = do
   return i
 
 -- | Add a flag to p
-flag :: PackageFlag -> Package -> TSt Package
-flag f p = modifyPackage (over flags (f :)) p
+flag :: PackageFlag -> PackageId -> TSt PackageId
+flag f i = modifyPackage (over flags (f :)) i
 
 -- | Add a flag to p
 flag' :: PackageFlag -> PackageId -> TSt PackageId
 flag' f i = modifyPackage' (over flags (f :)) i
 
-mflag :: Maybe PackageFlag -> Package -> TSt Package
-mflag Nothing p = return p
-mflag (Just f) p = flag f p
+mflag :: Maybe PackageFlag -> PackageId -> TSt PackageId
+mflag Nothing i = return i
+mflag (Just f) i = flag f i
 
-apply :: (CabalInfo -> CabalInfo) -> Package -> TSt Package
-apply f p = modifyPackage (over post (f :)) p
+apply :: (CabalInfo -> CabalInfo) -> PackageId -> TSt PackageId
+apply f i = modifyPackage (over post (f :)) i
 
-patch :: ByteString -> Package -> TSt Package
-patch s p = modifyPackage (over spec (`Patch` s)) p
+patch :: ByteString -> PackageId -> TSt PackageId
+patch s i = modifyPackage (over spec (`Patch` s)) i
 
 -- rename :: Packages -> GroupName -> TSt Packages
 -- rename mps s = (\ ps -> ps {group = s}) <$> mps
 
-cd :: FilePath -> Package -> TSt Package
-cd path p = modifyPackage (over spec (Cd path)) p
+cd :: FilePath -> PackageId -> TSt PackageId
+cd path i = modifyPackage (over spec (Cd path)) i
 
-apt :: String -> String -> TSt Package
+apt :: String -> String -> TSt PackageId
 apt dist name = method 1 (Apt dist name)
 
-bzr :: String -> TSt Package
+bzr :: String -> TSt PackageId
 bzr path = method 2 (Bzr path)
 
-darcs :: String -> TSt Package
+darcs :: String -> TSt PackageId
 darcs path = method 3 (Darcs path)
 
-datafiles :: RetrieveMethod -> RetrieveMethod -> FilePath -> TSt Package
+datafiles :: RetrieveMethod -> RetrieveMethod -> FilePath -> TSt PackageId
 datafiles cabal files dest = method 4 (DataFiles cabal files dest)
 
-datafiles' :: Package -> Package -> FilePath -> TSt Package
+datafiles' :: PackageId -> PackageId -> FilePath -> TSt PackageId
 datafiles' cabal files dest = do
+  Just cabal' <- use (packageMap . at cabal)
+  Just files' <- use (packageMap . at files)
   -- set spec (DataFiles (use spec cabal) (use spec files) dest) cabal
-  let cabal' = (set spec (DataFiles (view spec cabal) (view spec files) dest) cabal)
-  modifyPackage (const cabal') cabal
-  return cabal'
+  modifyPackage (const (set spec (DataFiles (view spec cabal') (view spec files') dest) cabal')) cabal
+  return cabal
 
-debianize :: Package -> TSt Package
+debianize :: PackageId -> TSt PackageId
 debianize = modifyPackage (\p -> set spec (Debianize'' (view spec p) Nothing) p)
     -- Map.insert over spec (\x -> Debianize'' x Nothing) <$> mp
 
 -- debdir :: String -> RetrieveMethod -> RetrieveMethod -> Packages
 -- debdir name method1 method2 = method name (DebDir method1 method1)
 
-debdir :: Package -> RetrieveMethod -> TSt Package
-debdir p debian = modifyPackage (set spec (DebDir (view spec p) debian)) p
+debdir :: RetrieveMethod -> PackageId -> TSt PackageId
+debdir debian i = modifyPackage (\p -> set spec (DebDir (view spec p) debian) p) i
 
-dir :: FilePath -> TSt Package
+dir :: FilePath -> TSt PackageId
 dir path = method 5 (Dir path)
 
-git :: String -> [GitSpec] -> TSt Package
+git :: String -> [GitSpec] -> TSt PackageId
 git path gitspecs = method 6 (Git path gitspecs)
 
-hackage :: String -> TSt Package
+hackage :: String -> TSt PackageId
 hackage s = method 7 (Hackage s)
 
-hg :: String -> TSt Package
+hg :: String -> TSt PackageId
 hg path = method 8 (Hg path)
 
-proc :: Package -> TSt Package
+proc :: PackageId -> TSt PackageId
 proc = modifyPackage (over spec Proc)
 
-quilt :: RetrieveMethod -> Package -> TSt Package
+quilt :: RetrieveMethod -> PackageId -> TSt PackageId
 quilt patchdir = modifyPackage (over spec (\x -> Quilt x patchdir))
 
-sourceDeb :: Package -> TSt Package
-sourceDeb =  method 9 . SourceDeb . view spec
+sourceDeb :: PackageId -> TSt PackageId
+sourceDeb i = use (packageMap . at i) >>= \(Just p) -> method 9 (SourceDeb (view spec p))
 
-svn :: String -> TSt Package
+svn :: String -> TSt PackageId
 svn path = method 10 (Svn path)
 
-tla :: String -> TSt Package
+tla :: String -> TSt PackageId
 tla path = method 11 (Tla path)
 
-twice :: Package -> TSt Package
-twice mp = modifyPackage (over spec Twice) mp
+twice :: PackageId -> TSt PackageId
+twice = modifyPackage (over spec Twice)
 
-uri :: String -> String -> TSt Package
+uri :: String -> String -> TSt PackageId
 uri tarball checksum = method 12 (Uri tarball checksum)
 
 -- | The target name returned is only used by the autobuilder command
