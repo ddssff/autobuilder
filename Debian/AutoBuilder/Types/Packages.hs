@@ -4,7 +4,8 @@
 module Debian.AutoBuilder.Types.Packages
     ( Packages(..)
     , aPackage
-    , Package(..), post, spec, flags
+    , Package(..), pid, post, spec, flags
+    , PackageId
     , GroupName(..)
     , TSt
     , TargetState, release, deps, nodes, packageMap, groups
@@ -17,20 +18,28 @@ module Debian.AutoBuilder.Types.Packages
     , packageCount
     , mapPackages
     , PackageFlag(..)
+    , createPackage
+    , modifyPackage
+    , modifyPackage'
+    , clonePackage
+    , clonePackage'
     , plist
     , relaxInfo
     , hackage
     , method
+    , deletePackage
+    , deletePackage'
     , darcs
     , apt
     , debianize
     , flag
+    , flag'
     , mflag
     , apply
     , patch
-    , rename
+    -- , rename
     , bzr
-    , datafiles
+    , datafiles, datafiles'
     , debdir
     , dir
     , git
@@ -49,15 +58,13 @@ module Debian.AutoBuilder.Types.Packages
     , gitBranch
     , darcsTag
     , aptPin
+    , newId
     ) where
 
 import Debug.Trace as D
 
-#if !MIN_VERSION_base(4,8,0)
-import Control.Applicative (pure, (<$>))
-#endif
 import Control.Exception (SomeException, try)
-import Control.Lens (makeLenses, over, use, view, (%=))
+import Control.Lens -- (makeLenses, over, set, use, view, (%=))
 import Control.Monad (foldM)
 import Control.Monad.State (State)
 import Data.ByteString (ByteString)
@@ -65,11 +72,8 @@ import Data.Function (on)
 import Data.Generics (Data, Typeable)
 import Data.Graph.Inductive (Node, LNode, insEdge, insNode, lab, mkGraph, reachable)
 import Data.Graph.Inductive.PatriciaTree (Gr)
-import Data.Map as Map (insert, insertWith, lookup, Map)
+import Data.Map.Strict as Map (delete, insert, insertWith, lookup, Map)
 import Data.Maybe (fromJust)
-#if !MIN_VERSION_base(4,8,0)
-import Data.Monoid (Monoid(mempty, mappend))
-#endif
 import Data.Set as Set (fromList, Set, singleton, toList, union, unions)
 import Data.String (IsString(fromString))
 import Debian.Debianize (CabalInfo)
@@ -112,7 +116,7 @@ instance Enum PackageId where
 -- | Collected information about a package.
 data Package
     = Package
-      { _id :: PackageId
+      { _pid :: PackageId
       , _spec :: RetrieveMethod
       -- ^ This value describes the method used to download the
       -- package's source code.
@@ -134,7 +138,7 @@ data TargetState
       , _next :: Node
       , _deps :: Gr NodeLabel EdgeLabel
       , _nextPackageId :: PackageId
-      , _groups :: Map GroupName (Set Package)
+      , _groups :: Map GroupName (Set PackageId)
       , _packageMap :: Map PackageId Package
       }
 
@@ -221,12 +225,15 @@ $(makeLenses ''Package)
 $(makeLenses ''TargetState)
 
 -- | Add a package to a package group
-inGroup :: TSt Package -> GroupName -> TSt Package
-inGroup p g = p >>= \p' -> groups %= Map.insertWith Set.union g (singleton p') >> p
+inGroup :: GroupName -> Package -> TSt Package
+-- inGroup p g = modifyPackage (\p' -> over groups (Map.insertWith Set.union g (singleton p')) p') p
+inGroup g p = do
+  groups %= Map.insertWith Set.union g (singleton (view pid p))
+  return p
 
 -- | Add a list of packages to a package group
-inGroups :: TSt Package -> [GroupName] -> TSt Package
-inGroups p gs = mapM_ (inGroup p) gs >> p
+inGroups :: [GroupName] -> Package -> TSt Package
+inGroups gs p = mapM_ (`inGroup` p) gs >> return p
 
 instance Eq Package where
     a == b = compare a b == EQ
@@ -247,11 +254,9 @@ targetState rel path = TargetState { _nextPackageId = PackageId 1
 newId :: TSt PackageId
 newId = use nextPackageId >>= \r -> nextPackageId %= succ >> return r
 
--- | Expand dependency list and turn a Package into a Packages.
-aPackage :: TSt Package -> TSt Packages
-aPackage p = p >>= plist . (: []) >>= \ps -> return $ case ps of
-                                                        [p'] -> APackage p'
-                                                        _ -> Packages $ map APackage ps
+-- | Expand dependency list(?) and turn a Package into a Packages.
+aPackage :: Package -> TSt Packages
+aPackage p = return $ APackage p
 
 -- | Expand a package list using the suspected dependency graph
 plist :: [Package] -> TSt [Package]
@@ -362,14 +367,11 @@ packageCount :: Packages -> Int
 packageCount ps = foldPackages (\ _ n -> n + 1) ps 0
 
 -- | Apply a function to every Package embedded in a Packages.
-mapPackages :: Monad m => (m Package -> m Package) -> m Packages -> m Packages
-mapPackages f ps =
-    ps >>= \ x ->
-        case x of
-          NoPackage -> return NoPackage
-          (APackage p) -> f (return p) >>= return . APackage
-          (Packages {}) -> mapM (mapPackages f) (map return (list x)) >>= \ l' -> return $ x {list = l'}
-          (Named {}) -> mapPackages f (return (packages x)) >>= \ ps -> return $ x {packages = ps}
+mapPackages :: Monad m => (Package -> m Package) -> Packages -> m Packages
+mapPackages f NoPackage = return NoPackage
+mapPackages f (APackage p) = f p >>= return . APackage
+mapPackages f x@(Packages {}) = mapM (mapPackages f) (list x) >>= \ l' -> return $ x {list = l'}
+mapPackages f x@(Named {}) = mapPackages f (packages x) >>= \ ps -> return $ x {packages = ps}
 
 relaxInfo :: [PackageFlag] -> [String]
 relaxInfo flags' =
@@ -379,111 +381,149 @@ relaxInfo flags' =
 
 -- Combinators for the Packages type
 
-method :: RetrieveMethod -> TSt Package
-method m = do
+method :: Int -> RetrieveMethod -> TSt Package
+method n m = do
   i <- newId
-  let p = Package { _id = i, _spec = m, _flags = [], _post = [] }
+  let p = Package { _pid = i, _spec = m, _flags = [], _post = [] }
   packageMap %= Map.insert i p
   return p
 
--- | Add a flag to every package in p
-flag :: TSt Package -> PackageFlag -> TSt Package
-flag mp f = over flags (f :) <$> mp
+deletePackage :: Package -> TSt ()
+deletePackage p = packageMap %= Map.delete (view pid p)
 
-mflag :: TSt Package -> Maybe PackageFlag -> TSt Package
-mflag mp Nothing = mp
-mflag mp (Just f) = flag mp f
+deletePackage' :: PackageId -> TSt ()
+deletePackage' i = packageMap %= Map.delete i
 
-apply :: TSt Package -> (CabalInfo -> CabalInfo) -> TSt Package
-apply mp f = over post (f :) <$> mp
+modifyPackage :: (Package -> Package) -> Package -> TSt Package
+modifyPackage f p = do
+  let p' = f p
+  packageMap %= Map.insert (view pid p') p'
+  return p'
 
-patch :: TSt Package -> ByteString -> TSt Package
-patch mp s = over spec (`Patch` s) <$> mp
+modifyPackage' :: (Package -> Package) -> PackageId -> TSt PackageId
+modifyPackage' f i = do
+  Just p <- Map.lookup i <$> use packageMap
+  packageMap %= Map.insert i (f p)
+  return i
 
-rename :: TSt Packages -> GroupName -> TSt Packages
-rename mps s = (\ ps -> ps {group = s}) <$> mps
+clonePackage :: (Package -> Package) -> Package -> TSt Package
+clonePackage f p = do
+  i <- newId
+  modifyPackage (set pid i . f) p
 
-mapSpec :: (RetrieveMethod -> RetrieveMethod) -> Package -> Package
-mapSpec f p = over spec f p
+clonePackage' :: (Package -> Package) -> PackageId -> TSt PackageId
+clonePackage' f i = do
+  j <- newId
+  modifyPackage' (set pid j . f) i
 
-cd :: TSt Package -> FilePath -> TSt Package
-cd mp path = over spec (Cd path) <$> mp
+createPackage :: RetrieveMethod -> [PackageFlag] -> [CabalInfo -> CabalInfo] -> TSt Package
+createPackage s f p = do
+  i <- newId
+  let r = Package {_spec = s, _flags = f, _post = p, _pid = i}
+  packageMap %= Map.insert i r
+  return r
+
+mergePackages :: (Package -> Package -> Package) -> Package -> Package -> TSt Package
+mergePackages f p1 p2 = do
+  let r = f p1 p2
+  packageMap %= Map.delete (view pid p2)
+  packageMap %= Map.insert (view pid p1) r
+  return r
+
+mergePackages' :: (Package -> Package -> Package) -> PackageId -> PackageId -> TSt PackageId
+mergePackages' f i j = do
+  Just p <- Map.lookup i <$> use packageMap
+  Just q <- Map.lookup j <$> use packageMap
+  let r = f p q
+  packageMap %= Map.delete j
+  packageMap %= Map.insert i r
+  return i
+
+-- | Add a flag to p
+flag :: PackageFlag -> Package -> TSt Package
+flag f p = modifyPackage (over flags (f :)) p
+
+-- | Add a flag to p
+flag' :: PackageFlag -> PackageId -> TSt PackageId
+flag' f i = modifyPackage' (over flags (f :)) i
+
+mflag :: Maybe PackageFlag -> Package -> TSt Package
+mflag Nothing p = return p
+mflag (Just f) p = flag f p
+
+apply :: (CabalInfo -> CabalInfo) -> Package -> TSt Package
+apply f p = modifyPackage (over post (f :)) p
+
+patch :: ByteString -> Package -> TSt Package
+patch s p = modifyPackage (over spec (`Patch` s)) p
+
+-- rename :: Packages -> GroupName -> TSt Packages
+-- rename mps s = (\ ps -> ps {group = s}) <$> mps
+
+cd :: FilePath -> Package -> TSt Package
+cd path p = modifyPackage (over spec (Cd path)) p
 
 apt :: String -> String -> TSt Package
-apt dist name = do
-  i <- newId
-  let p = Package
-               { _id = i
-               , _spec = Apt dist name
-               , _flags = []
-               , _post = [] }
-  packageMap %= Map.insert i p
-  return p
+apt dist name = method 1 (Apt dist name)
 
 bzr :: String -> TSt Package
-bzr path = method (Bzr path)
+bzr path = method 2 (Bzr path)
 
 darcs :: String -> TSt Package
-darcs path = do
-  i <- newId
-  let p = Package { _id = i
-                  , _spec = Darcs path
-                  , _flags = []
-                  , _post = [] }
-  packageMap %= Map.insert i p
-  return p
+darcs path = method 3 (Darcs path)
 
 datafiles :: RetrieveMethod -> RetrieveMethod -> FilePath -> TSt Package
-datafiles cabal files dest = method (DataFiles cabal files dest)
+datafiles cabal files dest = method 4 (DataFiles cabal files dest)
 
-debianize :: TSt Package -> TSt Package
-debianize mp = over spec (\x -> Debianize'' x Nothing) <$> mp
+datafiles' :: Package -> Package -> FilePath -> TSt Package
+datafiles' cabal files dest = do
+  -- set spec (DataFiles (use spec cabal) (use spec files) dest) cabal
+  let cabal' = (set spec (DataFiles (view spec cabal) (view spec files) dest) cabal)
+  modifyPackage (const cabal') cabal
+  return cabal'
+
+debianize :: Package -> TSt Package
+debianize = modifyPackage (\p -> set spec (Debianize'' (view spec p) Nothing) p)
+    -- Map.insert over spec (\x -> Debianize'' x Nothing) <$> mp
 
 -- debdir :: String -> RetrieveMethod -> RetrieveMethod -> Packages
 -- debdir name method1 method2 = method name (DebDir method1 method1)
 
-debdir :: TSt Package -> RetrieveMethod -> TSt Package
-debdir mp debian = over spec (\x -> DebDir x debian) <$> mp
+debdir :: Package -> RetrieveMethod -> TSt Package
+debdir p debian = modifyPackage (set spec (DebDir (view spec p) debian)) p
 
 dir :: FilePath -> TSt Package
-dir path = method (Dir path)
+dir path = method 5 (Dir path)
 
 git :: String -> [GitSpec] -> TSt Package
-git path gitspecs = method (Git path gitspecs)
+git path gitspecs = method 6 (Git path gitspecs)
 
 hackage :: String -> TSt Package
-hackage s = do
-  i <- newId
-  let p = Package { _id = i
-                  , _spec = Hackage s
-                  , _flags = []
-                  , _post = [] }
-  packageMap %= Map.insert i p
-  return p
+hackage s = method 7 (Hackage s)
 
 hg :: String -> TSt Package
-hg path = method (Hg path)
+hg path = method 8 (Hg path)
 
-proc :: TSt Package -> TSt Package
-proc p = mapSpec Proc <$> p
+proc :: Package -> TSt Package
+proc = modifyPackage (over spec Proc)
 
-quilt :: RetrieveMethod -> TSt Package -> TSt Package
-quilt patchdir mp = over spec (\x -> Quilt x patchdir)  <$> mp
+quilt :: RetrieveMethod -> Package -> TSt Package
+quilt patchdir = modifyPackage (over spec (\x -> Quilt x patchdir))
 
-sourceDeb :: TSt Package -> TSt Package
-sourceDeb mp =  mp >>= method . SourceDeb . view spec
+sourceDeb :: Package -> TSt Package
+sourceDeb =  method 9 . SourceDeb . view spec
 
 svn :: String -> TSt Package
-svn path = method (Svn path)
+svn path = method 10 (Svn path)
 
 tla :: String -> TSt Package
-tla path = method (Tla path)
+tla path = method 11 (Tla path)
 
-twice :: TSt Package -> TSt Package
-twice mp = over spec Twice <$> mp
+twice :: Package -> TSt Package
+twice mp = modifyPackage (over spec Twice) mp
 
 uri :: String -> String -> TSt Package
-uri tarball checksum = method (Uri tarball checksum)
+uri tarball checksum = method 12 (Uri tarball checksum)
 
 -- | The target name returned is only used by the autobuilder command
 -- line interface to choose targets.  They look a lot like debian

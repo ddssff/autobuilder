@@ -22,7 +22,11 @@ import System.FilePath
 import System.Process (proc, shell, CreateProcess(cwd, cmdspec))
 import System.Process.ListLike (readCreateProcessWithExitCode, showCmdSpecForUser, showCreateProcessForUser)
 import System.Unix.Directory
+import Text.PrettyPrint.HughesPJClass (Pretty(pPrint), prettyShow, text)
 import Text.Regex
+
+instance Pretty CreateProcess where
+    pPrint = text . showCreateProcessForUser
 
 documentation :: [String]
 documentation = [ "darcs:<string> - a target of this form obtains the source code by running"
@@ -105,31 +109,27 @@ prepare method flags theUri gitspecs =
       test1 _ = return False
 
       pullSource dir =
-          let commit = mapMaybe (\ x -> case x of (Commit s) -> Just s; _ -> Nothing) gitspecs in
+          let commit = foldr (\x r -> case x of Commit s -> Just s; _ -> r) Nothing gitspecs
+              branch = foldr (\x r -> case x of Branch s -> s; _ -> r) "master" gitspecs in
           do exists <- doesDirectoryExist dir
              case exists of
                False -> return False
-               True ->
-                   let args :: [String]
-                       args = (case commit of
-                                 [] -> ["pull", "--all"]
-                                 [x] -> ["reset", "--hard", x]
-                                 _ -> error $ "Multiple commit arguments for " ++ show method ++ ": " ++ show commit) in
-                   readProcessVE (proc "git" args) {cwd = Just dir} B.empty >>=
-                   setBranch dir
-      setBranch dir (Right (ExitSuccess, _, _)) =
-          let branch = mapMaybe (\ x -> case x of (Branch s) -> Just s; _ -> Nothing) gitspecs in
-          readProcessVE (proc "git" ["checkout", "-f", (case branch of
-                                                          [] -> "master"
-                                                          [x] -> x
-                                                          _ -> error "Multiple branches")]) {cwd = Just dir} B.empty >>= test1
-
+               True -> do
+                 readProc (proc "git" ["pull", "--all"]) {cwd = Just dir} B.empty
+                 maybe (return ()) (\x -> readProc (proc "git" ["reset", "--hard", x]) {cwd = Just dir} B.empty) commit
+                 readProc (proc "git" ["checkout", "-f", branch]) {cwd = Just dir} B.empty
+                 return True
       cloneSource dir =
           do let (parent, _) = splitFileName dir
              createDirectoryIfMissing True parent
              removeRecursiveSafely dir
              let clone = proc "git" (["clone", renderForGit theUri'] ++ concat (map (\ x -> case x of (Branch s) -> ["--branch", s]; _ -> []) gitspecs) ++ [dir])
              readProcessVE clone B.empty >>= test1
+
+      readProc pr inp = readProcessV pr inp >>= testCode pr
+      testCode pr (ExitSuccess, _, _) = return ()
+      testCode pr (ExitFailure s, out, err) = error (prettyShow pr ++ " -> " ++ show s ++ "\n  out: " ++ show out ++ "\n  err: " ++ show err)
+
 {-
       testSource dir =
           do result <- readProcessVE ((proc "git" ["status", "--porcelain"]) {cwd = Just dir}) mempty

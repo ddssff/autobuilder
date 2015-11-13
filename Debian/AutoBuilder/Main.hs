@@ -89,7 +89,8 @@ main init myParams =
          -- All the work for a given run must occur in the same top
          -- directory - ~/.autobuilder for example.
          [top] -> runReposCachedT top (foldM (doParameterSet init) [] recs) `catch` showAndThrow >>= testResults
-         tops -> IO.hPutStr IO.stderr ("Parameter sets have different top directories: " ++ show tops)
+         [] -> IO.hPutStrLn IO.stderr "No parameter sets"
+         tops -> IO.hPutStrLn IO.stderr ("Parameter sets have different top directories: " ++ show tops)
     where testResults results =
               case partitionFailing results of
                 ([], _) -> return ()
