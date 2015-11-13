@@ -2,9 +2,7 @@
 -- | The Packages type specifies how to obtain the source code for one
 -- or more packages.
 module Debian.AutoBuilder.Types.Packages
-    ( Packages(..)
-    , aPackage
-    , Package(..), pid, post, spec, flags
+    ( Package(..), pid, post, spec, flags
     , PackageId
     , GroupName(..)
     , TSt
@@ -12,11 +10,6 @@ module Debian.AutoBuilder.Types.Packages
     , inGroup, inGroups
     , targetState
     , depends
-    , foldPackages
-    , foldPackages'
-    , filterPackages
-    , packageCount
-    , mapPackages
     , PackageFlag(..)
     , createPackage
     , modifyPackage
@@ -33,7 +26,6 @@ module Debian.AutoBuilder.Types.Packages
     , mflag
     , apply
     , patch
-    -- , rename
     , bzr
     , datafiles, datafiles'
     , debdir
@@ -89,18 +81,6 @@ data GroupName
 
 instance IsString GroupName where
     fromString = GroupName
-
-data Packages
-    = NoPackage
-    | APackage Package
-    | Packages
-      { list :: [Packages]
-      }
-    | Named
-      { group :: GroupName
-      , packages :: Packages
-      } deriving (Show, Data, Typeable)
-    -- deriving (Show, Eq, Ord)
 
 newtype PackageId = PackageId Int deriving (Eq, Ord, Read, Show, Data, Typeable)
 
@@ -250,8 +230,8 @@ newId :: TSt PackageId
 newId = use nextPackageId >>= \r -> nextPackageId %= succ >> return r
 
 -- | Expand dependency list(?) and turn a Package into a Packages.
-aPackage :: Package -> TSt Packages
-aPackage p = return $ APackage p
+-- aPackage :: Package -> TSt Packages
+-- aPackage p = return $ APackage p
 
 -- | Expand a package list using the suspected dependency graph
 plist :: [PackageId] -> TSt [PackageId]
@@ -297,76 +277,13 @@ edge' pkg dep = do
   edge dep dep
   edge pkg dep
 
--- A bit of a monad-y mess
--- depends :: TSt Package -> [TSt Package] -> TSt Package
--- depends p ps = mapM_ (edge' p) ps >> p
-
 depends :: PackageId -> [PackageId] -> TSt ()
 depends p ps = mapM_ (edge' p) ps
-
--- instance Eq Packages where
---     (APackage p1) == (APackage p2) = p1 == p2
---     (Packages {list = l1}) == (Packages {list = l2}) = l1 == l2
---     (Named {group = g1, packages = p1}) == (Named {group = g2, packages = p2}) = g1 == g2 && p1 == p2
---     NoPackage == NoPackage = True
---     _ == _ = False
---
--- instance Eq Package where
---     p1 == p2 = spec p1 == spec p2
 
 instance Monoid GroupName where
     mempty = NoName
     mappend NoName x = x
     mappend x _ = x
-
-instance Monoid Packages where
-    mempty = NoPackage
-    mappend NoPackage y = y
-    mappend x NoPackage = x
-    mappend x@(APackage {}) y = mappend (Packages [x]) y
-    mappend x y@(APackage {}) = mappend x (Packages [y])
-    mappend x@(Packages {}) y@(Packages {}) = Packages { list = list x ++ list y }
-    mappend x@(Named {}) y@(Named {}) =
-        Named { group = mappend (group x) (group y)
-              , packages = mappend (packages x) (packages y) }
-    mappend x@(Named {}) y = x {packages = mappend (packages x) y}
-    mappend x y@(Named {}) = y {packages = mappend x (packages y)}
-
-foldPackages' :: (Package -> r -> r)
-              -> (GroupName -> Packages -> r -> r)
-              -> ([Packages] -> r -> r)
-              -> (r -> r)
-              -> Packages -> r -> r
-foldPackages' _ n _ _ ps@(Named {}) r = n (group ps) (packages ps) r
-foldPackages' _ _ g _ ps@(Packages {}) r = g (list ps) r
-foldPackages' f _ _ _ (APackage p) r = f p r
-foldPackages' _ _ _ h NoPackage r = h r
-
--- FIXME: this can be implemented using foldPackages'
-foldPackages :: (Package -> r -> r) -> Packages -> r -> r
-foldPackages _ NoPackage r = r
-foldPackages f (APackage x) r = f x r
-foldPackages f x@(Packages {}) r = foldr (foldPackages f) r (list x)
-foldPackages f x@(Named {}) r = foldPackages f (packages x) r
-
-filterPackages :: (Packages -> Bool) -> Packages -> Packages
-filterPackages f xs =
-    foldPackages (\ p xs' ->
-                      if f (APackage p)
-                      then mappend (APackage p) xs'
-                      else xs')
-                 xs
-                 mempty
-
-packageCount :: Packages -> Int
-packageCount ps = foldPackages (\ _ n -> n + 1) ps 0
-
--- | Apply a function to every Package embedded in a Packages.
-mapPackages :: Monad m => (Package -> m Package) -> Packages -> m Packages
-mapPackages f NoPackage = return NoPackage
-mapPackages f (APackage p) = f p >>= return . APackage
-mapPackages f x@(Packages {}) = mapM (mapPackages f) (list x) >>= \ l' -> return $ x {list = l'}
-mapPackages f x@(Named {}) = mapPackages f (packages x) >>= \ ps -> return $ x {packages = ps}
 
 relaxInfo :: [PackageFlag] -> [String]
 relaxInfo flags' =
@@ -440,9 +357,6 @@ apply f i = modifyPackage (over post (f :)) i
 patch :: ByteString -> PackageId -> TSt PackageId
 patch s i = modifyPackage (over spec (`Patch` s)) i
 
--- rename :: Packages -> GroupName -> TSt Packages
--- rename mps s = (\ ps -> ps {group = s}) <$> mps
-
 cd :: FilePath -> PackageId -> TSt PackageId
 cd path i = modifyPackage (over spec (Cd path)) i
 
@@ -462,16 +376,11 @@ datafiles' :: PackageId -> PackageId -> FilePath -> TSt PackageId
 datafiles' cabal files dest = do
   Just cabal' <- use (packageMap . at cabal)
   Just files' <- use (packageMap . at files)
-  -- set spec (DataFiles (use spec cabal) (use spec files) dest) cabal
   modifyPackage (const (set spec (DataFiles (view spec cabal') (view spec files') dest) cabal')) cabal
   return cabal
 
 debianize :: PackageId -> TSt PackageId
 debianize = modifyPackage (\p -> set spec (Debianize'' (view spec p) Nothing) p)
-    -- Map.insert over spec (\x -> Debianize'' x Nothing) <$> mp
-
--- debdir :: String -> RetrieveMethod -> RetrieveMethod -> Packages
--- debdir name method1 method2 = method name (DebDir method1 method1)
 
 debdir :: RetrieveMethod -> PackageId -> TSt PackageId
 debdir debian i = modifyPackage (\p -> set spec (DebDir (view spec p) debian) p) i

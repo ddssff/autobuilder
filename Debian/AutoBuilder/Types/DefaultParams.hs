@@ -7,7 +7,6 @@ import Data.List as List (isSuffixOf, map)
 import Data.Maybe
 import Data.Set as Set (empty, fromList)
 import Debian.Arch (Arch(Binary), ArchCPU(ArchCPU), ArchOS(ArchOS))
-import Debian.AutoBuilder.Types.Packages (Packages(NoPackage))
 import Debian.AutoBuilder.Types.ParamRec (ParamRec(..), Strictness(..), TargetSpec(..))
 import Debian.Release (ReleaseName(ReleaseName, relName))
 import Debian.Repo (SourcesChangedAction(SourcesChangedError))
@@ -119,7 +118,7 @@ defaultParams myBuildRelease -- e.g. wheezy or precise
     , noClean = False
     , cleanUp = False
     , ifSourcesChanged = SourcesChangedError
-    , knownPackages = NoPackage
+    , knownPackages = mempty
     }
 
 defaultVendorTag = "+" ++ defaultVendor

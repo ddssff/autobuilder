@@ -20,7 +20,9 @@ import qualified Data.ByteString.Lazy as L
 import Data.Either (partitionEithers)
 import Data.Generics (listify)
 import Data.List as List (intercalate, null, nub)
+import Data.Map ((!))
 import Data.Monoid ((<>), mconcat, mempty)
+import Data.Set as Set (toList)
 import Data.Text as LT (unpack)
 import Data.Text.Encoding (decodeUtf8)
 import Data.Time(NominalDiffTime)
@@ -31,8 +33,8 @@ import Debian.AutoBuilder.Target (buildTargets, showTargets)
 import Debian.AutoBuilder.Types.Buildable (Target, Buildable(debianSourceTree), asBuildable)
 import Debian.AutoBuilder.Types.Download (SomeDownload(..), Download(..))
 import qualified Debian.AutoBuilder.Types.CacheRec as C
-import qualified Debian.AutoBuilder.Types.Packages as P (foldPackages, spec, flags, post, PackageFlag(CabalPin))
-import qualified Debian.AutoBuilder.Types.ParamRec as R (ParamRec, getParams, doHelp, usage, verbosity, showParams, showSources, flushAll, doSSHExport, uploadURI, report, buildRelease, ifSourcesChanged, requiredVersion, prettyPrint, doUpload, doNewDist, newDistProgram, createRelease, buildPackages, flushSource, extraRepos)
+import qualified Debian.AutoBuilder.Types.Packages as P (spec, flags, post, PackageFlag(CabalPin))
+import qualified Debian.AutoBuilder.Types.ParamRec as R (ParamRec, getParams, doHelp, usage, verbosity, showParams, showSources, flushAll, doSSHExport, uploadURI, report, buildRelease, ifSourcesChanged, requiredVersion, prettyPrint, doUpload, doNewDist, newDistProgram, createRelease, buildPackages, flushSource, extraRepos, knownPackages)
 import qualified Debian.AutoBuilder.Version as V
 import Debian.Control.Policy (debianPackageNames, debianSourcePackageName)
 import Debian.Debianize (CabalT, CabalInfo)
@@ -150,7 +152,10 @@ runParameterSet init cache =
       qPutStrLn "Preparing dependency environment"
       extraSlices <- mapM (either (return . (: [])) (liftIO . expandPPASlice (P.baseRelease params))) (R.extraRepos params) >>= return . concat
       dependOS <- prepareDependOS params buildRelease extraSlices
-      let allTargets = filter (notZero . view _1) (P.foldPackages (\ p l -> (view P.spec p, view P.flags p, view P.post p) : l) (R.buildPackages params) [])
+      let allTargets :: [(P.RetrieveMethod, [P.PackageFlag], [CabalInfo -> CabalInfo])]
+          allTargets = map (\i -> f (R.knownPackages (C.params cache) ! i)) (Set.toList (R.buildPackages params))
+          f p = (view P.spec p, view P.flags p, view P.post p)
+      -- let allTargets = filter (notZero . view _1) (P.foldPackages (\ p l -> (view P.spec p, view P.flags p, view P.post p) : l) (R.buildPackages params) [])
       qPutStrLn "Preparing build environment"
       buildOS <- evalMonadOS (do sources <- osBaseDistro <$> getOS
                                  updateCacheSources (R.ifSourcesChanged params) sources

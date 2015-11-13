@@ -15,15 +15,17 @@ import Control.Applicative ((<$>))
 #endif
 import Control.Applicative.Error (Failing(Success, Failure), ErrorMsg)
 import Control.Exception as E (SomeException, try, catch, throw)
+import Control.Lens (view)
 import Control.Monad (when)
 import Control.Monad.Catch (MonadMask)
 import Control.Monad.Trans (MonadIO, liftIO)
+import Data.Map ((!))
 import qualified Debian.AutoBuilder.Types.CacheRec as C
 import qualified Debian.AutoBuilder.Types.Download as T
 import Debian.AutoBuilder.Types.Download (Download(..))
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as R
-import Debian.AutoBuilder.Types.Packages (foldPackages)
+import Debian.AutoBuilder.Types.Packages (pid)
 import Debian.AutoBuilder.Types.ParamRec (ParamRec(..))
 import Debian.Changes (logVersion, ChangeLogEntry(..))
 import Debian.Control (HasDebianControl(debianControl))
@@ -49,16 +51,6 @@ import Debian.Repo.Prelude.Verbosity (quieter, qPutStrLn)
 failing :: ([ErrorMsg] -> b) -> (a -> b) -> Failing a -> b
 failing f _ (Failure errs) = f errs
 failing _ f (Success a)    = f a
-
-{- -- This is now in the Triplets module of cabal-debian
-instance Monad Failing where
-  return = Success
-  m >>= f =
-      case m of
-        (Failure errs) -> (Failure errs)
-        (Success a) -> f a
-  fail errMsg = Failure [errMsg]
--}
 
 -- | A replacement for the BuildTarget class and the BuildTarget.* types.  The method code
 -- moves into the function that turns a RetrieveMethod into a BuildTarget.
@@ -99,10 +91,9 @@ relaxDepends :: (T.Download a) => C.CacheRec -> Buildable a -> SrcPkgName -> Bin
 relaxDepends c x s b =
     any (== b) (map BinPkgName (globalRelaxInfo (C.params c))) ||
     (debianSourcePackageName x == s &&
-     any (== b) (map BinPkgName (concatMap (P.relaxInfo . P._flags) (packageList (R.buildPackages (C.params c))))))
-
-packageList :: P.Packages -> [P.Package]
-packageList p = foldPackages (:) p []
+     any (== b) (map BinPkgName (concatMap (P.relaxInfo . P._flags . get) (R.buildPackages (C.params c)))))
+    where
+      get i = R.knownPackages (C.params c) ! i
 
 -- | Information collected from the build tree for a Tgt.
 data Target download
@@ -146,9 +137,6 @@ prepareBuild _cache target =
                       _ -> error $ "Multiple debian source trees found in " ++ T.getTop target)
            copySource
     where
-{-    checkName tree = source == Just name
-          where source = fieldValue "Source" (head (unControl (control' (debTree' tree)))) -}
-
       copySource :: (MonadOS m, MonadIO m) => DebianSourceTree -> m DebianBuildTree
       copySource debSource =
           do root <- rootPath . osRoot <$> getOS
@@ -203,47 +191,6 @@ escapeForBuild =
       escape '+' = '_'
       escape c = c
 
-{-
-updateDependencyInfo :: G.RelaxInfo -> Relations -> [Target] -> IO [Target]
-updateDependencyInfo relaxInfo globalBuildDeps targets =
-    q12 "Updating dependency info" $
-    getDependencyInfo globalBuildDeps targets >>=
-    (\ ts -> qPutStrLn ("Original dependencies: " ++ show (map (prettyTarget . targetDepends) ts)) >> return ts) >>=
-    (\ ts -> qPutStrLn ("Relaxed dependencies:  " ++ show (map (prettyTarget . targetRelaxed relaxInfo) ts)) >> return ts)
--}
-{-
-prettyTarget :: (G.SrcPkgName, Relations, [G.BinPkgName]) -> Doc
-prettyTarget (src, relss, _bins) = cat (intersperse (text ", ")  (map (prettyRels src) relss))
-
-prettyRels :: G.SrcPkgName -> [Relation] -> Doc
-prettyRels src rels =             cat (intersperse (text " | ") (map (\ rel -> cat [prettySrcPkgName src, prettyRelation rel]) rels))
-
-prettySrcPkgName :: G.SrcPkgName -> Doc
-prettySrcPkgName (G.SrcPkgName pkgname) = text pkgname
--}
-{-
-prettyPkgVersion :: PkgVersion -> Doc
-prettyPkgVersion v = cat [text (getName v ++ "-"), prettyVersion (getVersion v)]
-
-instance Show Target where
-    show target = show . tgt $ target
--}
-
-{-
--- |Retrieve the dependency information for a list of targets
-getDependencyInfo :: Relations -> [Target] -> IO [Target]
-getDependencyInfo globalBuildDeps targets =
-    mapM (getTargetDependencyInfo globalBuildDeps) (cleanSource targets) >>=
-    finish . partitionEithers . zipEithers targets . map eff
-    where
-      finish ([], ok) = return (map (\ (target, deps) -> target {targetDepends = deps}) ok)
-      finish (bad, ok) =
-          do -- FIXME: Any errors here should be fatal
-             qPutStrLn ("Unable to retrieve build dependency info for some targets:\n  " ++
-                           concat (intersperse "\n  " (map (\ (target, message) -> targetName target ++ ": " ++ message) bad)))
-             return (map (\ (target, deps) -> target {targetDepends = deps}) ok)
--}
-
 getRelaxedDependencyInfo :: Relations -> G.RelaxInfo -> DebianBuildTree -> IO (G.DepInfo, G.DepInfo)
 getRelaxedDependencyInfo globalBuildDeps relaxInfo tree =
     do deps <- getTargetDependencyInfo globalBuildDeps tree
@@ -275,20 +222,3 @@ getTargetControlInfo buildTree =
     parseDebianControlFromFile controlPath >>= either throw return
     where
       controlPath = debdir buildTree ++ "/debian/control"
-
-{-
-zipEithers :: [a] -> [Either b c] -> [Either (a, b) (a, c)]
-zipEithers xs ys = 
-    map zipEither (zip xs ys)
-    where
-      zipEither :: (a, Either b c) -> Either (a, b) (a, c)
-      zipEither (x, (Left y)) = Left (x, y)
-      zipEither (x, (Right y)) = Right (x, y)
-
--- Failing From Either - use during conversion
--- ffe :: IO a -> IO (Failing a)
--- ffe a = try a >>= return . either (\ (e :: SomeException) -> Failure [show e]) Success
-
-eff (Failure ss) = Left (intercalate "\n" ss)
-eff (Success x) = Right x
--}

@@ -11,11 +11,13 @@ module Debian.AutoBuilder.Types.ParamRec
     ) where
 
 import Control.Arrow (first)
+import Control.Lens (view)
 import Data.Generics (listify)
 import Data.List as List (map, isInfixOf)
-import Data.Set as Set (Set, insert, toList)
+import Data.Map as Map (Map, elems)
+import Data.Set as Set (Set, fromList, insert, member, toList, unions)
 import Debian.Arch (Arch)
-import Debian.AutoBuilder.Types.Packages (Packages(Packages, list, APackage), Package, GroupName(GroupName), foldPackages, foldPackages')
+import Debian.AutoBuilder.Types.Packages (Package, PackageId, GroupName(GroupName), pid, _groups)
 import Debian.Pretty (PP(..), ppPrint)
 import Debian.Relation (SrcPkgName(SrcPkgName))
 import Debian.Release (ReleaseName )
@@ -269,7 +271,7 @@ data ParamRec =
     --  * 'SourcesChangedRemove' - discard and rebuild the environment
     -- , emailTo :: [String]
     -- -- ^ Who should get emails of autobuilder progress messages.
-    , knownPackages :: Packages
+    , knownPackages :: Map PackageId Package
     -- ^ The set of all known packages
   }
 
@@ -433,15 +435,6 @@ optSpecs =
     ]
     where
       addTarget s p = (targets p) {groups = Set.insert s (groups (targets p))}
-{-
-      allTargets p =
-          p {targets = let name = (relName (buildRelease p)) in TargetList (myTargets (releaseTargetNamePred name) name)})
-      ++ [find s p]
-      find s p = case filter (\ t -> sourcePackageName t == s) (myTargets (const True) (relName (buildRelease p))) of
-                   [x] -> x
-                   [] -> error $ "Package not found: " ++ s
-                   xs -> error $ "Multiple packages found: " ++ show (map sourcePackageName xs)
--}
 
 #if 0
 readPattern :: Monad m => String -> m RetrieveMethod
@@ -526,28 +519,16 @@ fmtLong (NoArg  _   ) lo = "--" ++ lo
 fmtLong (ReqArg _ ad) lo = "--" ++ lo ++ "=" ++ ad
 fmtLong (OptArg _ ad) lo = "--" ++ lo ++ "[=" ++ ad ++ "]"
 
-buildPackages :: ParamRec -> Packages
+buildPackages :: ParamRec -> Set PackageId
 buildPackages params =
     case targets params of
-      TargetSpec {allTargets = True} -> knownPackages params
-      TargetSpec {groups = names} -> Packages {list = map findByName (toList names) ++ map APackage (findByPattern (patterns params))}
+      TargetSpec {allTargets = True} -> Set.fromList (map (view pid) (Map.elems (knownPackages params)))
+      TargetSpec {groups = names} -> Set.unions (findByPattern (patterns params) : map findByName (toList names))
     where
-      findByName :: GroupName -> Packages
-      findByName s =
-          foldPackages' f n g h (knownPackages params) mempty
-          where
-            f _ r = r
-            n s' p r = if s == s'
-                       then mappend r p
-                       else foldPackages' f n g h p r
-            g ps r = foldr (foldPackages' f n g h) r ps
-            h r = r
-      -- Filter the singleton packages by whether its RetrieveMethod
-      -- contains pat.
-      findByPattern :: [String] -> [Package]
-      findByPattern pats =
-          foldPackages (\ p r -> case testPatterns pats p of
-                                   False -> r
-                                   True -> p : r) (knownPackages params) []
+      findByName :: GroupName -> Set PackageId
+      findByName s = Set.fromList (map (view pid) (filter (\p -> Set.member s (_groups p)) (Map.elems (knownPackages params))))
+      -- Filter the singleton packages by whether its RetrieveMethod contains pat.
+      findByPattern :: [String] -> Set PackageId
+      findByPattern pats = Set.fromList (map (view pid) (filter (testPatterns pats) (Map.elems (knownPackages params))))
       testPatterns :: [String] -> Package -> Bool
       testPatterns pats p = any (\ s -> not $ null $ listify (isInfixOf s) p) pats
