@@ -15,7 +15,7 @@ import Debian.Repo.Fingerprint (RetrieveMethod, retrieveMethodMD5)
 import Debian.Repo.Rsync (rsyncOld)
 import Debian.Version (version)
 import System.Directory
-import System.FilePath ((</>))
+import System.FilePath ((</>), takeBaseName)
 
 documentation = [ "deb-dir:(<target>):(<target>) - A target of this form combines two targets,"
                 , "where one points to an un-debianized source tree and the other contains"
@@ -39,22 +39,25 @@ instance (Download a, Download b) => Download (DebDirDL a b) where
 
 prepare :: (MonadRepos m, MonadTop m, T.Download a, T.Download b) =>
            RetrieveMethod -> [P.PackageFlag] -> a -> b -> m SomeDownload
-prepare method flags upstream debian =
-    sub "deb-dir" >>= \ dir ->
-    sub ("deb-dir" </> retrieveMethodMD5 method) >>= \ dest ->
-    liftIO (createDirectoryIfMissing True dir) >>
-    rsyncOld [] (T.getTop upstream) dest >>
-    rsyncOld [] (T.getTop debian </> "debian") (dest </> "debian") >>
-    liftIO (findSourceTree dest :: IO DebianSourceTree) >>= \ tree ->
+prepare method flags upstream debian = do
+  dir <- sub "deb-dir"
+  dest <- sub ("deb-dir" </> retrieveMethodMD5 method)
+  liftIO (createDirectoryIfMissing True dir)
+  rsyncOld [] (T.getTop upstream) dest
+  let debianSubdir = case takeBaseName (T.getTop debian) of
+                       "debian" -> T.getTop debian
+                       _ -> (T.getTop debian </> "debian")
+  rsyncOld [] debianSubdir (dest </> "debian")
+  tree <- liftIO (findSourceTree dest :: IO DebianSourceTree)
 
-    let tgt = DebDirDL {ddMethod = method, ddFlags = flags, upstream = SomeDownload upstream, debian = SomeDownload debian, tree = tree} in
-    -- The upstream and downstream versions must match after the epoch and revision is stripped.
-    case T.mVersion upstream of
-      Nothing -> return $ SomeDownload tgt
-      Just upstreamV ->
-          let debianV = logVersion (entry tree) in
-          case compare (version debianV) (showVersion upstreamV) of
-            -- If the debian version is too old it needs to be bumped, this ensures we notice
-            -- when a new upstream appears.  We should just modify the changelog directly.
-            LT -> error $ show method ++ ": version in Debian changelog (" ++ version debianV ++ ") is too old for the upstream (" ++ showVersion upstreamV ++ ")"
-            _ -> return $ SomeDownload tgt
+  let tgt = DebDirDL {ddMethod = method, ddFlags = flags, upstream = SomeDownload upstream, debian = SomeDownload debian, tree = tree}
+  -- The upstream and downstream versions must match after the epoch and revision is stripped.
+  case T.mVersion upstream of
+    Nothing -> return $ SomeDownload tgt
+    Just upstreamV ->
+        let debianV = logVersion (entry tree) in
+        case compare (version debianV) (showVersion upstreamV) of
+          -- If the debian version is too old it needs to be bumped, this ensures we notice
+          -- when a new upstream appears.  We should just modify the changelog directly.
+          LT -> error $ show method ++ ": version in Debian changelog (" ++ version debianV ++ ") is too old for the upstream (" ++ showVersion upstreamV ++ ")"
+          _ -> return $ SomeDownload tgt
