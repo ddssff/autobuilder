@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, DeriveDataTypeable, FlexibleContexts, RankNTypes, ScopedTypeVariables, TemplateHaskell #-}
+{-# LANGUAGE CPP, DeriveDataTypeable, FlexibleContexts, FlexibleInstances, RankNTypes, ScopedTypeVariables, TemplateHaskell #-}
 -- | The Packages type specifies how to obtain the source code for one
 -- or more packages.
 module Debian.AutoBuilder.Types.Packages
