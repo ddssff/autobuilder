@@ -115,9 +115,9 @@ prepare method flags theUri gitspecs =
              case exists of
                False -> return False
                True -> do
-                 readProc (proc "git" ["pull", "--all"]) {cwd = Just dir} B.empty
                  maybe (return ()) (\x -> readProc (proc "git" ["reset", "--hard", x]) {cwd = Just dir} B.empty) commit
                  readProc (proc "git" ["checkout", "-f", branch]) {cwd = Just dir} B.empty
+                 readProc (proc "git" ["pull", "--all"]) {cwd = Just dir} B.empty
                  return True
       cloneSource dir =
           do let (parent, _) = splitFileName dir

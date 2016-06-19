@@ -104,6 +104,9 @@ data Package
       , _groups :: Set GroupName
       } deriving (Show, Data, Typeable) -- We can't derive Eq because post contains functions
 
+instance Show (CabalInfo -> CabalInfo) where
+    show _ = "<function>"
+
 type NodeLabel = PackageId
 type EdgeLabel = ()
 
