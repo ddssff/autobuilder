@@ -71,6 +71,7 @@ import Debian.Repo (DebianSourceTree, findDebianSourceTrees)
 import Debian.Repo.Fingerprint (RetrieveMethod(..), GitSpec(..))
 import Distribution.Package as Cabal (PackageName)
 import System.FilePath ((</>))
+import Text.Show.Functions ()
 
 -- | A type for the group name of a Packages record, used to reference
 -- a group of packages.
@@ -103,9 +104,6 @@ data Package
       -- ^ Final transformations to perform on the package info.
       , _groups :: Set GroupName
       } deriving (Show, Data, Typeable) -- We can't derive Eq because post contains functions
-
-instance Show (CabalInfo -> CabalInfo) where
-    show _ = "<function>"
 
 type NodeLabel = PackageId
 type EdgeLabel = ()
