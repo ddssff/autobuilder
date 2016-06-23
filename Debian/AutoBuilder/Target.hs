@@ -351,13 +351,13 @@ qError message = qPutStrLn message >> error message
 
 -- Decide whether a target needs to be built and, if so, build it.
 buildTarget ::
-    (MonadRepos m, MonadTop m, MonadApt m, MonadMask m, T.Download a) =>
-    P.CacheRec ->                       -- configuration info
-    EnvRoot ->
-    EnvRoot ->
-    LocalRepository ->                  -- ^ The local repository the packages will be uploaded to, this also may already contain packages.
-    Target a ->
-    m (Maybe LocalRepository)   -- The local repository after the upload (if it changed)
+    (MonadRepos m, MonadTop m, MonadApt m, MonadMask m, T.Download a)
+ => P.CacheRec                       -- configuration info
+ -> EnvRoot
+ -> EnvRoot
+ -> LocalRepository                  -- ^ The local repository the packages will be uploaded to, this also may already contain packages.
+ -> Target a
+ -> m (Maybe LocalRepository)   -- The local repository after the upload (if it changed)
 buildTarget cache dependOS buildOS repo !target = do
   -- Get the control file from the clean source and compute the
   -- build dependencies
