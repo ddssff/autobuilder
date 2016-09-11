@@ -84,6 +84,7 @@ prepare method flags theUri gitspecs =
       tree <- prepareSource dir
       _output <- fixLink base
       let p = (proc "git" ["log", "-n", "1", "--pretty=%H"]) {cwd = Just dir}
+      putStrLn (" -> " ++ showCreateProcessForUser p)
       (code, out, _) <- readCreateProcessWithExitCode p ""
       commit <- case code of
                   ExitSuccess -> return . head . lines $ out
