@@ -14,6 +14,7 @@ import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as L
 import Data.List (isPrefixOf, tails, intercalate)
 import Data.Maybe (mapMaybe)
+import Data.Set as Set (fromList, toList)
 import Data.Version (Version, showVersion, parseVersion)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Download as T
@@ -69,7 +70,7 @@ prepare cache method flags name =
                                            , version = version
                                            , tar = tar }
     where
-      versionString = case mapMaybe P.cabalPin flags of
+      versionString = case Set.toList (Set.fromList (mapMaybe P.cabalPin flags)) of
                         [] -> Nothing
                         [v] -> Just v
                         vs -> error ("Conflicting cabal version numbers passed to Debianize: [" ++ intercalate ", " vs ++ "]")

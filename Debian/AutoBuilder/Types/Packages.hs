@@ -392,8 +392,9 @@ dir path = method 5 (Dir path)
 git :: String -> [GitSpec] -> TSt PackageId
 git path gitspecs = method 6 (Git path gitspecs)
 
-hackage :: String -> TSt PackageId
-hackage s = method 7 (Hackage s)
+hackage :: Maybe String -> String -> TSt PackageId
+hackage Nothing s = method 7 (Hackage s)
+hackage (Just v) s = method 7 (Hackage s) >>= flag (CabalPin v)
 
 hg :: String -> TSt PackageId
 hg path = method 8 (Hg path)
