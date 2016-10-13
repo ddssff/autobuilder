@@ -23,7 +23,7 @@ import qualified Debian.AutoBuilder.Types.CacheRec as P (CacheRec(params))
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P (buildRelease)
-import Debian.Debianize as Cabal hiding (package) -- (CabalT, compileArgs, debianize, evalCabalT, makeAtoms, runDebianizeScript, SourceFormat(Native3), sourceFormat, sourcePackageName, writeDebianization, (~?=), debInfo)
+import Debian.Debianize as Cabal (CabalInfo, withCurrentDirectory, dependOS, performDebianization, (.?=), CabalT, runDebianizeScript, SourceFormat(Native3), sourceFormat, sourcePackageName, debInfo)
 import Debian.Pretty (ppShow)
 import Debian.Relation (SrcPkgName(..))
 import Debian.Repo.Fingerprint (RetrieveMethod(Debianize''), retrieveMethodMD5)
@@ -87,8 +87,8 @@ prepare defaultAtoms cache method@(Debian.Repo.Fingerprint.Debianize'' _ sourceN
          _ -> error $ "Download at " ++ cabdir ++ ": missing or multiple cabal files"
 prepare _ _ method _ _ _ = error $ "Unexpected method passed to Debianize.prepare: " ++ show method
 
-withCurrentDirectory :: (MonadMask m, MonadIO m) => FilePath -> m a -> m a
-withCurrentDirectory new action = bracket (liftIO getCurrentDirectory >>= \ old -> liftIO (setCurrentDirectory new) >> return old) (liftIO . setCurrentDirectory) (\ _ -> action)
+-- withCurrentDirectory :: (MonadMask m, MonadIO m) => FilePath -> m a -> m a
+-- withCurrentDirectory new action = bracket (liftIO getCurrentDirectory >>= \ old -> liftIO (setCurrentDirectory new) >> return old) (liftIO . setCurrentDirectory) (\ _ -> action)
 
 {-
 -- | Run cabal-debian on the given directory, creating or updating the

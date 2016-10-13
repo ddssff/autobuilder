@@ -432,6 +432,10 @@ optSpecs =
       "Output a report of packages that are pinned or patched."
     , Option ['h'] ["help", "usage"] (NoArg (Right (\ p -> p {doHelp = True})))
       "Print a help message and exit."
+    , Option [] ["setenv"] (ReqArg (\s -> Right (\p -> p {setEnv = (case break (== '=') s of
+                                                                      (_, "") -> (s, Nothing)
+                                                                      (s', v) -> (s, Just v)) : setEnv p})) "NAME=VALUE")
+      "Set an environment variable during build."
     ]
     where
       addTarget s p = (targets p) {groups = Set.insert s (groups (targets p))}

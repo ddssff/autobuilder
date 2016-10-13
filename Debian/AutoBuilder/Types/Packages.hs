@@ -380,8 +380,8 @@ datafiles' cabal files dest = do
   modifyPackage (const (set spec (DataFiles (view spec cabal') (view spec files') dest) cabal')) cabal
   return cabal
 
-debianize :: PackageId -> TSt PackageId
-debianize = modifyPackage (\p -> set spec (Debianize'' (view spec p) Nothing) p)
+debianize :: [String] -> PackageId -> TSt PackageId
+debianize args = modifyPackage (\p -> set spec (Debianize'' (view spec p) Nothing) p)
 
 debdir :: RetrieveMethod -> PackageId -> TSt PackageId
 debdir debian i = modifyPackage (\p -> set spec (DebDir (view spec p) debian) p) i
