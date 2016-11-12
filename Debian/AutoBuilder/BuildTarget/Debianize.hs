@@ -19,10 +19,10 @@ import Data.Monoid ((<>))
 import Data.Version (Version)
 import Debian.AutoBuilder.BuildEnv (envSet)
 import Debian.AutoBuilder.Params (computeTopDir)
-import qualified Debian.AutoBuilder.Types.CacheRec as P (CacheRec(params))
-import qualified Debian.AutoBuilder.Types.Download as T
-import qualified Debian.AutoBuilder.Types.Packages as P
-import qualified Debian.AutoBuilder.Types.ParamRec as P (buildRelease)
+import qualified Debian.AutoBuilder.Types.CacheRec as CR (CacheRec(params))
+import qualified Debian.AutoBuilder.Types.Download as DL
+import qualified Debian.AutoBuilder.Types.Packages as PS
+import qualified Debian.AutoBuilder.Types.ParamRec as PR (buildRelease)
 import Debian.Debianize as Cabal (CabalInfo, withCurrentDirectory, dependOS, performDebianization, (.?=), CabalT, runDebianizeScript, SourceFormat(Native3), sourceFormat, sourcePackageName, debInfo)
 import Debian.Pretty (ppShow)
 import Debian.Relation (SrcPkgName(..))
@@ -43,29 +43,29 @@ documentation :: [String]
 documentation = [ "hackage:<name> or hackage:<name>=<version> - a target of this form"
                 , "retrieves source code from http://hackage.haskell.org." ]
 
-data T.Download a => DebianizeDL a
+data DL.Download a => DebianizeDL a
     = DebianizeDL { def :: CabalT IO ()
                   , method :: RetrieveMethod
-                  , debFlags :: [P.PackageFlag]
+                  , debFlags :: [PS.PackageFlag]
                   , cabal :: a
                   , version :: Version
                   , dir :: FilePath }
 
-instance T.Download a => T.Download (DebianizeDL a) where
+instance DL.Download a => DL.Download (DebianizeDL a) where
     method = method
     flags = debFlags
     getTop = dir
     logText x = "Built from hackage, revision: " ++ show (method x)
     mVersion = Just . version
-    origTarball = T.origTarball . cabal
-    flushSource x = T.flushSource (cabal x) >> liftIO (removeRecursiveSafely (dir x))
-    cleanTarget x = \ top -> T.cleanTarget (cabal x) top
-    attrs = T.attrs . cabal
+    origTarball = DL.origTarball . cabal
+    flushSource x = DL.flushSource (cabal x) >> liftIO (removeRecursiveSafely (dir x))
+    cleanTarget x = \ top -> DL.cleanTarget (cabal x) top
+    attrs = DL.attrs . cabal
 
 -- | Debianize the download, which is assumed to be a cabal package.
-prepare :: (MonadRepos m, MonadTop m, T.Download a) => CabalT IO () -> P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> [CabalInfo -> CabalInfo] -> a -> m T.SomeDownload
+prepare :: (MonadRepos m, MonadTop m, DL.Download a) => CabalT IO () -> CR.CacheRec -> RetrieveMethod -> [PS.PackageFlag] -> [CabalInfo -> CabalInfo] -> a -> m DL.SomeDownload
 prepare defaultAtoms cache method@(Debian.Repo.Fingerprint.Debianize'' _ sourceName) flags functions cabal =
-    do let cabdir = T.getTop cabal
+    do let cabdir = DL.getTop cabal
        debdir <- sub ("debianize" </> retrieveMethodMD5 method)
        liftIO $ createDirectoryIfMissing True debdir
        _ <- rsyncOld [] cabdir debdir
@@ -78,7 +78,7 @@ prepare defaultAtoms cache method@(Debian.Repo.Fingerprint.Debianize'' _ sourceN
                 -- We want to see the original changelog, so don't remove this
                 -- removeRecursiveSafely (dir </> "debian")
                 liftIO $ autobuilderCabal cache flags functions sourceName debdir defaultAtoms
-                return $ T.SomeDownload $ DebianizeDL { def = defaultAtoms
+                return $ DL.SomeDownload $ DebianizeDL { def = defaultAtoms
                                                       , method = method
                                                       , debFlags = flags
                                                       , cabal = cabal
@@ -106,11 +106,11 @@ autobuilderDebianize cache pflags currentDirectory =
 -- it looks for a debian/Debianize.hs script and tries to run that, if
 -- that doesn't work it runs cabal-debian --native, adding any options
 -- it can infer from the package flags.
-autobuilderCabal :: P.CacheRec -> [P.PackageFlag] -> [CabalInfo -> CabalInfo] -> Maybe String -> FilePath -> CabalT IO () -> IO ()
+autobuilderCabal :: CR.CacheRec -> [PS.PackageFlag] -> [CabalInfo -> CabalInfo] -> Maybe String -> FilePath -> CabalT IO () -> IO ()
 autobuilderCabal cache flags functions sourceName debianizeDirectory defaultAtoms =
     Cabal.withCurrentDirectory debianizeDirectory $
-    do let rel = P.buildRelease $ P.params cache
-       top <- computeTopDir (P.params cache)
+    do let rel = PR.buildRelease $ CR.params cache
+       top <- computeTopDir (CR.params cache)
        eset <- runTopT top (envSet rel)
        -- let (functions, flags) = partitionEithers (map (\ x -> case x of P.ModifyAtoms fn -> Left fn; _ -> Right x) pflags)
        v <- return 0 -- verbosity
@@ -144,29 +144,29 @@ groom args = foldl nubOpt args ["--disable-tests", "--no-tests"]
 class CabalFlags a where
     asCabalFlags :: a -> [String]
 
-instance CabalFlags P.PackageFlag where
-    asCabalFlags (P.Maintainer s) = ["--maintainer", s]
-    asCabalFlags (P.BuildDep s) = ["--build-dep", s]
-    asCabalFlags (P.DevelDep s) = ["--build-dep", s, "--dev-dep", s]
-    asCabalFlags (P.SetupDep s) = []
-    asCabalFlags (P.MapDep c d) = ["--dep-map", c ++ ":" ++ ppShow d]
-    asCabalFlags (P.DebVersion s) = ["--deb-version", s]
-    asCabalFlags (P.SkipVersion _) = []
-    asCabalFlags (P.FailVersion _) = []
-    asCabalFlags P.SkipPackage = []
-    asCabalFlags P.FailPackage = []
-    asCabalFlags (P.Revision s) = ["--revision", s]
-    asCabalFlags (P.Epoch name d) = ["--epoch-map", name ++ "=" ++ show d]
-    asCabalFlags P.NoDoc = ["--disable-haddock"]
-    asCabalFlags P.NoHoogle = ["--no-hoogle"]
-    -- P.CabalDebian is the most future proof way to pass options to
+instance CabalFlags PS.PackageFlag where
+    asCabalFlags (PS.Maintainer s) = ["--maintainer", s]
+    asCabalFlags (PS.BuildDep s) = ["--build-dep", s]
+    asCabalFlags (PS.DevelDep s) = ["--build-dep", s, "--dev-dep", s]
+    asCabalFlags (PS.SetupDep s) = []
+    asCabalFlags (PS.MapDep c d) = ["--dep-map", c ++ ":" ++ ppShow d]
+    asCabalFlags (PS.DebVersion s) = ["--deb-version", s]
+    asCabalFlags (PS.SkipVersion _) = []
+    asCabalFlags (PS.FailVersion _) = []
+    asCabalFlags PS.SkipPackage = []
+    asCabalFlags PS.FailPackage = []
+    asCabalFlags (PS.Revision s) = ["--revision", s]
+    asCabalFlags (PS.Epoch name d) = ["--epoch-map", name ++ "=" ++ show d]
+    asCabalFlags PS.NoDoc = ["--disable-haddock"]
+    asCabalFlags PS.NoHoogle = ["--no-hoogle"]
+    -- PS.CabalDebian is the most future proof way to pass options to
     -- cabal-debian, most of the other cases can be done with this one
-    asCabalFlags (P.CabalDebian ss) = ss
-    asCabalFlags (P.RelaxDep _) = []
-    asCabalFlags (P.UDeb _) = []
-    asCabalFlags P.OmitLTDeps = [] -- I think this exists
-    asCabalFlags (P.AptPin _) = []
-    asCabalFlags (P.CabalPin _) = []
-    asCabalFlags (P.DarcsTag _) = []
-    asCabalFlags (P.GitBranch _) = []
-    asCabalFlags P.KeepRCS = []
+    asCabalFlags (PS.CabalDebian ss) = ss
+    asCabalFlags (PS.RelaxDep _) = []
+    asCabalFlags (PS.UDeb _) = []
+    asCabalFlags PS.OmitLTDeps = [] -- I think this exists
+    asCabalFlags (PS.AptPin _) = []
+    asCabalFlags (PS.CabalPin _) = []
+    asCabalFlags (PS.DarcsTag _) = []
+    asCabalFlags (PS.GitBranch _) = []
+    asCabalFlags PS.KeepRCS = []

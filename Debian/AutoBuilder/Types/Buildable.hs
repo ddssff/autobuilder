@@ -15,7 +15,6 @@ import Control.Applicative ((<$>))
 #endif
 import Control.Applicative.Error (Failing(Success, Failure), ErrorMsg)
 import Control.Exception as E (SomeException, try, catch, throw)
-import Control.Lens (view)
 import Control.Monad (when)
 import Control.Monad.Catch (MonadMask)
 import Control.Monad.Trans (MonadIO, liftIO)
@@ -25,7 +24,6 @@ import qualified Debian.AutoBuilder.Types.Download as T
 import Debian.AutoBuilder.Types.Download (Download(..))
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as R
-import Debian.AutoBuilder.Types.Packages (pid)
 import Debian.AutoBuilder.Types.ParamRec (ParamRec(..))
 import Debian.Changes (logVersion, ChangeLogEntry(..))
 import Debian.Control (HasDebianControl(debianControl))
