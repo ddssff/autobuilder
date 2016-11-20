@@ -40,7 +40,7 @@ instance Show Patch where
 documentation :: [String]
 documentation = [ "Patch <target> <patchtext> - Apply the patch to the target." ]
 
-data T.Download a => PatchDL a
+data PatchDL a
     = PatchDL { method :: RetrieveMethod
               , flags :: [P.PackageFlag]
               , patch :: B.ByteString

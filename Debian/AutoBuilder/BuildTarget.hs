@@ -44,7 +44,7 @@ import Debian.Repo.Top (MonadTop)
 import System.FilePath ((</>))
 import System.Unix.Mount (WithProcAndSys)
 
-data Download a => CdDL a
+data CdDL a
     = CdDL { cd :: P.RetrieveMethod
            , fs :: [P.PackageFlag]
            , dir :: FilePath
@@ -60,7 +60,7 @@ instance Download a => Download (CdDL a) where
     cleanTarget x = cleanTarget (parent x)
     attrs = attrs . parent
 
-data Download a => ProcDL a
+data ProcDL a
     = ProcDL { procMethod :: P.RetrieveMethod
              , procFlags :: [P.PackageFlag]
              , base :: a

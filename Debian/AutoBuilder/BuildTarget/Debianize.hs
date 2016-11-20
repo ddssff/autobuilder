@@ -43,7 +43,7 @@ documentation :: [String]
 documentation = [ "hackage:<name> or hackage:<name>=<version> - a target of this form"
                 , "retrieves source code from http://hackage.haskell.org." ]
 
-data DL.Download a => DebianizeDL a
+data DebianizeDL a
     = DebianizeDL { def :: CabalT IO ()
                   , method :: RetrieveMethod
                   , debFlags :: [PS.PackageFlag]

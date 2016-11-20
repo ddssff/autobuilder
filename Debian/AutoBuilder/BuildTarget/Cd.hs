@@ -13,7 +13,7 @@ documentation = [ "cd:<relpath>:<target> - A target of this form modifies anothe
                 , "changing directories into a subdirectory before doing the build.  It is"
                 , "used for repositories where the debian directory is in a subdirectory."]
 
-data Download a => CdDL a
+data CdDL a
     = CdDL { cdMethod :: RetrieveMethod
            , cdFlags :: [P.PackageFlag]
            , subdir :: FilePath

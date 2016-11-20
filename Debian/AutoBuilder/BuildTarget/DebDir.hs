@@ -21,7 +21,7 @@ documentation = [ "deb-dir:(<target>):(<target>) - A target of this form combine
                 , "where one points to an un-debianized source tree and the other contains"
                 , "a debian subdirectory." ]
 
-data (Download a, Download b) => DebDirDL a b
+data DebDirDL a b
     = DebDirDL { ddMethod :: RetrieveMethod
                , ddFlags :: [P.PackageFlag]
                , upstream :: a

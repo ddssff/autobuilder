@@ -85,7 +85,7 @@ makeQuiltTree m base patch =
 failing f _ (Failure x) = f x
 failing _ s (Success x) = s x
 
-data (T.Download a, T.Download b) => QuiltDL a b
+data QuiltDL a b
     = QuiltDL
       { method :: RetrieveMethod
       , flags :: [P.PackageFlag]
