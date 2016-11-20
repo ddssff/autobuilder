@@ -455,7 +455,7 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
              -- to set the exact version number.
              let ver = maybe [] (\ v -> [("CABALDEBIAN", Just (show ["--deb-version", show (prettyDebianVersion v)]))]) newVersion
              let env = ver ++ P.setEnv (P.params cache)
-             let action = buildDebs (P.noClean (P.params cache)) False env buildTree decision
+             let action = buildDebs (P.noClean (P.params cache)) env buildTree decision
              elapsed <- T.buildWrapper (download (tgt target)) action
              return (buildTree, elapsed)
 
