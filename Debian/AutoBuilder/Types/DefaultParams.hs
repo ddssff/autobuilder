@@ -8,6 +8,7 @@ import Data.Maybe
 import Data.Set as Set (empty, fromList)
 import Debian.Arch (Arch(Binary), ArchCPU(ArchCPU), ArchOS(ArchOS))
 import Debian.AutoBuilder.Types.ParamRec (ParamRec(..), Strictness(..), TargetSpec(..))
+import Debian.Relation (BinPkgName(BinPkgName))
 import Debian.Release (ReleaseName(ReleaseName, relName))
 import Debian.Repo (SourcesChangedAction(SourcesChangedError))
 import Debian.Sources (DebSource, parseSourceLine)
@@ -253,8 +254,9 @@ defaultGlobalRelaxInfo =
      "libc6-dev",
      "haskell-devscripts"]
 
-defaultIncludePackages :: [String]
+defaultIncludePackages :: [BinPkgName]
 defaultIncludePackages =
+    map BinPkgName
     [ "debian-archive-keyring"
     , "build-essential"         -- This is required by autobuilder code that opens the essential-packages list
     , "pkg-config"              -- Some packages now depend on this package via new cabal options.

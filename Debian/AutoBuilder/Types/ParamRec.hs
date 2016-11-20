@@ -19,8 +19,8 @@ import Data.Set as Set (Set, fromList, insert, member, toList, unions)
 import Debian.Arch (Arch)
 import Debian.AutoBuilder.Types.Packages (Package, PackageId, GroupName(GroupName), pid, _groups)
 import Debian.Pretty (PP(..), ppPrint)
-import Debian.Relation (SrcPkgName(SrcPkgName))
-import Debian.Release (ReleaseName )
+import Debian.Relation (BinPkgName, SrcPkgName(SrcPkgName))
+import Debian.Release (ReleaseName)
 --import Debian.Repo.Fingerprint (RetrieveMethod)
 import Debian.Repo.Slice (SourcesChangedAction, Slice, PPASlice)
 import Debian.Sources (DebSource)
@@ -195,7 +195,7 @@ data ParamRec =
     -- dist-upgrade@.  'Lax' means that build dependencies are
     -- installed into the clean build environment so that they
     -- accumulate across runs.
-    , includePackages :: [String]
+    , includePackages :: [BinPkgName]
     -- ^ Additional packages to include in the clean build environment.
     -- Adding packages here can speed things up when you are building many
     -- packages, because for each package it reverts the build environment
@@ -203,12 +203,12 @@ data ParamRec =
     -- dependencies.  This only affects newly created environments, so if
     -- you change this value use the flushRoot option to get it to take
     -- effect.
-    , optionalIncludePackages :: [String]
+    , optionalIncludePackages :: [BinPkgName]
     -- ^ Additional packages that might not be immediately
     -- available when a release is created - specifically,
     -- seereason-keyring, which must be built and uploaded to each new
     -- distribution, at least the way we do things.
-    , excludePackages :: [String]
+    , excludePackages :: [BinPkgName]
     -- ^ Specify packages for build-env to omit from the package list
     -- even if they are marked essential
     , components :: [String]
