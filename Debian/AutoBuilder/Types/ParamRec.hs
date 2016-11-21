@@ -355,7 +355,7 @@ prettyPrint x =
             --, "baseRelease sources=\n" ++ show (lookup (sliceName (baseRelease x)) (sources x))
             ]
 
--- |A Left String value indicates that beginning of a new autobuilder
+-- |A Left String value indicates the beginning of a new autobuilder
 -- run for the named release.  Following that are Right (ParamRec ->
 -- ParamRec) values which transform the parameter record that
 -- describes that autobuilder run.

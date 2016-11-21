@@ -2,7 +2,7 @@
 -- |AutoBuilder - application to build Debian packages in a clean
 -- environment.  In the following list, each module's dependencies
 -- appear above it:
-module Debian.AutoBuilder.Main 
+module Debian.AutoBuilder.Main
     ( main
     ) where
 
