@@ -8,6 +8,7 @@ import Data.Maybe
 import Data.Set as Set (empty, fromList)
 import Debian.Arch (Arch(Binary), ArchCPU(ArchCPU), ArchOS(ArchOS))
 import Debian.AutoBuilder.Types.ParamRec (ParamRec(..), Strictness(..), TargetSpec(..))
+import Debian.GHC (CompilerVendor(Debian))
 import Debian.Relation (BinPkgName(BinPkgName))
 import Debian.Release (ReleaseName(ReleaseName, relName))
 import Debian.Repo (SourcesChangedAction(SourcesChangedError))
@@ -32,6 +33,7 @@ defaultParams myBuildRelease -- e.g. wheezy or precise
     ParamRec
     { vendorTag = defaultVendorTag
     , oldVendorTags = []
+    , compilerPackage = Debian
     , autobuilderEmail = "SeeReason Autobuilder <partners@seereason.com>"
     , releaseSuffixes = defaultReleaseSuffixes
     , buildRelease = ReleaseName {relName = myBuildRelease}

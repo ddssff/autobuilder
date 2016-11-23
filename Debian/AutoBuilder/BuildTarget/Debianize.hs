@@ -16,14 +16,15 @@ import Data.List (isSuffixOf, partition)
 #if !MIN_VERSION_base(4,8,0)
 import Data.Monoid ((<>))
 #endif
-import Data.Version (Version)
+import Data.Version (showVersion, Version)
 import Debian.AutoBuilder.BuildEnv (envSet)
 import Debian.AutoBuilder.Params (computeTopDir)
 import qualified Debian.AutoBuilder.Types.CacheRec as CR (CacheRec(params))
 import qualified Debian.AutoBuilder.Types.Download as DL
 import qualified Debian.AutoBuilder.Types.Packages as PS
-import qualified Debian.AutoBuilder.Types.ParamRec as PR (buildRelease)
+import qualified Debian.AutoBuilder.Types.ParamRec as PR (buildRelease, compilerPackage)
 import Debian.Debianize as Cabal (CabalInfo, withCurrentDirectory, dependOS, performDebianization, (.?=), CabalT, runDebianizeScript, SourceFormat(Native3), sourceFormat, sourcePackageName, debInfo)
+import Debian.GHC (CompilerVendor(Debian, HVR))
 import Debian.Pretty (ppShow)
 import Debian.Relation (SrcPkgName(..))
 import Debian.Repo.Fingerprint (RetrieveMethod(Debianize''), retrieveMethodMD5)
@@ -119,6 +120,9 @@ autobuilderCabal cache flags functions sourceName debianizeDirectory defaultAtom
                    ["--native"] ++
                    maybe [] (\ name -> ["--source-package-name", name]) sourceName ++
                    ["--buildenvdir", takeDirectory (dependOS eset)] ++
+                   (case PR.compilerPackage (CR.params cache) of
+                      Debian -> []
+                      HVR v -> ["--hvr-version", showVersion v]) ++
                    replicate v "-v" ++
                    concatMap asCabalFlags flags
        -- This will return false if the package has no debian/Debianize.hs script.

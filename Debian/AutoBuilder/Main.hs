@@ -34,10 +34,11 @@ import Debian.AutoBuilder.Types.Buildable (Target, Buildable(debianSourceTree), 
 import Debian.AutoBuilder.Types.Download (SomeDownload(..), Download(..))
 import qualified Debian.AutoBuilder.Types.CacheRec as C
 import qualified Debian.AutoBuilder.Types.Packages as P (spec, flags, post, PackageFlag(CabalPin))
-import qualified Debian.AutoBuilder.Types.ParamRec as R (ParamRec, getParams, doHelp, usage, verbosity, showParams, showSources, flushAll, doSSHExport, uploadURI, report, buildRelease, ifSourcesChanged, requiredVersion, prettyPrint, doUpload, doNewDist, newDistProgram, createRelease, buildPackages, flushSource, extraRepos, knownPackages)
+import qualified Debian.AutoBuilder.Types.ParamRec as R
 import qualified Debian.AutoBuilder.Version as V
 import Debian.Control.Policy (debianPackageNames, debianSourcePackageName)
 import Debian.Debianize (CabalT, CabalInfo)
+import Debian.GHC (withCompilerPATH)
 import Debian.Pretty (prettyShow, ppShow)
 import Debian.Relation (BinPkgName(unBinPkgName), SrcPkgName(unSrcPkgName))
 import Debian.Release (ReleaseName(ReleaseName, relName), releaseName')
@@ -124,7 +125,9 @@ doParameterSet _ results _ | any isFailure results = return results
 doParameterSet init results params = do
   result <- withVerbosity (R.verbosity params)
             (do top <- askTop
-                withLock (top </> "lockfile") (P.buildCache params >>= runParameterSet init))
+                withCompilerPATH (R.compilerPackage params) $
+                  withLock (top </> "lockfile") $
+                    P.buildCache params >>= runParameterSet init)
               `catch` (\ (e :: SomeException) -> return (Failure [show e]))
   return (result : results)
 

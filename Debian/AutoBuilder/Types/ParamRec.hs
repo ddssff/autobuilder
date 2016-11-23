@@ -18,6 +18,7 @@ import Data.Map as Map (Map, elems)
 import Data.Set as Set (Set, fromList, insert, member, toList, unions)
 import Debian.Arch (Arch)
 import Debian.AutoBuilder.Types.Packages (Package, PackageId, GroupName(GroupName), pid, _groups)
+import Debian.GHC (CompilerVendor)
 import Debian.Pretty (PP(..), ppPrint)
 import Debian.Relation (BinPkgName, SrcPkgName(SrcPkgName))
 import Debian.Release (ReleaseName)
@@ -47,6 +48,9 @@ data ParamRec =
     -- ^ Additional vendor tags that should be treated as part of the local
     -- repository, and stripped when deciding the version number of the
     -- upstream source.
+    , compilerPackage :: CompilerVendor
+    -- ^ If this is Debian we use the deb ghc, otherwise if it is HVR VERSION
+    -- we use ghc-<VERSION> and associated cabal-install, happy, and alex.
     , autobuilderEmail :: String
     -- ^ Email return address of autobuilder for use in generated
     -- changelog entries.
