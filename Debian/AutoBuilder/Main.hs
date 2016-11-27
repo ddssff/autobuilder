@@ -9,10 +9,11 @@ module Debian.AutoBuilder.Main
 import Control.Arrow (first)
 #if !MIN_VERSION_base(4,8,0)
 import Control.Applicative (Applicative, (<$>))
+import Data.Monoid (mconcat, mempty)
 #endif
 import Control.Applicative.Error (Failing(..), ErrorMsg)
-import Control.Exception(SomeException, AsyncException(UserInterrupt), fromException, toException, try)
-import Control.Lens (view, _1)
+import Control.Exception(SomeException, AsyncException(UserInterrupt), fromException, toException)
+import Control.Lens (view)
 import Control.Monad(foldM, when)
 import Control.Monad.Catch (MonadMask, catch, throwM)
 import Control.Monad.State (MonadIO(liftIO))
@@ -21,11 +22,8 @@ import Data.Either (partitionEithers)
 import Data.Generics (listify)
 import Data.List as List (intercalate, null, nub)
 import Data.Map ((!))
-import Data.Monoid ((<>), mconcat, mempty)
+import Data.Monoid ((<>))
 import Data.Set as Set (toList)
-import Data.Text as LT (unpack)
-import Data.Text.Encoding (decodeUtf8)
-import Data.Time(NominalDiffTime)
 import Debian.AutoBuilder.BuildEnv (prepareDependOS, prepareBuildOS)
 import Debian.AutoBuilder.BuildTarget (retrieve)
 import qualified Debian.AutoBuilder.Params as P (computeTopDir, buildCache, baseRelease, findSlice)
@@ -38,7 +36,7 @@ import qualified Debian.AutoBuilder.Types.ParamRec as R
 import qualified Debian.AutoBuilder.Version as V
 import Debian.Control.Policy (debianPackageNames, debianSourcePackageName)
 import Debian.Debianize (CabalT, CabalInfo)
-import Debian.GHC (withCompilerPATH)
+import Debian.GHC (hvrCompilerPATH, withModifiedPATH)
 import Debian.Pretty (prettyShow, ppShow)
 import Debian.Relation (BinPkgName(unBinPkgName), SrcPkgName(unSrcPkgName))
 import Debian.Release (ReleaseName(ReleaseName, relName), releaseName')
@@ -125,8 +123,12 @@ doParameterSet _ results _ | any isFailure results = return results
 doParameterSet init results params = do
   result <- withVerbosity (R.verbosity params)
             (do top <- askTop
-                withCompilerPATH (R.compilerPackage params) $
-                  withLock (top </> "lockfile") $
+                withLock (top </> "lockfile") $
+                  -- Should we just let the autobuilder deduce from current $PATH?
+                  -- Probably not, because packages built with ghc are difficult to
+                  -- distinguish from those built with ghc-8.0.1 as things stand.  But then
+                  -- we need our --hvr-version option back.
+                  withModifiedPATH (maybe id hvrCompilerPATH (R.hvrVersion params)) $
                     P.buildCache params >>= runParameterSet init)
               `catch` (\ (e :: SomeException) -> return (Failure [show e]))
   return (result : results)

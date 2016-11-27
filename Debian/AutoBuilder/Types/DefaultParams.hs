@@ -6,9 +6,9 @@ module Debian.AutoBuilder.Types.DefaultParams
 import Data.List as List (isSuffixOf, map)
 import Data.Maybe
 import Data.Set as Set (empty, fromList)
+import Data.Version (Version)
 import Debian.Arch (Arch(Binary), ArchCPU(ArchCPU), ArchOS(ArchOS))
 import Debian.AutoBuilder.Types.ParamRec (ParamRec(..), Strictness(..), TargetSpec(..))
-import Debian.GHC (CompilerVendor(Debian))
 import Debian.Relation (BinPkgName(BinPkgName))
 import Debian.Release (ReleaseName(ReleaseName, relName))
 import Debian.Repo (SourcesChangedAction(SourcesChangedError))
@@ -22,18 +22,20 @@ import System.FilePath ((</>))
 defaultVendor = "extra"
 
 defaultParams :: String
+              -> Maybe Version
               -> String
               -> String
               -> [String]
               -> ParamRec
 defaultParams myBuildRelease -- e.g. wheezy or precise
+              myCompilerVersion
               myUploadURIPrefix
               myBuildURIPrefix
               myDevelopmentReleaseNames =
     ParamRec
     { vendorTag = defaultVendorTag
     , oldVendorTags = []
-    , compilerPackage = Debian
+    , hvrVersion = myCompilerVersion
     , autobuilderEmail = "SeeReason Autobuilder <partners@seereason.com>"
     , releaseSuffixes = defaultReleaseSuffixes
     , buildRelease = ReleaseName {relName = myBuildRelease}

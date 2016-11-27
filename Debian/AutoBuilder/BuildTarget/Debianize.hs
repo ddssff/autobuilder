@@ -10,21 +10,20 @@ module Debian.AutoBuilder.BuildTarget.Debianize
 import Control.Lens ((.=))
 import Control.Monad (when)
 import Control.Monad.State (modify)
-import Control.Monad.Catch (MonadMask, bracket)
-import Control.Monad.Trans (MonadIO, liftIO)
+--import Control.Monad.Catch (MonadMask, bracket)
+import Control.Monad.Trans (liftIO)
 import Data.List (isSuffixOf, partition)
 #if !MIN_VERSION_base(4,8,0)
 import Data.Monoid ((<>))
 #endif
-import Data.Version (showVersion, Version)
+import Data.Version (Version)
 import Debian.AutoBuilder.BuildEnv (envSet)
 import Debian.AutoBuilder.Params (computeTopDir)
 import qualified Debian.AutoBuilder.Types.CacheRec as CR (CacheRec(params))
 import qualified Debian.AutoBuilder.Types.Download as DL
 import qualified Debian.AutoBuilder.Types.Packages as PS
-import qualified Debian.AutoBuilder.Types.ParamRec as PR (buildRelease, compilerPackage)
+import qualified Debian.AutoBuilder.Types.ParamRec as PR (buildRelease)
 import Debian.Debianize as Cabal (CabalInfo, withCurrentDirectory, dependOS, performDebianization, (.?=), CabalT, runDebianizeScript, SourceFormat(Native3), sourceFormat, sourcePackageName, debInfo)
-import Debian.GHC (CompilerVendor(Debian, HVR))
 import Debian.Pretty (ppShow)
 import Debian.Relation (SrcPkgName(..))
 import Debian.Repo.Fingerprint (RetrieveMethod(Debianize''), retrieveMethodMD5)
@@ -35,7 +34,7 @@ import Distribution.Verbosity (normal)
 import Distribution.Package (PackageIdentifier(..))
 import Distribution.PackageDescription (GenericPackageDescription(..), PackageDescription(..))
 import Distribution.PackageDescription.Parse (readPackageDescription)
-import System.Directory (getDirectoryContents, createDirectoryIfMissing, getCurrentDirectory, setCurrentDirectory)
+import System.Directory (getDirectoryContents, createDirectoryIfMissing)
 import System.Environment (withArgs)
 import System.FilePath ((</>), takeDirectory)
 import System.Unix.Directory (removeRecursiveSafely)
@@ -120,9 +119,6 @@ autobuilderCabal cache flags functions sourceName debianizeDirectory defaultAtom
                    ["--native"] ++
                    maybe [] (\ name -> ["--source-package-name", name]) sourceName ++
                    ["--buildenvdir", takeDirectory (dependOS eset)] ++
-                   (case PR.compilerPackage (CR.params cache) of
-                      Debian -> []
-                      HVR v -> ["--hvr-version", showVersion v]) ++
                    replicate v "-v" ++
                    concatMap asCabalFlags flags
        -- This will return false if the package has no debian/Debianize.hs script.
@@ -152,7 +148,7 @@ instance CabalFlags PS.PackageFlag where
     asCabalFlags (PS.Maintainer s) = ["--maintainer", s]
     asCabalFlags (PS.BuildDep s) = ["--build-dep", s]
     asCabalFlags (PS.DevelDep s) = ["--build-dep", s, "--dev-dep", s]
-    asCabalFlags (PS.SetupDep s) = []
+    asCabalFlags (PS.SetupDep _) = []
     asCabalFlags (PS.MapDep c d) = ["--dep-map", c ++ ":" ++ ppShow d]
     asCabalFlags (PS.DebVersion s) = ["--deb-version", s]
     asCabalFlags (PS.SkipVersion _) = []
@@ -175,3 +171,4 @@ instance CabalFlags PS.PackageFlag where
     asCabalFlags (PS.GitBranch _) = []
     asCabalFlags (PS.GitCommit _) = []
     asCabalFlags PS.KeepRCS = []
+    asCabalFlags (PS.InGroup _) = []

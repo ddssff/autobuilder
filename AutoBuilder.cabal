@@ -25,19 +25,9 @@ flag pretty112
   Description: Is Text.PrettyPrint.HughesPJClass available?
   Default: True
 
-flag local-debian-repo
-  Description: Link directly to the source of the debian-repo library
-  Default: False
-  Manual: True
-
-flag local-cabal-debian
-  Description: Link directly to the source of the cabal-debian library
-  Default: False
-  Manual: True
-
-flag local-debian
-  Description: Link directly to the source of the debian library
-  Default: False
+flag local-libs
+  Description: Link directly to the source of the debian, cabal-debian, and debian-repo libraries
+  Default: True
   Manual: True
 
 Library
@@ -49,6 +39,7 @@ Library
       , bzlib
       , Cabal
       , containers
+      , debian >= 3.89
       , directory
       , exceptions >= 0.6
       , fgl
@@ -122,9 +113,9 @@ Library
     Debian.AutoBuilder.Version
     Paths_AutoBuilder
 
-  if flag(local-debian-repo)
-    Hs-Source-Dirs: debian-repo
-    Build-Depends: lens, transformers, transformers-compat, deepseq, bytestring, transformers, process-extras, Unixutils, filepath, lens, mtl, template-haskell, filemanip-extra, directory, pureMD5, unix, process, ListLike, old-locale, exceptions, text, regex-compat, network-uri
+  if flag(local-libs)
+    Hs-Source-Dirs: ../debian-repo
+    Build-Depends: lens, transformers, transformers-compat, deepseq, bytestring, transformers, process-extras, Unixutils, filepath, lens, mtl, template-haskell, filemanip-extra, directory, pureMD5, unix, process, ListLike, old-locale, exceptions, text, regex-compat, network-uri, HUnit
     Exposed-modules:
         Debian.Releases,
         Debian.Repo,
@@ -170,8 +161,8 @@ Library
   else
     Build-Depends: debian-repo >= 5.74
 
-  if flag(local-cabal-debian)
-    Hs-Source-Dirs: cabal-debian/src, cabal-debian/dist/build/autogen
+  if flag(local-libs)
+    Hs-Source-Dirs: ../cabal-debian/src, ../cabal-debian/dist/build/autogen
     Build-Depends: ansi-wl-pprint, bifunctors, data-default, Diff, set-extra, hsemail, memoize, newtype-generics, optparse-applicative, syb
     if flag(pretty112)
       Build-Depends: pretty >= 1.1.2
@@ -208,70 +199,22 @@ Library
     Other-Modules:
       Debian.Orphans
   else
-    Build-Depends: cabal-debian >= 4.29, deepseq
-
-  if flag(local-debian)
-    Hs-Source-Dirs: debian-haskell
-    Build-Depends: ListLike, network
-    Exposed-modules:
-        Debian.Apt.Dependencies,
-        Debian.Apt.Index,
-        Debian.Apt.Methods,
-        Debian.Apt.Package,
-        Debian.Arch,
-        Debian.Changes,
-        Debian.Control,
-        Debian.Control.Common,
-        Debian.Control.ByteString,
-        Debian.Control.Policy,
-        Debian.Control.String,
-        Debian.Control.Text,
-        Debian.Deb,
-        Debian.Extra.Files,
-        Debian.GenBuildDeps,
-        Debian.Loc,
-        Debian.Pretty,
-        Debian.Relation,
-        Debian.Relation.ByteString,
-        Debian.Relation.Common,
-        Debian.Relation.String,
-        Debian.Relation.Text,
-        Debian.Release,
-        Debian.Sources,
-        Debian.Version,
-        Debian.Version.ByteString,
-        Debian.Version.Common,
-        Debian.Version.String,
-        Debian.Version.Text,
-        Debian.Report,
-        Debian.Time,
-        Debian.URI,
-        Debian.UTF8,
-        Debian.Util.FakeChanges
-    Other-Modules:
-        Debian.Version.Internal
-  else
-    Build-Depends: debian >= 3.89
+    Build-Depends: cabal-debian >= 4.35.4, deepseq
 
 Test-Suite autobuilder-tests
   Type: exitcode-stdio-1.0
   Hs-Source-Dirs: Test
   Main-Is: Test.hs
   ghc-options: -O2 -threaded -Wall
-  Build-Depends: base, containers, Cabal, HUnit
+  Build-Depends: base, containers, Cabal, debian >= 3.89, HUnit
 
-  if flag (local-debian-repo)
-    Hs-Source-Dirs: debian-repo
+  if flag (local-libs)
+    Hs-Source-Dirs: ../debian-repo
     Build-Depends: deepseq
   else
     Build-Depends: AutoBuilder, debian-repo >= 5.74
 
-  if flag (local-cabal-debian)
-    Hs-Source-Dirs: cabal-debian/src, cabal-debian/dist/build/autogen
+  if flag (local-libs)
+    Hs-Source-Dirs: ../cabal-debian/src, ../cabal-debian/dist/build/autogen
   else
-    Build-Depends: cabal-debian >= 4.29
-
-  if flag (local-debian)
-    Hs-Source-Dirs: debian-haskell
-  else
-    Build-Depends: debian >= 3.89
+    Build-Depends: cabal-debian >= 4.35.4

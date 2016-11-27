@@ -16,9 +16,9 @@ import Data.Generics (listify)
 import Data.List as List (map, isInfixOf)
 import Data.Map as Map (Map, elems)
 import Data.Set as Set (Set, fromList, insert, member, toList, unions)
+import Data.Version (Version)
 import Debian.Arch (Arch)
 import Debian.AutoBuilder.Types.Packages (Package, PackageId, GroupName(GroupName), pid, _groups)
-import Debian.GHC (CompilerVendor)
 import Debian.Pretty (PP(..), ppPrint)
 import Debian.Relation (BinPkgName, SrcPkgName(SrcPkgName))
 import Debian.Release (ReleaseName)
@@ -48,9 +48,12 @@ data ParamRec =
     -- ^ Additional vendor tags that should be treated as part of the local
     -- repository, and stripped when deciding the version number of the
     -- upstream source.
-    , compilerPackage :: CompilerVendor
-    -- ^ If this is Debian we use the deb ghc, otherwise if it is HVR VERSION
-    -- we use ghc-<VERSION> and associated cabal-install, happy, and alex.
+    , hvrVersion :: Maybe Version
+    -- ^ If this is Nothing we use compiler in debian package ghc,
+    -- otherwise we use the hvr package in /opt with the given version
+    -- number, and associated cabal-install, happy, and alex.  We could
+    -- infer this from $PATH, but there is less likelyhood of building
+    -- a mixture of ghc-7 and ghc-8 packages if it is fixed here.
     , autobuilderEmail :: String
     -- ^ Email return address of autobuilder for use in generated
     -- changelog entries.
@@ -438,7 +441,7 @@ optSpecs =
       "Print a help message and exit."
     , Option [] ["setenv"] (ReqArg (\s -> Right (\p -> p {setEnv = (case break (== '=') s of
                                                                       (_, "") -> (s, Nothing)
-                                                                      (s', v) -> (s, Just v)) : setEnv p})) "NAME=VALUE")
+                                                                      (s', v) -> (s', Just v)) : setEnv p})) "NAME=VALUE")
       "Set an environment variable during build."
     ]
     where

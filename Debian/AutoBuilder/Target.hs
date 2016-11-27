@@ -69,7 +69,7 @@ import Debian.Repo.Fingerprint (RetrieveMethod, dependencyChanges, DownstreamFin
 import Debian.Repo.Internal.Apt (MonadApt)
 import Debian.Repo.Internal.Repos (MonadRepos)
 import Debian.Repo.LocalRepository (LocalRepository, uploadLocal)
-import Debian.Repo.MonadOS (MonadOS(getOS), evalMonadOS, updateLists, syncLocalPool, buildEssential, syncOS)
+import Debian.Repo.MonadOS (MonadOS(getOS), evalMonadOS, buildEssential, syncOS)
 import Debian.Repo.OSImage (osRoot)
 import Debian.Repo.Package (binaryPackageSourceVersion, sourcePackageBinaryNames)
 import Debian.Repo.PackageID (PackageID(packageVersion))
