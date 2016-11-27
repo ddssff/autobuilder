@@ -27,7 +27,7 @@ flag pretty112
 
 flag local-libs
   Description: Link directly to the source of the debian, cabal-debian, and debian-repo libraries
-  Default: True
+  Default: False
   Manual: True
 
 Library
