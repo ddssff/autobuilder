@@ -173,4 +173,5 @@ instance CabalFlags PS.PackageFlag where
     asCabalFlags (PS.CabalPin _) = []
     asCabalFlags (PS.DarcsTag _) = []
     asCabalFlags (PS.GitBranch _) = []
+    asCabalFlags (PS.GitCommit _) = []
     asCabalFlags PS.KeepRCS = []

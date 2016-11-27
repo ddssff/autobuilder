@@ -20,7 +20,7 @@ import System.Directory
 import System.Exit (ExitCode(..))
 import System.FilePath
 import System.Process (proc, shell, CreateProcess(cwd, cmdspec))
-import System.Process.ListLike (readCreateProcessWithExitCode, showCmdSpecForUser, showCreateProcessForUser)
+import System.Process.ListLike (CmdSpec, readCreateProcessWithExitCode, showCmdSpecForUser, showCreateProcessForUser)
 import System.Unix.Directory
 import Text.PrettyPrint.HughesPJClass (Pretty(pPrint), prettyShow, text)
 import Text.Regex
@@ -44,57 +44,63 @@ darcsRev tree m =
       cmd = proc "darcs" ["changes", "--xml-output"]
       path = topdir tree
 
+showCmd :: CmdSpec -> String
 showCmd = showCmdSpecForUser
 
 data GitDL
     = GitDL
-      { method :: RetrieveMethod
-      , flags :: [P.PackageFlag]
-      , uri :: String
-      , gitspecs :: [GitSpec]
-      , tree :: SourceTree
-      , latestCommit :: String
+      { _gitMethod :: RetrieveMethod
+      , _gitFlags :: [P.PackageFlag]
+      , _gitUri :: String
+      , _gitSpecs :: [GitSpec]
+      , _gitTree :: SourceTree
+      , _gitLatestCommit :: String
       }
 
 instance T.Download GitDL where
-    method = method
-    flags = flags
-    getTop = topdir . tree
-    logText x = "git revision: " ++ show (method x)
-    flushSource x =
-        let theUri' = mustParseURI (uri x)
-            theBranch = case mapMaybe P.gitBranch (flags x) of
-                          [] -> Nothing
-                          [x] -> Just x
-                          xs -> error ("Conflicting branches for git clone of " ++ uri x ++ ": " ++ show xs)
-            uriAndBranch = uriToString id theUri' "" ++ maybe "" (\ branch -> "=" ++ branch) theBranch
-            sum = show (md5 (B.pack uriAndBranch)) in
-        sub ("git" </> sum) >>= liftIO . removeRecursiveSafely
+    method = _gitMethod
+    flags = _gitFlags
+    getTop = topdir . _gitTree
+    logText x = "git revision: " ++ show (_gitMethod x)
+    flushSource x = sub ("git" </> gitSum (_gitFlags x) (_gitUri x)) >>= liftIO . removeRecursiveSafely
     cleanTarget x =
-        (\ top -> case any P.isKeepRCS (flags x) of
+        (\ top -> case any P.isKeepRCS (_gitFlags x) of
                     False -> let cmd = "find " ++ top ++ " -name '.git' -maxdepth 1 -prune | xargs rm -rf" in timeTask (readProcessVE (shell cmd) "")
                     True -> return (Right mempty, 0))
-    attrs x = singleton $ GitCommit $ latestCommit x
+    attrs x = singleton $ GitCommit $ _gitLatestCommit x
+
+-- Maybe we should include the "git:" in the string we checksum?  -- DSF
+-- Need more info to answer that, but addition of git makes it more likely. -- CB
+-- We need all values in the [GitSpec] field
+gitSum :: [P.PackageFlag] -> String -> String
+gitSum flags theUri = show (md5 (B.pack uriAndBranch))
+    where
+      uriAndBranch = uriToString id (mustParseURI theUri) "" ++ branchAndCommitSuffix
+      branchAndCommitSuffix = case theBranch ++ theCommit of
+                                [] -> ""
+                                _ -> "=" ++ mconcat (theBranch ++ theCommit)
+      theBranch = maybe [] (: []) (listToMaybe (mapMaybe P.gitBranch flags))
+      theCommit = maybe [] (\x -> ["@" ++ x]) (listToMaybe (mapMaybe P.gitCommit flags))
 
 prepare :: (MonadRepos m, MonadTop m) => RetrieveMethod -> [P.PackageFlag] -> String -> [GitSpec] -> m T.SomeDownload
-prepare method flags theUri gitspecs =
-    sub "git" >>= \ base ->
-    sub ("git" </> sum) >>= \ dir -> liftIO $
-    do
-      tree <- prepareSource dir
-      _output <- fixLink base
-      let p = (proc "git" ["log", "-n", "1", "--pretty=%H"]) {cwd = Just dir}
-      putStrLn (" -> " ++ showCreateProcessForUser p)
-      (code, out, _) <- readCreateProcessWithExitCode p ""
-      commit <- case code of
-                  ExitSuccess -> return . head . lines $ out
-                  _ -> error $ showCreateProcessForUser p ++ " -> " ++ show code
-      return $ T.SomeDownload $ GitDL { method = method
-                                      , flags = flags
-                                      , uri = theUri
-                                      , gitspecs = gitspecs
-                                      , tree = tree
-                                      , latestCommit = commit }
+prepare method flags theUri gitspecs = do
+  base <- sub "git"
+  dir <- sub ("git" </> gitSum flags theUri)
+  tree <- liftIO $ prepareSource dir
+  _output <- fixLink base
+  let p = (proc "git" ["log", "-n", "1", "--pretty=%H"]) {cwd = Just dir}
+  liftIO $ putStrLn (" -> " ++ showCreateProcessForUser p)
+  (code, out, _) <- liftIO $ readCreateProcessWithExitCode p ""
+  commit <- case code of
+              ExitSuccess -> return . head . lines $ out
+              _ -> error $ showCreateProcessForUser p ++ " -> " ++ show code
+  let x = GitDL { _gitMethod = method
+                , _gitFlags = flags
+                , _gitUri = theUri
+                , _gitSpecs = gitspecs
+                , _gitTree = tree
+                , _gitLatestCommit = commit }
+  return $ T.SomeDownload x
     where
 
       prepareSource dir =
@@ -129,7 +135,7 @@ prepare method flags theUri gitspecs =
              readProcessVE clone B.empty >>= test1
 
       readProc pr inp = readProcessV pr inp >>= testCode pr
-      testCode pr (ExitSuccess, _, _) = return ()
+      testCode _pr (ExitSuccess, _, _) = return ()
       testCode pr (ExitFailure s, out, err) = error (prettyShow pr ++ " -> " ++ show s ++ "\n  out: " ++ show out ++ "\n  err: " ++ show err)
 
 {-
@@ -145,16 +151,9 @@ prepare method flags theUri gitspecs =
       fixLink base =
           let link = base </> name in
           readProcessV (proc "rm" ["-rf", link]) B.empty >>
-          readProcessV (proc "ln" ["-s", sum, link]) B.empty
+          readProcessV (proc "ln" ["-s", gitSum flags theUri, link]) B.empty
       name = snd . splitFileName $ (uriPath theUri')
-      sum = show (md5 (B.pack uriAndBranch))
-      -- Maybe we should include the "git:" in the string we checksum?  -- DSF
-      -- Need more info to answer that, but addition of git makes it more likely. -- CB
-      uriAndBranch = uriToString id theUri' "" ++ maybe "" (\ branch -> "=" ++ branch) theBranch
-      theBranch = case mapMaybe P.gitBranch flags of
-                    [] -> Nothing
-                    [x] -> Just x
-                    xs -> error ("Conflicting branches for git clone of " ++ theUri ++ ": " ++ show xs)
+
       theUri' = mustParseURI theUri
 
 renderForGit :: URI -> String
