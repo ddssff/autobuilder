@@ -5,7 +5,7 @@ import Control.Exception (try, SomeException)
 import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as B
 import Data.Digest.Pure.MD5 (md5)
-import Data.Maybe (mapMaybe)
+import Data.Maybe (listToMaybe, mapMaybe)
 #if !MIN_VERSION_base(4,8,0)
 import Data.Monoid (mempty)
 #endif
