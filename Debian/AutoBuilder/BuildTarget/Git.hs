@@ -5,6 +5,7 @@ import Control.Exception (try, SomeException)
 import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as B
 import Data.Digest.Pure.MD5 (md5)
+import Data.List (sort)
 import Data.Maybe (listToMaybe, mapMaybe)
 #if !MIN_VERSION_base(4,8,0)
 import Data.Monoid (mempty)
@@ -62,7 +63,7 @@ instance T.Download GitDL where
     flags = _gitFlags
     getTop = topdir . _gitTree
     logText x = "git revision: " ++ show (_gitMethod x)
-    flushSource x = sub ("git" </> gitSum (_gitFlags x) (_gitUri x)) >>= liftIO . removeRecursiveSafely
+    flushSource x = sub ("git" </> gitSum (_gitFlags x) (_gitUri x) (_gitSpecs x)) >>= liftIO . removeRecursiveSafely
     cleanTarget x =
         (\ top -> case any P.isKeepRCS (_gitFlags x) of
                     False -> let cmd = "find " ++ top ++ " -name '.git' -maxdepth 1 -prune | xargs rm -rf" in timeTask (readProcessVE (shell cmd) "")
@@ -72,20 +73,18 @@ instance T.Download GitDL where
 -- Maybe we should include the "git:" in the string we checksum?  -- DSF
 -- Need more info to answer that, but addition of git makes it more likely. -- CB
 -- We need all values in the [GitSpec] field
-gitSum :: [P.PackageFlag] -> String -> String
-gitSum flags theUri = show (md5 (B.pack uriAndBranch))
+gitSum :: [P.PackageFlag] -> String -> [GitSpec] -> String
+gitSum flags theUri gitspecs = show (md5 (B.pack uriAndBranch))
     where
       uriAndBranch = uriToString id (mustParseURI theUri) "" ++ branchAndCommitSuffix
-      branchAndCommitSuffix = case theBranch ++ theCommit of
+      branchAndCommitSuffix = case sort gitspecs of
                                 [] -> ""
-                                _ -> "=" ++ mconcat (theBranch ++ theCommit)
-      theBranch = maybe [] (: []) (listToMaybe (mapMaybe P.gitBranch flags))
-      theCommit = maybe [] (\x -> ["@" ++ x]) (listToMaybe (mapMaybe P.gitCommit flags))
+                                _ -> "=" ++ show (sort gitspecs)
 
 prepare :: (MonadRepos m, MonadTop m) => RetrieveMethod -> [P.PackageFlag] -> String -> [GitSpec] -> m T.SomeDownload
 prepare method flags theUri gitspecs = do
   base <- sub "git"
-  dir <- sub ("git" </> gitSum flags theUri)
+  dir <- sub ("git" </> gitSum flags theUri gitspecs)
   tree <- liftIO $ prepareSource dir
   _output <- fixLink base
   let p = (proc "git" ["log", "-n", "1", "--pretty=%H"]) {cwd = Just dir}
@@ -151,7 +150,7 @@ prepare method flags theUri gitspecs = do
       fixLink base =
           let link = base </> name in
           readProcessV (proc "rm" ["-rf", link]) B.empty >>
-          readProcessV (proc "ln" ["-s", gitSum flags theUri, link]) B.empty
+          readProcessV (proc "ln" ["-s", gitSum flags theUri gitspecs, link]) B.empty
       name = snd . splitFileName $ (uriPath theUri')
 
       theUri' = mustParseURI theUri

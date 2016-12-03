@@ -43,8 +43,6 @@ module Debian.AutoBuilder.Types.Packages
     , findSource
     , isKeepRCS
     , cabalPin
-    , gitBranch
-    , gitCommit
     , darcsTag
     , aptPin
     , newId
@@ -189,10 +187,6 @@ data PackageFlag
     -- for the given cabal package
     | DarcsTag String
     -- ^ When doing a darcs get pass this string to darcs via the --tag flag.
-    | GitBranch String
-    -- ^ When doing a 'git clone' pass this string to darcs via the --branch flag.
-    | GitCommit String
-    -- ^ When doing a 'git clone' reset to this particular commit
     | KeepRCS
     -- ^ Don't clean out the subdirectory containing the revision control info,
     -- i.e. _darcs or .git or whatever.
@@ -453,14 +447,6 @@ isKeepRCS _ = False
 cabalPin :: PackageFlag -> Maybe String
 cabalPin (CabalPin v) = Just v
 cabalPin _ = Nothing
-
-gitBranch :: PackageFlag -> Maybe String
-gitBranch (GitBranch v) = Just v
-gitBranch _ = Nothing
-
-gitCommit :: PackageFlag -> Maybe String
-gitCommit (GitCommit v) = Just v
-gitCommit _ = Nothing
 
 darcsTag :: PackageFlag -> Maybe String
 darcsTag (DarcsTag v) = Just v
