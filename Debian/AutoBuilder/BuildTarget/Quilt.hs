@@ -92,7 +92,7 @@ data QuiltDL a b
       , base :: a
       , patch :: b
       , tree :: SourceTree
-      }
+      } deriving Show
 
 instance (T.Download a, T.Download b) => T.Download (QuiltDL a b) where
     method = method

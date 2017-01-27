@@ -52,21 +52,21 @@ failing _ f (Success a)    = f a
 
 -- | A replacement for the BuildTarget class and the BuildTarget.* types.  The method code
 -- moves into the function that turns a RetrieveMethod into a BuildTarget.
-data Buildable download
+data Show download => Buildable download
     = Buildable
       { download :: download
       , debianSourceTree :: DebianSourceTree
       -- ^ Return the debian source tree.  Every target must have
       -- this, since this program only builds debian packages.
-      }
+      } deriving Show
 
-instance HasDebianControl (Buildable download) where
+instance Show download => HasDebianControl (Buildable download) where
     debianControl = control' . debianSourceTree
 
 -- | Try to turn a Download into a Target.  First look for a debianization in the
 -- top directory, then for debianizations in subdirectory.  This will throw an
 -- exception if we can't find any, or we find too many.
-asBuildable :: (T.Download a) => a -> IO (Buildable a)
+asBuildable :: T.Download a => a -> IO (Buildable a)
 asBuildable x =
     try (findSourceTree (getTop x)) >>=
             either (\ (_ :: SomeException) ->
@@ -98,12 +98,12 @@ data Target download
     = Target { tgt :: Buildable download        -- ^ The instance of BuildTarget
              , cleanSource :: DebianBuildTree   -- ^ The source code stripped of SCCS info
              , targetControl :: DebianControl   -- ^ The dependency control file
-             }
+             } deriving Show
 
-instance HasDebianControl (Target download) where
+instance Show download => HasDebianControl (Target download) where
     debianControl = debianControl . tgt
 
-instance Eq (Target download) where
+instance Show download => Eq (Target download) where
     a == b = debianSourcePackageName a == debianSourcePackageName b
 
 -- |Prepare a target for building in the given environment.  At this

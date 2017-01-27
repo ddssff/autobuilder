@@ -28,7 +28,7 @@ data HgDL
            , method :: RetrieveMethod
            , flags :: [P.PackageFlag]
            , archive :: String
-           , tree :: SourceTree }
+           , tree :: SourceTree } deriving Show
 
 instance T.Download HgDL where
     method = method

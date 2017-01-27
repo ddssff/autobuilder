@@ -32,7 +32,7 @@ data AptDL
             , dist :: String
             , package :: SrcPkgName
             , apt :: FilePath
-            , tree :: DebianBuildTree }
+            , tree :: DebianBuildTree } deriving Show
 
 instance Download AptDL where
     method = aptMethod

@@ -26,7 +26,7 @@ data DebDirDL a b
                , ddFlags :: [P.PackageFlag]
                , upstream :: a
                , debian :: b
-               , tree :: DebianSourceTree }
+               , tree :: DebianSourceTree } deriving Show
 
 instance (Download a, Download b) => Download (DebDirDL a b) where
     method = ddMethod

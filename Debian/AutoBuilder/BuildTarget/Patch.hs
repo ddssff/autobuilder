@@ -45,7 +45,7 @@ data PatchDL a
               , flags :: [P.PackageFlag]
               , patch :: B.ByteString
               , base :: a
-              , tree :: SourceTree }
+              , tree :: SourceTree } deriving Show
 
 instance T.Download a => T.Download (PatchDL a) where
     method = method

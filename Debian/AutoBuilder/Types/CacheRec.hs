@@ -11,4 +11,4 @@ data CacheRec
     -- , topDir :: FilePath -- Use MonadTop
     , allSources :: [NamedSliceList]
     , buildRepoSources :: SliceList
-    }
+    } deriving Show

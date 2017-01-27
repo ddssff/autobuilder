@@ -49,7 +49,7 @@ data CdDL a
            , fs :: [P.PackageFlag]
            , dir :: FilePath
            , parent :: a
-           }
+           } deriving Show
 
 instance Download a => Download (CdDL a) where
     method = cd
@@ -64,7 +64,7 @@ data ProcDL a
     = ProcDL { procMethod :: P.RetrieveMethod
              , procFlags :: [P.PackageFlag]
              , base :: a
-             }
+             } deriving Show
 
 instance Download a => Download (ProcDL a) where
     method = procMethod
@@ -81,7 +81,7 @@ instance Download a => Download (ProcDL a) where
 data DirDL
     = DirDL { dirMethod :: P.RetrieveMethod
             , dirFlags :: [P.PackageFlag]
-            , dirTree :: SourceTree }
+            , dirTree :: SourceTree } deriving Show
 
 instance Download DirDL where
     method = dirMethod
@@ -90,7 +90,7 @@ instance Download DirDL where
     logText x = "Built from local directory " ++ show (method x)
     flushSource _ = return ()
 
-data ZeroDL = ZeroDL
+data ZeroDL = ZeroDL deriving Show
 
 instance Download ZeroDL where
     method _ = P.Zero

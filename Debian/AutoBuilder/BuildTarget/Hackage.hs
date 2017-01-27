@@ -45,7 +45,7 @@ data HackageDL
       , tree :: SourceTree
       , version :: Version
       , tar :: FilePath
-      }
+      } deriving Show
 
 instance T.Download HackageDL where
     method = method

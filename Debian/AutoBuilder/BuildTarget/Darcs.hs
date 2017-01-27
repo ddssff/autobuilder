@@ -53,7 +53,7 @@ data DarcsDL
       , uri :: String
       , tree :: SourceTree
       , attr :: String
-      }
+      } deriving Show
 
 instance T.Download DarcsDL where
     method = method

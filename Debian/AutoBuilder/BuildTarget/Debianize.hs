@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, PackageImports, ScopedTypeVariables #-}
+{-# LANGUAGE CPP, PackageImports, RecordWildCards, ScopedTypeVariables #-}
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 -- |The intent is that this target debianize any cabal target, but currently
 -- it combines debianization with the hackage target.
@@ -50,6 +50,10 @@ data DebianizeDL a
                   , cabal :: a
                   , version :: Version
                   , dir :: FilePath }
+
+instance Show a => Show (DebianizeDL a) where
+    show (DebianizeDL {..}) =
+        "DebianizeDL {def = pure (), method = " ++ show method ++ ", debFlags = " ++ show debFlags ++ ", cabal = " ++ show cabal ++ ", version = " ++ show version ++ ", dir = " ++ show dir ++ "}"
 
 instance DL.Download a => DL.Download (DebianizeDL a) where
     method = method

@@ -22,7 +22,7 @@ import Debian.Repo.Top (MonadTop)
 import System.Exit (ExitCode(ExitSuccess))
 import System.Unix.Mount (WithProcAndSys)
 
-class Download a where
+class Show a => Download a where
     method :: a -> RetrieveMethod
     -- ^ The method used to retrieve this target.
     flags :: a -> [PackageFlag]
@@ -55,6 +55,9 @@ class Download a where
 
 -- Existential type
 data SomeDownload = forall a. Download a => SomeDownload a
+
+instance Show SomeDownload where
+    show (SomeDownload a) = show a
 
 instance Download SomeDownload where
     method (SomeDownload x) = method x

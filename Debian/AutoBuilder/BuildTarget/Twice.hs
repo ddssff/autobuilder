@@ -14,7 +14,7 @@ documentation = [ "twice:<target> - A target of this form modifies another targe
 data TwiceDL a
     = TwiceDL { method :: RetrieveMethod
               , flags :: [P.PackageFlag]
-              , base :: a }
+              , base :: a } deriving Show
 
 instance T.Download a => T.Download (TwiceDL a) where
     method = method

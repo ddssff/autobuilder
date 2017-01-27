@@ -280,7 +280,7 @@ data ParamRec =
     -- -- ^ Who should get emails of autobuilder progress messages.
     , knownPackages :: Map PackageId Package
     -- ^ The set of all known packages
-  }
+  } deriving Show
 
 data Strictness
     = Lax |             -- Let build dependencies accumulate (default)

@@ -50,7 +50,7 @@ data SvnDL
             , method :: RetrieveMethod
             , flags :: [P.PackageFlag]
             , uri :: String
-            , tree :: SourceTree }
+            , tree :: SourceTree } deriving Show
 
 instance T.Download SvnDL where
     method = method

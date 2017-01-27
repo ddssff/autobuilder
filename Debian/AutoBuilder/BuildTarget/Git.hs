@@ -56,7 +56,7 @@ data GitDL
       , _gitSpecs :: [GitSpec]
       , _gitTree :: SourceTree
       , _gitLatestCommit :: String
-      }
+      } deriving Show
 
 instance T.Download GitDL where
     method = _gitMethod

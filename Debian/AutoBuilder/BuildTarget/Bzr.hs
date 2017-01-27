@@ -34,7 +34,7 @@ data BzrDL
       , bzrFlags :: [P.PackageFlag]
       , bzrVersion :: String
       , bzrTree :: SourceTree
-      }
+      } deriving Show
 
 instance Download BzrDL where
     method = bzrMethod

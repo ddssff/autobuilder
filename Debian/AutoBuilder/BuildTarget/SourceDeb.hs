@@ -27,7 +27,7 @@ documentation = [ "sourcedeb:<target> - A target of this form unpacks the source
 data SourceDebDL a
     = SourceDebDL { method :: RetrieveMethod
                   , flags :: [P.PackageFlag]
-                  , base :: a }
+                  , base :: a } deriving Show
 
 instance T.Download a => T.Download (SourceDebDL a) where
     method = method

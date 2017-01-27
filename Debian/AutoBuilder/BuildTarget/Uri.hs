@@ -46,7 +46,7 @@ data UriDL
             , cksum :: FilePath
             , tree :: R.SourceTree
             , tar :: FilePath
-            }
+            } deriving Show
 
 instance T.Download UriDL where
     method = method

@@ -18,7 +18,7 @@ data CdDL a
            , cdFlags :: [P.PackageFlag]
            , subdir :: FilePath
            , cdParent :: a
-           }
+           } deriving Show
 
 instance Download a => Download (CdDL a) where
     method = cdMethod

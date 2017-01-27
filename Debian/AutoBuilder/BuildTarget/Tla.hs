@@ -30,7 +30,7 @@ data TlaDL
       , flags :: [P.PackageFlag]
       , version :: String
       , tree :: SourceTree
-      }
+      } deriving Show
 
 instance T.Download TlaDL where
     method = method
