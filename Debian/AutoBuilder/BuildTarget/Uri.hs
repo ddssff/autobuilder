@@ -126,6 +126,8 @@ prepare method flags u s =
                            liftIO $ timeTask $ readProcessV (shell ("tar xfz " ++ tar ++ " -C " ++ src)) B.empty
                        | isPrefixOf "bzip2" fileInfo ->
                            liftIO $ timeTask $ readProcessV (shell ("tar xfj " ++ tar ++ " -C " ++ src)) B.empty
+                       | isPrefixOf "XZ compressed data" fileInfo ->
+                           liftIO $ timeTask $ readProcessV (shell ("tar xfJ " ++ tar ++ " -C " ++ src)) B.empty
                        | True ->
                            liftIO $ timeTask $ readProcessV (shell ("cp " ++ tar ++ " " ++ src ++ "/")) B.empty
             read (_output, _elapsed) = sourceDir s >>= \ src -> liftIO (getDir src)
