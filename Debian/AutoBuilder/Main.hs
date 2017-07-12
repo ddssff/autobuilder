@@ -50,7 +50,7 @@ import Debian.Repo.Prelude.Process (readProcessVE)
 import Debian.Repo.Prelude.Verbosity (ePutStrLn, ePutStr, qPutStrLn, qPutStr, withVerbosity, noisier)
 import Debian.Repo.Release (Release(releaseName))
 import Debian.Repo.Repo (repoReleaseInfo)
-import Debian.Repo.Slice (NamedSliceList(..), SliceList(slices), Slice(sliceRepoKey),
+import Debian.Repo.Slice (NamedSliceList(..), SliceList(slices), Slice(sliceRepoKey, sliceSource),
                           appendSliceLists, inexactPathSlices, releaseSlices, expandPPASlice)
 import Debian.Repo.State.AptImage (withAptImage)
 import Debian.Repo.State.Repository (foldRepository)
@@ -58,6 +58,7 @@ import Debian.Repo.State.Slice (repoSources, updateCacheSources)
 import Debian.Repo.Top (MonadTop(askTop))
 import Debian.Repo.EnvPath (EnvPath(..))
 import Debian.Repo.LocalRepository (LocalRepository, repoRoot)
+import Debian.Sources (SourceOption(SourceOption), SourceOp(OpSet), sourceOptions)
 import Debian.URI(URI(uriPath, uriAuthority), URIAuth(uriUserInfo, uriRegName, uriPort), parseURI)
 import Debian.Version(DebianVersion, parseDebianVersion', prettyDebianVersion)
 import Extra.Lock(withLock)
@@ -208,7 +209,7 @@ runParameterSet init cache =
       buildRepoSources = C.buildRepoSources cache
       buildReleaseSources = releaseSlices (R.buildRelease params) (inexactPathSlices buildRepoSources)
       buildRelease = NamedSliceList { sliceListName = ReleaseName (releaseName' (R.buildRelease params))
-                                    , sliceList = appendSliceLists [sliceList baseRelease, buildReleaseSources] }
+                                    , sliceList = appendSliceLists [sliceList baseRelease, setOptions [SourceOption "trusted" OpSet ["yes"]] buildReleaseSources] }
       doRequiredVersion :: IO ()
       doRequiredVersion =
           let abv = parseDebianVersion' V.autoBuilderVersion
@@ -285,6 +286,9 @@ runParameterSet init cache =
       testOutput result@(ExitSuccess, _, _) = Success result
       testOutput (code, out, err) =
           Failure [show code <> "\n" <> ({-LT.unpack $ decodeUtf8 $ mconcat $ L.toChunks $ snd $ indentChunks " 1> " " 2> "-} show (out, err))]
+
+      setOptions :: [SourceOption] -> SliceList -> SliceList
+      setOptions opts l = l {slices = fmap (\s -> s {sliceSource = (sliceSource s) {sourceOptions = opts}}) (slices l)}
 
 -- | Make sure the build release ("P.buildRelease params") - the
 -- release and repository to which we intend to upload the packages
