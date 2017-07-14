@@ -301,7 +301,8 @@ releaseRepoName rname = error $ "Unknown unknown release name: " ++ show rname
 debianReleases :: [String]
 debianReleases = ["experimental", "sid", "wheezy", "squeeze", "lenny", "sarge"]
 ubuntuReleases :: [String]
-ubuntuReleases = ["trusty", "supreme", "raring", "quantal", "precise", "oneiric", "natty", "maverick", "lucid",
+ubuntuReleases = ["artful", "zesty", "yakkity", "xenial", "vivid", "utopic", "trusty", "supreme",
+                  "raring", "quantal", "precise", "oneiric", "natty", "maverick", "lucid",
                   "karmic", "jaunty", "intrepid", "hardy", "feisty", "edgy", "dapper"]
 
 splitSuffix :: String -> String -> Maybe (String, String)
