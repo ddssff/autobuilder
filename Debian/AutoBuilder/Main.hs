@@ -160,7 +160,7 @@ runParameterSet init cache =
       dependOS <- prepareDependOS params buildRelease extraSlices
       let allTargets :: [(P.RetrieveMethod, [P.PackageFlag], [CabalInfo -> CabalInfo])]
           allTargets = map (\i -> f (R.knownPackages (C.params cache) ! i)) (Set.toList (R.buildPackages params))
-          f p = (view P.spec p, view P.flags p, view P.post p)
+          f p = (view P.spec p, nub (view P.flags p), view P.post p)
       -- let allTargets = filter (notZero . view _1) (P.foldPackages (\ p l -> (view P.spec p, view P.flags p, view P.post p) : l) (R.buildPackages params) [])
       qPutStrLn "Preparing build environment"
       buildOS <- evalMonadOS (do sources <- osBaseDistro <$> getOS

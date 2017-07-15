@@ -18,6 +18,7 @@ import Control.Exception as E (SomeException, try, catch, throw)
 import Control.Monad (when)
 import Control.Monad.Catch (MonadMask)
 import Control.Monad.Trans (MonadIO, liftIO)
+import Data.List (nub)
 import Data.Map ((!))
 import qualified Debian.AutoBuilder.Types.CacheRec as C
 import qualified Debian.AutoBuilder.Types.Download as T
@@ -89,9 +90,14 @@ relaxDepends :: (T.Download a) => C.CacheRec -> Buildable a -> SrcPkgName -> Bin
 relaxDepends c x s b =
     any (== b) (map BinPkgName (globalRelaxInfo (C.params c))) ||
     (debianSourcePackageName x == s &&
-     any (== b) (map BinPkgName (concatMap (P.relaxInfo . P._flags . get) (R.buildPackages (C.params c)))))
+     any (== b) (map BinPkgName (concatMap (P.relaxInfo . fixFlags . P._flags . get) (R.buildPackages (C.params c)))))
     where
       get i = R.knownPackages (C.params c) ! i
+
+-- In theory we might want multiple identical flags here, but in
+-- practice they are causing an error.
+fixFlags :: [P.PackageFlag] -> [P.PackageFlag]
+fixFlags = nub
 
 -- | Information collected from the build tree for a Tgt.
 data Target download

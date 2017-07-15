@@ -296,11 +296,11 @@ method n m = do
   packageMap %= Map.insert i p
   return i
 
-deletePackage :: PackageId -> TSt ()
-deletePackage i = packageMap %= Map.delete i
+deletePackage :: PackageId -> TSt PackageId
+deletePackage i = packageMap %= Map.delete i >> return i
 
-deletePackage' :: PackageId -> TSt ()
-deletePackage' i = packageMap %= Map.delete i
+deletePackage' :: PackageId -> TSt PackageId
+deletePackage' i = packageMap %= Map.delete i >> return i
 
 modifyPackage :: (Package -> Package) -> PackageId -> TSt PackageId
 modifyPackage f i = do
