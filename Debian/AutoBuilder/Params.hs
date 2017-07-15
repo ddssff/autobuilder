@@ -24,6 +24,7 @@ import Debian.Repo.Top (MonadTop(askTop), sub)
 import System.Directory (createDirectoryIfMissing, getPermissions, writable)
 import System.Environment (getEnv)
 import Debian.Repo.Prelude.Verbosity (qPutStrLn)
+import Debian.Sources (SourceOption(..), SourceOp(..))
 
 -- |Create a Cache object from a parameter set.
 buildCache :: (MonadRepos m, MonadTop m) => ParamRec -> m CacheRec
@@ -34,7 +35,7 @@ buildCache params' =
                   [".", "darcs", "deb-dir", "dists", "hackage", Local.subDir, "quilt", "tmp"]
        allSlices <- mapM parseNamedSliceList (sources params')
        let uri = maybe (uploadURI params') Just (buildURI params')
-       build <- maybe (return $ SliceList { slices = [] }) (repoSources Nothing) uri
+       build <- maybe (return $ SliceList { slices = [] }) (repoSources Nothing [SourceOption "trusted" OpSet ["yes"]]) uri
        return $ CacheRec {params = params', allSources = allSlices, buildRepoSources = build}
     where
       parseNamedSliceList (name, lines') =

@@ -142,7 +142,7 @@ getLocalSources = do
   root <- repoRoot . osLocalCopy <$> getOS
   case parseURI ("file://" ++ envPath root) of
     Nothing -> error $ "Invalid local repo root: " ++ show root
-    Just uri -> repoSources (Just (envRoot root)) uri
+    Just uri -> repoSources (Just (envRoot root)) [SourceOption "trusted" OpSet ["yes"]] uri
 
 runParameterSet :: (Applicative m, MonadReposCached m, MonadMask m) => CabalT IO () -> C.CacheRec -> m (Failing (ExitCode, L.ByteString, L.ByteString))
 runParameterSet init cache =
