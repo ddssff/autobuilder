@@ -296,11 +296,8 @@ method n m = do
   packageMap %= Map.insert i p
   return i
 
-deletePackage :: PackageId -> TSt PackageId
-deletePackage i = packageMap %= Map.delete i >> return i
-
-deletePackage' :: PackageId -> TSt PackageId
-deletePackage' i = packageMap %= Map.delete i >> return i
+deletePackage :: PackageId -> TSt ()
+deletePackage i = packageMap %= Map.delete i
 
 modifyPackage :: (Package -> Package) -> PackageId -> TSt PackageId
 modifyPackage f i = do
@@ -310,7 +307,7 @@ modifyPackage f i = do
 clonePackage :: (Package -> Package) -> PackageId -> TSt PackageId
 clonePackage f i = do
   j <- newId
-  Just p <- use (packageMap . at i)
+  p <- use (packageMap . at i) >>= maybe (error $ "No such package: " ++ show i) return
   packageMap %= Map.insert j (set pid j (f p))
   return j
 
