@@ -52,7 +52,7 @@ import Debug.Trace as D
 
 import Control.Exception (SomeException, try)
 import Control.Lens -- (makeLenses, over, set, use, view, (%=))
-import Control.Monad.State (State)
+import Control.Monad.State (State, StateT)
 import Data.ByteString (ByteString)
 import Data.Function (on)
 import Data.Generics (Data, Typeable)
@@ -117,7 +117,7 @@ data TargetState
       , _packageMap :: Map PackageId Package
       }
 
-type TSt = State TargetState
+type TSt m = StateT TargetState m
 
 -- | Hints about debianizing and building the package.
 data PackageFlag
@@ -198,12 +198,12 @@ $(makeLenses ''Package)
 $(makeLenses ''TargetState)
 
 -- | Add a package to a package group
-inGroup :: GroupName -> PackageId -> TSt PackageId
+inGroup :: Monad m => GroupName -> PackageId -> TSt m PackageId
 -- inGroup p g = modifyPackage (\p' -> over groups (Map.insertWith Set.union g (singleton p')) p') p
 inGroup g i = modifyPackage (over groups (Set.insert g)) i
 
 -- | Add a list of packages to a package group
-inGroups :: [GroupName] -> PackageId -> TSt PackageId
+inGroups :: Monad m => [GroupName] -> PackageId -> TSt m PackageId
 inGroups gs i = mapM_ (`inGroup` i) gs >> return i
 
 instance Eq Package where
@@ -222,18 +222,18 @@ targetState rel path = TargetState { _nextPackageId = PackageId 1
                                    , _next = 1
                                    , _deps = mkGraph [] [] }
 
-newId :: TSt PackageId
+newId :: Monad m => TSt m PackageId
 newId = use nextPackageId >>= \r -> nextPackageId %= succ >> return r
 
 -- | Expand dependency list(?) and turn a Package into a Packages.
--- aPackage :: Package -> TSt Packages
+-- aPackage :: Monad m => Package -> TSt m Packages
 -- aPackage p = return $ APackage p
 
 -- | Expand a package list using the suspected dependency graph
-plist :: [PackageId] -> TSt [PackageId]
+plist :: Monad m => [PackageId] -> TSt m [PackageId]
 plist ps = mapM reach ps >>= return . Set.toList . Set.unions
     where
-      reach :: PackageId -> TSt (Set PackageId)
+      reach :: Monad m => PackageId -> TSt m (Set PackageId)
       reach p = use nodes >>= maybe (return (singleton p)) (reach' p) . Map.lookup p
       reach' p n = do
         g <- use deps
@@ -244,7 +244,7 @@ plist ps = mapM reach ps >>= return . Set.toList . Set.unions
       -- tr _p n ns = trace ("edges: " ++ show n ++ " -> " ++ show ns) ns
 
 -- | If necessary, allocate a new Node and associate it with the argument package.
-node :: NodeLabel -> TSt (LNode NodeLabel)
+node :: Monad m => NodeLabel -> TSt m (LNode NodeLabel)
 node pkg = do
   (,) <$> node' <*> pure pkg
     where
@@ -260,20 +260,20 @@ node pkg = do
               mn
 
 -- | Record the fact that PKG has a build dependency on DEP.
-edge :: NodeLabel -> NodeLabel -> TSt ()
+edge :: Monad m => NodeLabel -> NodeLabel -> TSt m ()
 edge pkg dep = do
   (pkgNode, _) <- node pkg
   (depNode, _) <- node dep
   deps %= insEdge (pkgNode, depNode, ())
 
 -- | Like edge, but also adds self edges.
-edge' :: NodeLabel -> NodeLabel -> TSt ()
+edge' :: Monad m => NodeLabel -> NodeLabel -> TSt m ()
 edge' pkg dep = do
   edge pkg pkg
   edge dep dep
   edge pkg dep
 
-depends :: PackageId -> [PackageId] -> TSt ()
+depends :: Monad m => PackageId -> [PackageId] -> TSt m ()
 depends p ps = mapM_ (edge' p) ps
 
 instance Monoid GroupName where
@@ -289,36 +289,36 @@ relaxInfo flags' =
 
 -- Combinators for the Packages type
 
-method :: Int -> RetrieveMethod -> TSt PackageId
+method :: Monad m => Int -> RetrieveMethod -> TSt m PackageId
 method n m = do
   i <- newId
   let p = Package { _pid = i, _spec = m, _flags = mempty, _post = mempty, _groups = mempty }
   packageMap %= Map.insert i p
   return i
 
-deletePackage :: PackageId -> TSt ()
+deletePackage :: Monad m => PackageId -> TSt m ()
 deletePackage i = packageMap %= Map.delete i
 
-modifyPackage :: (Package -> Package) -> PackageId -> TSt PackageId
+modifyPackage :: Monad m => (Package -> Package) -> PackageId -> TSt m PackageId
 modifyPackage f i = do
   (packageMap . at i) %= maybe Nothing (Just . f)
   return i
 
-clonePackage :: (Package -> Package) -> PackageId -> TSt PackageId
+clonePackage :: Monad m => (Package -> Package) -> PackageId -> TSt m PackageId
 clonePackage f i = do
   j <- newId
   p <- use (packageMap . at i) >>= maybe (error $ "No such package: " ++ show i) return
   packageMap %= Map.insert j (set pid j (f p))
   return j
 
-createPackage :: RetrieveMethod -> [PackageFlag] -> [CabalInfo -> CabalInfo] -> TSt PackageId
+createPackage :: Monad m => RetrieveMethod -> [PackageFlag] -> [CabalInfo -> CabalInfo] -> TSt m PackageId
 createPackage s f p = do
   i <- newId
   let r = Package {_spec = s, _flags = f, _post = p, _pid = i, _groups = mempty}
   packageMap %= Map.insert i r
   return i
 
-mergePackages :: (Package -> Package -> Package) -> PackageId -> PackageId -> TSt PackageId
+mergePackages :: Monad m => (Package -> Package -> Package) -> PackageId -> PackageId -> TSt m PackageId
 mergePackages f i1 i2 = do
   Just p1 <- use (packageMap . at i1)
   Just p2 <- use (packageMap . at i2)
@@ -327,7 +327,7 @@ mergePackages f i1 i2 = do
   packageMap %= Map.insert i1 r
   return i1
 
-mergePackages' :: (Package -> Package -> Package) -> PackageId -> PackageId -> TSt PackageId
+mergePackages' :: Monad m => (Package -> Package -> Package) -> PackageId -> PackageId -> TSt m PackageId
 mergePackages' f i j = do
   Just p <- Map.lookup i <$> use packageMap
   Just q <- Map.lookup j <$> use packageMap
@@ -337,79 +337,79 @@ mergePackages' f i j = do
   return i
 
 -- | Add a flag to p
-flag :: PackageFlag -> PackageId -> TSt PackageId
+flag :: Monad m => PackageFlag -> PackageId -> TSt m PackageId
 flag f i = modifyPackage (over flags (f :)) i
 
-mflag :: Maybe PackageFlag -> PackageId -> TSt PackageId
+mflag :: Monad m => Maybe PackageFlag -> PackageId -> TSt m PackageId
 mflag Nothing i = return i
 mflag (Just f) i = flag f i
 
-apply :: (CabalInfo -> CabalInfo) -> PackageId -> TSt PackageId
+apply :: Monad m => (CabalInfo -> CabalInfo) -> PackageId -> TSt m PackageId
 apply f i = modifyPackage (over post (f :)) i
 
-patch :: ByteString -> PackageId -> TSt PackageId
+patch :: Monad m => ByteString -> PackageId -> TSt m PackageId
 patch s i = modifyPackage (over spec (`Patch` s)) i
 
-cd :: FilePath -> PackageId -> TSt PackageId
+cd :: Monad m => FilePath -> PackageId -> TSt m PackageId
 cd path i = modifyPackage (over spec (Cd path)) i
 
-apt :: String -> String -> TSt PackageId
+apt :: Monad m => String -> String -> TSt m PackageId
 apt dist name = method 1 (Apt dist name)
 
-bzr :: String -> TSt PackageId
+bzr :: Monad m => String -> TSt m PackageId
 bzr path = method 2 (Bzr path)
 
-darcs :: String -> TSt PackageId
+darcs :: Monad m => String -> TSt m PackageId
 darcs path = method 3 (Darcs path)
 
-datafiles :: RetrieveMethod -> RetrieveMethod -> FilePath -> TSt PackageId
+datafiles :: Monad m => RetrieveMethod -> RetrieveMethod -> FilePath -> TSt m PackageId
 datafiles cabal files dest = method 4 (DataFiles cabal files dest)
 
-datafiles' :: PackageId -> PackageId -> FilePath -> TSt PackageId
+datafiles' :: Monad m => PackageId -> PackageId -> FilePath -> TSt m PackageId
 datafiles' cabal files dest = do
   Just cabal' <- use (packageMap . at cabal)
   Just files' <- use (packageMap . at files)
   modifyPackage (const (set spec (DataFiles (view spec cabal') (view spec files') dest) cabal')) cabal
   return cabal
 
-debianize :: [String] -> PackageId -> TSt PackageId
+debianize :: Monad m => [String] -> PackageId -> TSt m PackageId
 debianize args = modifyPackage (\p -> set spec (Debianize'' (view spec p) Nothing) p)
 
-debdir :: RetrieveMethod -> PackageId -> TSt PackageId
+debdir :: Monad m => RetrieveMethod -> PackageId -> TSt m PackageId
 debdir debian i = modifyPackage (\p -> set spec (DebDir (view spec p) debian) p) i
 
-dir :: FilePath -> TSt PackageId
+dir :: Monad m => FilePath -> TSt m PackageId
 dir path = method 5 (Dir path)
 
-git :: String -> [GitSpec] -> TSt PackageId
+git :: Monad m => String -> [GitSpec] -> TSt m PackageId
 git path gitspecs = method 6 (Git path gitspecs)
 
-hackage :: Maybe String -> String -> TSt PackageId
+hackage :: Monad m => Maybe String -> String -> TSt m PackageId
 hackage Nothing s = method 7 (Hackage s)
 hackage (Just v) s = method 7 (Hackage s) >>= flag (CabalPin v)
 
-hg :: String -> TSt PackageId
+hg :: Monad m => String -> TSt m PackageId
 hg path = method 8 (Hg path)
 
-proc :: PackageId -> TSt PackageId
+proc :: Monad m => PackageId -> TSt m PackageId
 proc = modifyPackage (over spec Proc)
 
-quilt :: RetrieveMethod -> PackageId -> TSt PackageId
+quilt :: Monad m => RetrieveMethod -> PackageId -> TSt m PackageId
 quilt patchdir = modifyPackage (over spec (\x -> Quilt x patchdir))
 
-sourceDeb :: PackageId -> TSt PackageId
+sourceDeb :: Monad m => PackageId -> TSt m PackageId
 sourceDeb i = use (packageMap . at i) >>= \(Just p) -> method 9 (SourceDeb (view spec p))
 
-svn :: String -> TSt PackageId
+svn :: Monad m => String -> TSt m PackageId
 svn path = method 10 (Svn path)
 
-tla :: String -> TSt PackageId
+tla :: Monad m => String -> TSt m PackageId
 tla path = method 11 (Tla path)
 
-twice :: PackageId -> TSt PackageId
+twice :: Monad m => PackageId -> TSt m PackageId
 twice = modifyPackage (over spec Twice)
 
-uri :: String -> String -> TSt PackageId
+uri :: Monad m => String -> String -> TSt m PackageId
 uri tarball checksum = method 12 (Uri tarball checksum)
 
 -- | The target name returned is only used by the autobuilder command
