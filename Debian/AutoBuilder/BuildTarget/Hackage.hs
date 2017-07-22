@@ -16,15 +16,16 @@ import Data.List (isPrefixOf, tails, intercalate)
 import Data.Maybe (mapMaybe)
 import Data.Set as Set (fromList, toList)
 import Data.Version (Version, showVersion, parseVersion)
+import Debian.AutoBuilder.Prelude (replaceFile)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
-import Debian.Repo as DP
+import Debian.Repo as DP (findSourceTree, MonadRepos, MonadTop, SourceTree, sub, topdir)
 import Debian.Repo.Fingerprint (RetrieveMethod)
 import GHC.IO.Exception (IOErrorType(OtherError))
 import System.Exit
-import System.FilePath ((</>))
+import System.FilePath ((</>), (<.>))
 import System.IO (hPutStrLn, hPutStr, stderr)
 import System.IO.Error (mkIOError)
 import System.Process (CreateProcess, proc, showCommandForUser, cmdspec)
@@ -134,26 +135,33 @@ downloadCached server name version = do
         tar <- tarball name version
         dir <- unpacked name version
         liftIO $ removeRecursiveSafely dir
-        (res, out, _err) <- liftIO (readCreateProcessWithExitCode downloadCommand L.empty)
-        case res of
-          ExitSuccess ->
-              do liftIO $ L.writeFile tar out
-                 untar out
-                 return (Right dir)
-          ExitFailure r ->
-              do let msg = "Debian.AutoBuilder.BuildTarget.Hackage.download: " ++ showCmdSpecForUser (cmdspec downloadCommand) ++ " -> " ++ show r
+        (tarRes, tarOut, _tarErr) <- liftIO (readCreateProcessWithExitCode downloadCommand L.empty)
+        (cabalRes, cabalOut, _cabalErr) <- liftIO (readCreateProcessWithExitCode cabalCommand L.empty)
+        case (tarRes, cabalRes) of
+          (ExitSuccess, ExitSuccess) ->
+              do liftIO $ L.writeFile tar tarOut
+                 untar tarOut cabalOut
+                 return $ Right dir
+          (r1, r2) ->
+              do let msg = "Debian.AutoBuilder.BuildTarget.Hackage.download: " ++ showCmdSpecForUser (cmdspec downloadCommand) ++ " -> " ++ show (r1, r2)
                  liftIO $ hPutStrLn stderr msg
                  return $ Left (mkIOError OtherError msg Nothing Nothing)
 
       downloadCommand :: CreateProcess
       downloadCommand = proc "curl" ["-s", versionURL server name version]
 
+      cabalCommand :: CreateProcess
+      cabalCommand = proc "curl" ["-s", cabalURL server name version]
+
       validate :: L.ByteString -> Int
       validate text = Tar.foldEntries (\ _ n -> n + 1) 0 throw (Tar.read (Z.decompress text))
 
       -- Unpack and save the files of a tarball.
-      untar :: (MonadIO m, MonadTop m) => L.ByteString -> m ()
-      untar text = tmpDir >>= \ tmp -> liftIO $ Tar.unpack tmp (Tar.read (Z.decompress text))
+      untar :: (MonadIO m, MonadTop m) => L.ByteString -> L.ByteString -> m ()
+      untar tarText cabalText = do
+        tmp <- tmpDir
+        liftIO $ Tar.unpack tmp (Tar.read (Z.decompress tarText))
+        liftIO $ replaceFile (tmp </> name <.> "cabal") cabalText
 
 #if 0
 tryNTimes :: Int -> IO a -> IO (Either String a) -> IO a
@@ -198,6 +206,7 @@ getVersion server name =
 packageURL server name = "http://" ++ server ++ "/package/" ++ name
 
 versionURL server name version = "http://" ++ server ++ "/package/" ++ name ++ "-" ++ showVersion version ++ "/" ++ name ++ "-" ++ showVersion version ++ ".tar.gz"
+cabalURL server name version = "http://" ++ server ++ "/package/" ++ name ++ "-" ++ showVersion version ++ "/" ++ name ++ ".cabal"
 
 unpacked :: MonadTop m => String -> Version -> m FilePath
 unpacked name version = tmpDir >>= \ tmp -> return $ tmp </> name ++ "-" ++ showVersion version
