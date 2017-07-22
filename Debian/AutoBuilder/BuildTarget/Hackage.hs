@@ -137,10 +137,12 @@ downloadCached server name version = do
         liftIO $ removeRecursiveSafely dir
         (tarRes, tarOut, _tarErr) <- liftIO (readCreateProcessWithExitCode downloadCommand L.empty)
         (cabalRes, cabalOut, _cabalErr) <- liftIO (readCreateProcessWithExitCode cabalCommand L.empty)
+        liftIO $ print ("cabal file", cabalOut)
         case (tarRes, cabalRes) of
           (ExitSuccess, ExitSuccess) ->
               do liftIO $ L.writeFile tar tarOut
-                 untar tarOut cabalOut
+                 untar tarOut
+                 liftIO $ replaceFile (dir </> name <.> "cabal") cabalOut
                  return $ Right dir
           (r1, r2) ->
               do let msg = "Debian.AutoBuilder.BuildTarget.Hackage.download: " ++ showCmdSpecForUser (cmdspec downloadCommand) ++ " -> " ++ show (r1, r2)
@@ -157,11 +159,10 @@ downloadCached server name version = do
       validate text = Tar.foldEntries (\ _ n -> n + 1) 0 throw (Tar.read (Z.decompress text))
 
       -- Unpack and save the files of a tarball.
-      untar :: (MonadIO m, MonadTop m) => L.ByteString -> L.ByteString -> m ()
-      untar tarText cabalText = do
+      untar :: (MonadIO m, MonadTop m) => L.ByteString -> m ()
+      untar tarText = do
         tmp <- tmpDir
         liftIO $ Tar.unpack tmp (Tar.read (Z.decompress tarText))
-        liftIO $ replaceFile (tmp </> name <.> "cabal") cabalText
 
 #if 0
 tryNTimes :: Int -> IO a -> IO (Either String a) -> IO a
