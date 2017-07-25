@@ -205,7 +205,7 @@ runParameterSet init cache =
                                               return buildable) dependOS) `catch` handleRetrieveException method
             return res
       params = C.params cache
-      baseRelease =  either (error . show) id (P.findSlice cache (P.baseRelease params))
+      baseRelease =  either (\e -> error $ "Could not find slice " ++ show (P.baseRelease params) ++ ": " ++ show e) id (P.findSlice cache (P.baseRelease params))
       buildRepoSources = C.buildRepoSources cache
       buildReleaseSources = releaseSlices (R.buildRelease params) (inexactPathSlices buildRepoSources)
       buildRelease = NamedSliceList { sliceListName = ReleaseName (releaseName' (R.buildRelease params))
@@ -305,7 +305,10 @@ doVerifyBuildRepo cache =
                                Nothing -> "user@hostname"
                        rel = releaseName' (R.buildRelease params)
                        top = uriPath uri in -- "/home/autobuilder/deb-private/debian"
-                   error $ "Build repository does not exist on remote server: " ++ rel ++ "\nUse newdist there to create it:" ++
+                   error $ "Build repository does not exist on remote server: " ++ show (R.buildRelease params) ++
+                           "\nuploadURI: " ++ show (R.uploadURI params) ++
+                           "\nrepoNames: " ++ show repoNames ++
+                           "\nUse newdist there to create it:" ++
                            "\n  ssh " ++ ssh ++ " " ++ R.newDistProgram params ++ " --root=" ++ top ++ " --create-release=" ++ rel ++
                            "\n  ssh " ++ ssh ++ " " ++ R.newDistProgram params ++ " --root=" ++ top ++ " --create-section=" ++ rel ++ ",main" ++
                            "\nYou will also need to remove the local file ~/.autobuilder/repoCache." ++
