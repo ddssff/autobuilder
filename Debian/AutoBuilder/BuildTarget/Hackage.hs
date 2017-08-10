@@ -13,7 +13,7 @@ import Control.Monad.Trans (MonadIO, liftIO)
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as L
 import Data.List (isPrefixOf, tails, intercalate)
-import Data.Maybe (mapMaybe)
+import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
 import Data.Set as Set (fromList, toList)
 import Data.Version (Version, showVersion, parseVersion)
 import Debian.AutoBuilder.Prelude (replaceFile)
@@ -79,7 +79,7 @@ prepare cache method flags name =
 readVersion :: String -> Version
 readVersion text =
     fst .
-    head' .
+    fromMaybe (error ("readVersion parse failure: " ++ show text)) . listToMaybe .
     filter (null . snd) .
     readP_to_S parseVersion $
     text
@@ -97,9 +97,6 @@ scrapeVersion text =
     dropInfix "<strong>" $
     text
 #endif
-
-head' (x : _xs) = x
-head' [] = error "Debian.AutoBuilder.BuildTarget.Hackage.readVersion 2"
 
 -- | Remove everything until after the first occurrence of i
 dropInfix :: String -> String -> Maybe String
