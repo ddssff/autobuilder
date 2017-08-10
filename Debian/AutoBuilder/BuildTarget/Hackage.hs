@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, GADTs, PackageImports, ScopedTypeVariables, TypeFamilies #-}
+{-# LANGUAGE CPP, FlexibleContexts, GADTs, OverloadedStrings, PackageImports, ScopedTypeVariables, TypeFamilies #-}
 {-# OPTIONS_GHC -fno-warn-name-shadowing -fno-warn-type-defaults -fno-warn-missing-signatures #-}
 module Debian.AutoBuilder.BuildTarget.Hackage
     ( prepare
@@ -14,7 +14,9 @@ import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as L
 import Data.List (isPrefixOf, tails, intercalate)
 import Data.Maybe (listToMaybe, mapMaybe)
+import Data.Monoid ((<>))
 import Data.Set as Set (fromList, toList)
+import Data.Text as T (breakOn, drop, empty, length, null, pack, Text, unpack)
 import Data.Version (Version, showVersion, parseVersion)
 import Debian.AutoBuilder.Prelude (replaceFile)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
@@ -31,6 +33,8 @@ import System.IO.Error (mkIOError)
 import System.Process (CreateProcess, proc, showCommandForUser, cmdspec)
 import System.Process.ListLike (readCreateProcessWithExitCode, readProcessWithExitCode, showCmdSpecForUser)
 import System.Unix.Directory (removeRecursiveSafely)
+import Text.XML.HaXml.Html.Parse (htmlParse')
+import Text.XML.HaXml (Document(..), Element(..), Content(..))
 import Text.ParserCombinators.ReadP (readP_to_S)
 
 documentation :: [String]
@@ -84,34 +88,41 @@ readVersion text =
     fmap fst .
     -- fromMaybe (error ("readVersion parse failure: " ++ show text)) .
     listToMaybe .
-    filter (null . snd) .
+    filter (Prelude.null . snd) .
     readP_to_S parseVersion $
     text
 
 scrapeVersion :: String -> Either String Version
-scrapeVersion text =
-#if 1
-    case dropInfix "<strong>" text of
-      Nothing -> Left $ "Debian.AutoBuilder.BuildTarget.Hackage.readVersion 1 " ++ show text
-      Just x -> maybe (Left "") Right $ (readVersion $ trimInfix "</strong>" $ x)
-#else
-    readVersion .
-    trimInfix "</strong>" .
-    fromMaybe (error $ "Debian.AutoBuilder.BuildTarget.Hackage.readVersion 1 " ++ show text) .
-    dropInfix "<strong>" $
-    text
-#endif
+scrapeVersion text = either (\e -> Left ("Debian.AutoBuilder.BuildTarget.Hackage.scrapeVersion: " ++ show e)) findVersion (htmlParse' "" text)
+
+findVersion :: Document a -> Either String Version
+findVersion (Document _ _ (Elem _ _ (_ : _ : _ : CElem (Elem _ _ body) _ : _)) _) =
+    doBody ((filter isCElem body) !! 1)
+    where
+      doBody (CElem (Elem _ _ content) _) = doProperties ((filter isCElem content) !! 1)
+      doProperties (CElem (Elem _ _ properties) _) = doProperties' ((filter isCElem properties) !! 3)
+      doProperties' (CElem (Elem _ _ properties') _) = doProperties'' ((filter isCElem properties') !! 1)
+      doProperties'' (CElem (Elem _ _ properties'') _) = doProperties''' ((filter isCElem properties'') !! 0)
+      doProperties''' (CElem (Elem _ _ properties''') _) = doVersions ((filter isCElem properties''') !! 0)
+      doVersions (CElem (Elem _ _ versions) _) = doVersions' ((filter isCElem versions) !! 1)
+      doVersions' (CElem (Elem _ _ versions') _) = doVersions'' (last (filter isCElem (versions')))
+      doVersions'' (CElem (Elem _ _ [CString _ s _]) _) = maybe (Left ("Version parse failure: " ++ show s)) Right (readVersion s)
+      -- doVersion (CElem (Elem _ _ version) _) =
+      -- doContent xs = Left "foo"
+
+isCElem (CElem {}) = True
+isCElem _ = False
 
 -- | Remove everything until after the first occurrence of i
 dropInfix :: String -> String -> Maybe String
 dropInfix i s =
     case dropWhile (not . isPrefixOf i) (tails s) of
       [] -> Nothing
-      (x : _) -> Just (drop (length i) x)
+      (x : _) -> Just (Prelude.drop (Prelude.length i) x)
 
 -- | Remove everything starting from the first occurrence of i
 trimInfix :: String -> String -> String
-trimInfix i s = take (length (takeWhile (not . isPrefixOf i) (tails s))) s
+trimInfix i s = take (Prelude.length (takeWhile (not . isPrefixOf i) (tails s))) s
 
 -- | Check for file in cache and validate, on failure download and validate.
 downloadCached :: forall m. (MonadCatch m, MonadIO m, MonadTop m) => String -> String -> Version -> m FilePath
@@ -192,17 +203,30 @@ getVersion' server name =
 -- > getVersion \"binary\" -> \"0.5.0.2\"
 getVersion :: String -> String -> IO (Either String Version)
 getVersion server name =
-    do result@(code, out, _) <- readProcessWithExitCode cmd args B.empty
+    do result@(code, out, _) <- readProcessWithExitCode cmd args T.empty
        case code of
          -- This is bad it assumes the first occurrence of <strong>
          -- encloses the newest package version number.  I should go
          -- back to the html parser method
-         ExitSuccess -> return $ scrapeVersion $ B.unpack out
+         ExitSuccess -> return $ scrapeVersion $ T.unpack $ fixHrefs out
          _ -> return $ Left $ "Could not get version for " ++ name ++ "\n " ++ showCommandForUser cmd args ++ " -> " ++ show result
     where
       cmd = "curl"
       args = ["-s", url]
       url = packageURL server name
+
+fixHrefs :: Text -> Text
+fixHrefs s =
+    let badref = "href=http"
+        goodref = "href=\"http"
+        badclose = ">"
+        goodclose = "\">" in
+    case breakOn badref s of
+      (before, after) | T.null after -> before
+      (before, after) ->
+          let afterRef = T.drop (T.length badref) after in
+          let (url, afterURL) = breakOn badclose afterRef in
+          before <> goodref <> url <> goodclose <> fixHrefs (T.drop (T.length badclose) afterURL)
 
 -- |Hackage paths
 packageURL server name = "http://" ++ server ++ "/package/" ++ name
