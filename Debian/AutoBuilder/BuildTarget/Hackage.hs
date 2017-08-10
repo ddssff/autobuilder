@@ -34,7 +34,8 @@ import System.Process (CreateProcess, proc, showCommandForUser, cmdspec)
 import System.Process.ListLike (readCreateProcessWithExitCode, readProcessWithExitCode, showCmdSpecForUser)
 import System.Unix.Directory (removeRecursiveSafely)
 import Text.XML.HaXml.Html.Parse (htmlParse')
-import Text.XML.HaXml (Document(..), Element(..), Content(..))
+import Text.XML.HaXml.Posn (Posn(..))
+import Text.XML.HaXml (Document(..), Element(..), Content(..), QName(..), AttValue(..))
 import Text.ParserCombinators.ReadP (readP_to_S)
 
 documentation :: [String]
@@ -82,36 +83,6 @@ prepare cache method flags name =
             [] -> Nothing
             [v] -> Just v
             vs -> error ("Conflicting cabal version numbers passed to Debianize: [" ++ intercalate ", " vs ++ "]")
-
-readVersion :: String -> Maybe Version
-readVersion text =
-    fmap fst .
-    -- fromMaybe (error ("readVersion parse failure: " ++ show text)) .
-    listToMaybe .
-    filter (Prelude.null . snd) .
-    readP_to_S parseVersion $
-    text
-
-scrapeVersion :: String -> Either String Version
-scrapeVersion text = either (\e -> Left ("Debian.AutoBuilder.BuildTarget.Hackage.scrapeVersion: " ++ show e)) findVersion (htmlParse' "" text)
-
-findVersion :: Document a -> Either String Version
-findVersion (Document _ _ (Elem _ _ (_ : _ : _ : CElem (Elem _ _ body) _ : _)) _) =
-    doBody ((filter isCElem body) !! 1)
-    where
-      doBody (CElem (Elem _ _ content) _) = doProperties ((filter isCElem content) !! 1)
-      doProperties (CElem (Elem _ _ properties) _) = doProperties' ((filter isCElem properties) !! 3)
-      doProperties' (CElem (Elem _ _ properties') _) = doProperties'' ((filter isCElem properties') !! 1)
-      doProperties'' (CElem (Elem _ _ properties'') _) = doProperties''' ((filter isCElem properties'') !! 0)
-      doProperties''' (CElem (Elem _ _ properties''') _) = doVersions ((filter isCElem properties''') !! 0)
-      doVersions (CElem (Elem _ _ versions) _) = doVersions' ((filter isCElem versions) !! 1)
-      doVersions' (CElem (Elem _ _ versions') _) = doVersions'' (last (filter isCElem (versions')))
-      doVersions'' (CElem (Elem _ _ [CString _ s _]) _) = maybe (Left ("Version parse failure: " ++ show s)) Right (readVersion s)
-      -- doVersion (CElem (Elem _ _ version) _) =
-      -- doContent xs = Left "foo"
-
-isCElem (CElem {}) = True
-isCElem _ = False
 
 -- | Remove everything until after the first occurrence of i
 dropInfix :: String -> String -> Maybe String
@@ -185,6 +156,20 @@ tryNTimes n failed action =
       nTimes n r = either (\ _ -> hPutStr stderr "." >> action) (return . Right) r >>= nTimes (n - 1)
 #endif
 
+versionURL server name version = "http://" ++ server ++ "/package/" ++ name ++ "-" ++ showVersion version ++ "/" ++ name ++ "-" ++ showVersion version ++ ".tar.gz"
+cabalURL server name version = "http://" ++ server ++ "/package/" ++ name ++ "-" ++ showVersion version ++ "/" ++ name ++ ".cabal"
+
+unpacked :: MonadTop m => String -> Version -> m FilePath
+unpacked name version = tmpDir >>= \ tmp -> return $ tmp </> name ++ "-" ++ showVersion version
+
+tarball :: MonadTop m => String -> Version -> m FilePath
+tarball name version  = tmpDir >>= \ tmp -> return $ tmp </> name ++ "-" ++ showVersion version ++ ".tar.gz"
+
+tmpDir :: MonadTop m => m FilePath
+tmpDir = sub "hackage"
+
+---------------- version code --------------------
+
 getVersion' :: String -> String -> IO Version
 getVersion' server name =
 #if 0
@@ -202,18 +187,74 @@ getVersion' server name =
 -- |Given a package name, get the newest version in hackage of the hackage package with that name:
 -- > getVersion \"binary\" -> \"0.5.0.2\"
 getVersion :: String -> String -> IO (Either String Version)
-getVersion server name =
+getVersion server name = do
+  page <- packagePage server name
+  return (page >>= packageHtml >>= scrapeVersion)
+
+packagePage :: String -> String -> IO (Either String Text)
+packagePage server name =
     do result@(code, out, _) <- readProcessWithExitCode cmd args T.empty
        case code of
-         -- This is bad it assumes the first occurrence of <strong>
-         -- encloses the newest package version number.  I should go
-         -- back to the html parser method
-         ExitSuccess -> return $ scrapeVersion $ T.unpack $ fixHrefs out
-         _ -> return $ Left $ "Could not get version for " ++ name ++ "\n " ++ showCommandForUser cmd args ++ " -> " ++ show result
+         ExitSuccess -> return $ Right $ fixHrefs out
+         _ -> return $ Left "Failure retrieving hackage page"
     where
       cmd = "curl"
       args = ["-s", url]
       url = packageURL server name
+
+packageHtml :: Text -> Either String (Document Posn)
+packageHtml = htmlParse' "" . T.unpack
+
+scrapeVersion :: Document a -> Either String Version
+scrapeVersion (Document _ _ (Elem _ _ (_ : _ : _ : CElem (Elem _ _ body) _ : _)) _) =
+    doContent (findId "content" body)
+    where
+      doContent (Just (CElem (Elem _ _ content) _)) = doProperties (findId "properties" content)
+      doProperties (Just (CElem (Elem _ _ properties) _)) = doProperties' (findClass "properties" properties)
+      doProperties' (Just (CElem (Elem _ _ properties') _)) = doProperties'' (findElt "tbody" properties')
+      doProperties'' (Just (CElem (Elem _ _ properties'') _)) = doProperties''' ((filter isCElem properties'') !! 0) -- has label "Versions"
+      doProperties''' (CElem (Elem _ _ properties''') _) = doVersions (findElt "td" properties''')
+      doVersions (Just (CElem (Elem _ _ versions) _)) = doVersions' ((filter isCElem versions) !! 1)
+      doVersions' (CElem (Elem _ _ versions') _) = doVersions'' (last (filter isCElem (versions')))
+      doVersions'' (CElem (Elem _ _ [CString _ s _]) _) = maybe (Left ("Version parse failure: " ++ show s)) Right (readVersion s)
+      -- doVersion (CElem (Elem _ _ version) _) =
+      -- doContent xs = Left "foo"
+
+findElt tag (elt@(CElem (Elem (N tag') _ _) _) : more) | tag == tag' = Just elt
+findElt tag (_ : more) = findElt tag more
+findElt _ [] = Nothing
+
+findId s (elt@(CElem (Elem _ xs _) _) : more)
+    | any testId xs = Just elt
+    where testId (N "id", AttValue [Left s']) | s' == s = True
+          testId _ = False
+findId s (_ : more) = findId s more
+findId _ [] = Nothing
+
+findClass s (elt@(CElem (Elem _ xs _) _) : more)
+    | any test xs = Just elt
+    where test (N "class", AttValue [Left s']) | s' == s = True
+          test _ = False
+findClass s (_ : more) = findClass s more
+findClass _ [] = Nothing
+
+
+-- data QName = N Name | QN Namespace Name
+-- data Element i = Elem QName [Attribute] [Content i]
+-- type Attribute = (QName, AttValue)
+-- data AttValue = AttValue [Either String Reference]
+
+isCElem (CElem {}) = True
+isCElem _ = False
+
+readVersion :: String -> Maybe Version
+readVersion text =
+    fmap fst .
+    -- fromMaybe (error ("readVersion parse failure: " ++ show text)) .
+    listToMaybe .
+    filter (Prelude.null . snd) .
+    readP_to_S parseVersion $
+    text
 
 fixHrefs :: Text -> Text
 fixHrefs s =
@@ -230,15 +271,3 @@ fixHrefs s =
 
 -- |Hackage paths
 packageURL server name = "http://" ++ server ++ "/package/" ++ name
-
-versionURL server name version = "http://" ++ server ++ "/package/" ++ name ++ "-" ++ showVersion version ++ "/" ++ name ++ "-" ++ showVersion version ++ ".tar.gz"
-cabalURL server name version = "http://" ++ server ++ "/package/" ++ name ++ "-" ++ showVersion version ++ "/" ++ name ++ ".cabal"
-
-unpacked :: MonadTop m => String -> Version -> m FilePath
-unpacked name version = tmpDir >>= \ tmp -> return $ tmp </> name ++ "-" ++ showVersion version
-
-tarball :: MonadTop m => String -> Version -> m FilePath
-tarball name version  = tmpDir >>= \ tmp -> return $ tmp </> name ++ "-" ++ showVersion version ++ ".tar.gz"
-
-tmpDir :: MonadTop m => m FilePath
-tmpDir = sub "hackage"
