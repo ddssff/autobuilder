@@ -205,20 +205,18 @@ packagePage server name =
 packageHtml :: Text -> Either String (Document Posn)
 packageHtml = htmlParse' "" . T.unpack
 
-scrapeVersion :: Document a -> Either String Version
+scrapeVersion :: Show a => Document a -> Either String Version
 scrapeVersion (Document _ _ (Elem _ _ (_ : _ : _ : CElem (Elem _ _ body) _ : _)) _) =
     doContent (findId "content" body)
     where
       doContent (Just (CElem (Elem _ _ content) _)) = doProperties (findId "properties" content)
       doProperties (Just (CElem (Elem _ _ properties) _)) = doProperties' (findClass "properties" properties)
+      doProperties Nothing = Left "No such package"
       doProperties' (Just (CElem (Elem _ _ properties') _)) = doProperties'' (findElt "tbody" properties')
       doProperties'' (Just (CElem (Elem _ _ properties'') _)) = doProperties''' ((filter isCElem properties'') !! 0) -- has label "Versions"
       doProperties''' (CElem (Elem _ _ properties''') _) = doVersions (findElt "td" properties''')
-      doVersions (Just (CElem (Elem _ _ versions) _)) = doVersions' ((filter isCElem versions) !! 1)
-      doVersions' (CElem (Elem _ _ versions') _) = doVersions'' (last (filter isCElem (versions')))
-      doVersions'' (CElem (Elem _ _ [CString _ s _]) _) = maybe (Left ("Version parse failure: " ++ show s)) Right (readVersion s)
-      -- doVersion (CElem (Elem _ _ version) _) =
-      -- doContent xs = Left "foo"
+      doVersions (Just (CElem (Elem _ _ versions) _)) = doVersions' (last (filter isCElem versions))
+      doVersions' (CElem (Elem _ _ [CString _ s _]) _) = maybe (Left ("Version parse failure: " ++ show s)) Right (readVersion s)
 
 findElt tag (elt@(CElem (Elem (N tag') _ _) _) : more) | tag == tag' = Just elt
 findElt tag (_ : more) = findElt tag more
