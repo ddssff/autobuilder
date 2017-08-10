@@ -13,7 +13,7 @@ import Control.Monad.Trans (MonadIO, liftIO)
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as L
 import Data.List (isPrefixOf, tails, intercalate)
-import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
+import Data.Maybe (listToMaybe, mapMaybe)
 import Data.Set as Set (fromList, toList)
 import Data.Version (Version, showVersion, parseVersion)
 import Debian.AutoBuilder.Prelude (replaceFile)
@@ -60,7 +60,8 @@ instance T.Download HackageDL where
 prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m T.SomeDownload
 prepare cache method flags name =
     do let server = P.hackageServer (P.params cache) -- typically "hackage.haskell.org"
-       version <- liftIO $ maybe (getVersion' server name) (return . readVersion) versionString
+       version <- maybe (liftIO $ getVersion' server name) return (maybe Nothing readVersion versionString)
+       -- version <- liftIO $ maybe (getVersion' server name) (return . readVersion) versionString
        tar <- tarball name version
        unp <- downloadCached server name version
        tree <- liftIO $ (findSourceTree unp :: IO SourceTree)
@@ -71,15 +72,18 @@ prepare cache method flags name =
                                            , version = version
                                            , tar = tar }
     where
-      versionString = case Set.toList (Set.fromList (mapMaybe P.cabalPin flags)) of
-                        [] -> Nothing
-                        [v] -> Just v
-                        vs -> error ("Conflicting cabal version numbers passed to Debianize: [" ++ intercalate ", " vs ++ "]")
+      versionString :: Maybe String
+      versionString =
+          case Set.toList (Set.fromList (mapMaybe P.cabalPin flags)) of
+            [] -> Nothing
+            [v] -> Just v
+            vs -> error ("Conflicting cabal version numbers passed to Debianize: [" ++ intercalate ", " vs ++ "]")
 
-readVersion :: String -> Version
+readVersion :: String -> Maybe Version
 readVersion text =
-    fst .
-    fromMaybe (error ("readVersion parse failure: " ++ show text)) . listToMaybe .
+    fmap fst .
+    -- fromMaybe (error ("readVersion parse failure: " ++ show text)) .
+    listToMaybe .
     filter (null . snd) .
     readP_to_S parseVersion $
     text
@@ -89,7 +93,7 @@ scrapeVersion text =
 #if 1
     case dropInfix "<strong>" text of
       Nothing -> Left $ "Debian.AutoBuilder.BuildTarget.Hackage.readVersion 1 " ++ show text
-      Just x -> Right $ readVersion $ trimInfix "</strong>" $ x
+      Just x -> maybe (Left "") Right $ (readVersion $ trimInfix "</strong>" $ x)
 #else
     readVersion .
     trimInfix "</strong>" .
