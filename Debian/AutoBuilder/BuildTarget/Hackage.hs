@@ -215,8 +215,8 @@ scrapeVersion (Document _ _ (Elem _ _ (_ : _ : _ : CElem (Elem _ _ body) _ : _))
       doProperties' (Just (CElem (Elem _ _ properties') _)) = doProperties'' (findElt "tbody" properties')
       doProperties'' (Just (CElem (Elem _ _ properties'') _)) = doProperties''' ((filter isCElem properties'') !! 0) -- has label "Versions"
       doProperties''' (CElem (Elem _ _ properties''') _) = doVersions (findElt "td" properties''')
-      doVersions (Just (CElem (Elem _ _ versions) _)) = doVersions' (last (filter isCElem versions))
-      doVersions' (CElem (Elem _ _ [CString _ s _]) _) = maybe (Left ("Version parse failure: " ++ show s)) Right (readVersion s)
+      doVersions (Just (CElem (Elem _ _ versions) _)) = doVersions' (findElt "strong" (filter isCElem versions))
+      doVersions' (Just (CElem (Elem _ _ [CString _ s _]) _)) = maybe (Left ("Version parse failure: " ++ show s)) Right (readVersion s)
 
 findElt tag (elt@(CElem (Elem (N tag') _ _) _) : more) | tag == tag' = Just elt
 findElt tag (_ : more) = findElt tag more
