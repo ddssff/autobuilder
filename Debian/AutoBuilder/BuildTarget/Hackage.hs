@@ -191,19 +191,31 @@ getVersion server name = do
   page <- packagePage server name
   return (page >>= packageHtml >>= scrapeVersion)
 
-packagePage :: String -> String -> IO (Either String Text)
+packagePage :: String -> String -> IO (Either String String)
 packagePage server name =
     do result@(code, out, _) <- readProcessWithExitCode cmd args T.empty
        case code of
-         ExitSuccess -> return $ Right $ fixHrefs out
+         ExitSuccess -> return $ Right $ stripLines ("<script>", "</script>") $ T.unpack $ fixHrefs out
          _ -> return $ Left "Failure retrieving hackage page"
     where
       cmd = "curl"
       args = ["-s", url]
       url = packageURL server name
 
-packageHtml :: Text -> Either String (Document Posn)
-packageHtml = htmlParse' "" . T.unpack
+packageHtml :: String -> Either String (Document Posn)
+packageHtml = htmlParse' ""
+
+-- | There's a parse failure between <script> and </script>, just strip that out
+stripLines :: (String, String) -> String -> String
+stripLines (begin, end) s = unlines (go (lines s))
+    where
+      go :: [String] -> [String]
+      go a = case span (/= begin)  a of
+               (b, []) -> b
+               (b, _ : c) ->
+                   b ++ case span (/= end) c of
+                          (d, []) -> []
+                          (d, _ : e) -> go e
 
 scrapeVersion :: Show a => Document a -> Either String Version
 scrapeVersion (Document _ _ (Elem _ _ (_ : _ : _ : CElem (Elem _ _ body) _ : _)) _) =
