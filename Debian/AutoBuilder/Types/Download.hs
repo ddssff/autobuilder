@@ -14,7 +14,11 @@ import Data.Monoid (mempty)
 #endif
 import Data.Set as Set (Set, empty)
 import Data.Time (NominalDiffTime)
+#if MIN_VERSION_Cabal(2,0,0)
+import Distribution.Version(Version)
+#else
 import Data.Version (Version)
+#endif
 import Debian.AutoBuilder.Types.Packages (PackageFlag)
 import Debian.Repo.Fingerprint (RetrieveMethod(..), RetrieveAttribute(..))
 import Debian.Repo.MonadOS (MonadOS)

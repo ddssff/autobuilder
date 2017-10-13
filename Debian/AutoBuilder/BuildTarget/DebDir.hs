@@ -6,7 +6,11 @@ module Debian.AutoBuilder.BuildTarget.DebDir
 
 import Control.Monad.Trans (liftIO)
 import Data.Set (union)
+#if MIN_VERSION_Cabal(2,0,0)
+import Distribution.Version (showVersion)
+#else
 import Data.Version (showVersion)
+#endif
 import Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Changes (logVersion)

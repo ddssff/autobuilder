@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -Wall -fno-warn-missing-signatures #-}
+{-# LANGUAGE CPP #-}
 module Debian.AutoBuilder.Types.DefaultParams
     ( defaultParams
     ) where
@@ -6,7 +7,11 @@ module Debian.AutoBuilder.Types.DefaultParams
 import Data.List as List (isSuffixOf, map)
 import Data.Maybe
 import Data.Set as Set (empty, fromList)
+#if MIN_VERSION_Cabal(2,0,0)
+import Distribution.Version (Version)
+#else
 import Data.Version (Version)
+#endif
 import Debian.Arch (Arch(Binary), ArchCPU(ArchCPU), ArchOS(ArchOS))
 import Debian.AutoBuilder.Types.ParamRec (ParamRec(..), Strictness(..), TargetSpec(..))
 import Debian.Relation (BinPkgName(BinPkgName))

@@ -17,7 +17,12 @@ import Data.Maybe (listToMaybe, mapMaybe)
 import Data.Monoid ((<>))
 import Data.Set as Set (fromList, toList)
 import Data.Text as T (breakOn, drop, empty, length, null, pack, Text, unpack)
+#if MIN_VERSION_Cabal(2,0,0)
+import Distribution.Version (Version, mkVersion', showVersion)
+import Data.Version (parseVersion)
+#else
 import Data.Version (Version, showVersion, parseVersion)
+#endif
 import Debian.AutoBuilder.Prelude (replaceFile)
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Download as T
@@ -259,6 +264,9 @@ isCElem _ = False
 
 readVersion :: String -> Maybe Version
 readVersion text =
+#if MIN_VERSION_Cabal(2,0,0)
+    fmap mkVersion' .
+#endif
     fmap fst .
     -- fromMaybe (error ("readVersion parse failure: " ++ show text)) .
     listToMaybe .

@@ -16,7 +16,11 @@ import Data.Generics (listify)
 import Data.List as List (map, isInfixOf)
 import Data.Map as Map (Map, elems)
 import Data.Set as Set (Set, fromList, insert, member, toList, unions)
+#if MIN_VERSION_Cabal(2,0,0)
+import Distribution.Version (Version)
+#else
 import Data.Version (Version)
+#endif
 import Debian.Arch (Arch)
 import Debian.AutoBuilder.Types.Packages (Package, PackageId, GroupName(GroupName), pid, _groups)
 import Debian.Pretty (PP(..), ppPrint)
