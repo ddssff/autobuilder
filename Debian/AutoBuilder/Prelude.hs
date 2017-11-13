@@ -1,8 +1,13 @@
 {-# OPTIONS -Wall #-}
+{-# LANGUAGE CPP #-}
 
 module Debian.AutoBuilder.Prelude
     ( gFind
     , replaceFile
+#if !MIN_VERSION_Cabal(2,0,0)
+    , mkPackageName
+    , mkVersion
+#endif
     ) where
 
 import Control.Exception (catch)
@@ -11,6 +16,10 @@ import qualified Data.ByteString.Lazy as L (ByteString)
 import Data.Generics (Data, Typeable, listify)
 import Data.ListLike.IO (writeFile)
 import Data.ListLike.Instances ({-instance ListLikeIO L.ByteString Word8-})
+#if MIN_VERSION_Cabal(2,0,0)
+import Distribution.Package
+import Distribution.Version
+#endif
 import Prelude hiding (writeFile)
 import System.Directory (removeFile)
 import System.IO.Error (isDoesNotExistError)
@@ -33,3 +42,8 @@ replaceFile path text =
     where
       f :: IO ()
       f = removeFile path `Control.Exception.catch` (\ e -> if isDoesNotExistError e then return () else ioError e) >> writeFile path text
+
+#if !MIN_VERSION_Cabal(2,0,0)
+mkPackageName = PackageName
+mkVersion ns = Version ns []
+#endif
