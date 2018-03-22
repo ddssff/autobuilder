@@ -13,10 +13,11 @@ import Control.Monad.Trans (MonadIO, liftIO)
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as L
 import Data.List (isPrefixOf, tails, intercalate)
+import Data.ListLike as LL (drop, length)
 import Data.Maybe (listToMaybe, mapMaybe)
 import Data.Monoid ((<>))
 import Data.Set as Set (fromList, toList)
-import Data.Text as T (breakOn, drop, empty, length, null, pack, Text, unpack)
+import Data.Text as T (breakOn, empty, null, pack, Text, unpack)
 #if MIN_VERSION_Cabal(2,0,0)
 import Distribution.Version (Version, mkVersion', showVersion)
 import Data.Version (parseVersion)
@@ -31,6 +32,7 @@ import qualified Debian.AutoBuilder.Types.ParamRec as P
 import Debian.Repo as DP (findSourceTree, MonadRepos, MonadTop, SourceTree, sub, topdir)
 import Debian.Repo.Fingerprint (RetrieveMethod)
 import GHC.IO.Exception (IOErrorType(OtherError))
+import Prelude hiding (drop, length)
 import System.Exit
 import System.FilePath ((</>), (<.>))
 import System.IO (hPutStrLn, hPutStr, stderr)
@@ -94,11 +96,27 @@ dropInfix :: String -> String -> Maybe String
 dropInfix i s =
     case dropWhile (not . isPrefixOf i) (tails s) of
       [] -> Nothing
-      (x : _) -> Just (Prelude.drop (Prelude.length i) x)
+      (x : _) -> Just (drop (length i) x)
+
+-- @@
+-- (Right page) <- packagePage "hackage.haskell.org" "th-desugar"
+-- dropScripts page
+-- @@
+dropScripts :: String -> String
+dropScripts s =
+    case length (takeWhile (not . isPrefixOf stag) (tails s)) of
+      n | n >= length s -> s
+      n -> let (before, s') = splitAt n s
+               s'' = drop (length stag) s'
+               charsAfter = length (takeWhile (not . isPrefixOf etag) (tails s''))
+               after = drop (charsAfter + length etag) s'' in
+           before ++ dropScripts after
+    where stag = "<script>\n"
+          etag = "</script>\n"
 
 -- | Remove everything starting from the first occurrence of i
 trimInfix :: String -> String -> String
-trimInfix i s = take (Prelude.length (takeWhile (not . isPrefixOf i) (tails s))) s
+trimInfix i s = take (length (takeWhile (not . isPrefixOf i) (tails s))) s
 
 -- | Check for file in cache and validate, on failure download and validate.
 downloadCached :: forall m. (MonadCatch m, MonadIO m, MonadTop m) => String -> String -> Version -> m FilePath
@@ -191,9 +209,11 @@ getVersion' server name =
 
 -- |Given a package name, get the newest version in hackage of the hackage package with that name:
 -- > getVersion \"binary\" -> \"0.5.0.2\"
+-- λ> (Right page) <- packagePage "hackage.haskell.org" "th-desugar"
+-- λ> let (Right doc) = packageHtml page
 getVersion :: String -> String -> IO (Either String Version)
 getVersion server name = do
-  page <- packagePage server name
+  page <- fmap dropScripts <$> packagePage server name
   return (page >>= packageHtml >>= scrapeVersion)
 
 packagePage :: String -> String -> IO (Either String String)
@@ -283,9 +303,9 @@ fixHrefs s =
     case breakOn badref s of
       (before, after) | T.null after -> before
       (before, after) ->
-          let afterRef = T.drop (T.length badref) after in
+          let afterRef = drop (length badref) after in
           let (url, afterURL) = breakOn badclose afterRef in
-          before <> goodref <> url <> goodclose <> fixHrefs (T.drop (T.length badclose) afterURL)
+          before <> goodref <> url <> goodclose <> fixHrefs (drop (length badclose) afterURL)
 
 -- |Hackage paths
 packageURL server name = "http://" ++ server ++ "/package/" ++ name
