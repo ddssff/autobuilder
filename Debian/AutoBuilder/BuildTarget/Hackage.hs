@@ -247,6 +247,7 @@ scrapeVersion (Document _ _ (Elem _ _ (_ : _ : _ : CElem (Elem _ _ body) _ : _))
     doContent (findId "content" body)
     where
       doContent (Just (CElem (Elem _ _ content) _)) = doProperties (findId "properties" content)
+      doContent x = error ("scrapeVersion - unexpected content: " ++ show x)
       doProperties (Just (CElem (Elem _ _ properties) _)) = doProperties' (findClass "properties" properties)
       doProperties Nothing = Left "No such package"
       doProperties' (Just (CElem (Elem _ _ properties') _)) = doProperties'' (findElt "tbody" properties')
