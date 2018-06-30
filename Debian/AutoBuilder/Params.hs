@@ -67,7 +67,7 @@ findSlice :: CacheRec -> ReleaseName -> Either String NamedSliceList
 findSlice cache dist =
     case filter ((== dist) . sliceListName) (allSources cache) of
       [x] -> Right x
-      [] -> Left ("No sources.list found for " ++ relName dist ++ ": allSources cache = " ++ show (allSources cache))
+      [] -> Left ("Debian.AutoBuilder.Params - no sources.list found for " ++ relName dist ++ ".  Is it in Debian.Releases.baseReleaseList?  allSources cache = " ++ show (fmap (relName . sliceListName) (allSources cache)))
       xs -> Left ("Multiple sources.lists found for " ++ relName dist ++ "\n" ++ show (map (relName . sliceListName) xs))
 
 -- | Packages uploaded to the build release will be compatible
