@@ -53,7 +53,7 @@ failing _ f (Success a)    = f a
 
 -- | A replacement for the BuildTarget class and the BuildTarget.* types.  The method code
 -- moves into the function that turns a RetrieveMethod into a BuildTarget.
-data Show download => Buildable download
+data Buildable download
     = Buildable
       { download :: download
       , debianSourceTree :: DebianSourceTree
