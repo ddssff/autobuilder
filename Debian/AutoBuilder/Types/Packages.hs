@@ -276,10 +276,13 @@ edge' pkg dep = do
 depends :: Monad m => PackageId -> [PackageId] -> TSt m ()
 depends p ps = mapM_ (edge' p) ps
 
+instance Semigroup GroupName where
+    NoName <> x = x
+    x <> _ = x
+
 instance Monoid GroupName where
     mempty = NoName
-    mappend NoName x = x
-    mappend x _ = x
+    mappend = (<>)
 
 relaxInfo :: [PackageFlag] -> [String]
 relaxInfo flags' =

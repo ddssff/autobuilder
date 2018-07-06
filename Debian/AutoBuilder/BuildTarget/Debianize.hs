@@ -37,7 +37,11 @@ import Data.Version (Version)
 #endif
 import Distribution.Package (PackageIdentifier(..))
 import Distribution.PackageDescription (GenericPackageDescription(..), PackageDescription(..))
+#if MIN_VERSION_Cabal(2,2,0)
+import Distribution.PackageDescription.Parsec (readGenericPackageDescription)
+#else
 import Distribution.PackageDescription.Parse (readPackageDescription)
+#endif
 import System.Directory (getDirectoryContents, createDirectoryIfMissing)
 import System.Environment (withArgs)
 import System.FilePath ((</>), takeDirectory)
@@ -80,7 +84,11 @@ prepare defaultAtoms cache method@(Debian.Repo.Fingerprint.Debianize'' _ sourceN
        cabfiles <- liftIO $ getDirectoryContents cabdir >>= return . filter (isSuffixOf ".cabal")
        case cabfiles of
          [cabfile] ->
+#if MIN_VERSION_Cabal(2,2,0)
+             do desc <- liftIO $ readGenericPackageDescription normal (cabdir </> cabfile)
+#else
              do desc <- liftIO $ readPackageDescription normal (cabdir </> cabfile)
+#endif
                 -- let (PackageName name) = pkgName . package . packageDescription $ desc
                 let version = pkgVersion . package . Distribution.PackageDescription.packageDescription $ desc
                 -- We want to see the original changelog, so don't remove this
