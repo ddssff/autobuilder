@@ -52,6 +52,7 @@ import Debug.Trace as D
 
 import Control.Exception (SomeException, try)
 import Control.Lens -- (makeLenses, over, set, use, view, (%=))
+import Control.Monad.Fail (MonadFail)
 import Control.Monad.State (StateT)
 import Data.ByteString (ByteString)
 import Data.Function (on)
@@ -321,7 +322,7 @@ createPackage s f p = do
   packageMap %= Map.insert i r
   return i
 
-mergePackages :: Monad m => (Package -> Package -> Package) -> PackageId -> PackageId -> TSt m PackageId
+mergePackages :: MonadFail m => (Package -> Package -> Package) -> PackageId -> PackageId -> TSt m PackageId
 mergePackages f i1 i2 = do
   Just p1 <- use (packageMap . at i1)
   Just p2 <- use (packageMap . at i2)
@@ -330,7 +331,7 @@ mergePackages f i1 i2 = do
   packageMap %= Map.insert i1 r
   return i1
 
-mergePackages' :: Monad m => (Package -> Package -> Package) -> PackageId -> PackageId -> TSt m PackageId
+mergePackages' :: MonadFail m => (Package -> Package -> Package) -> PackageId -> PackageId -> TSt m PackageId
 mergePackages' f i j = do
   Just p <- Map.lookup i <$> use packageMap
   Just q <- Map.lookup j <$> use packageMap
@@ -368,7 +369,7 @@ darcs path = method 3 (Darcs path)
 datafiles :: Monad m => RetrieveMethod -> RetrieveMethod -> FilePath -> TSt m PackageId
 datafiles cabal files dest = method 4 (DataFiles cabal files dest)
 
-datafiles' :: Monad m => PackageId -> PackageId -> FilePath -> TSt m PackageId
+datafiles' :: MonadFail m => PackageId -> PackageId -> FilePath -> TSt m PackageId
 datafiles' cabal files dest = do
   Just cabal' <- use (packageMap . at cabal)
   Just files' <- use (packageMap . at files)
