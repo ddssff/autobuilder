@@ -9,6 +9,7 @@ module Debian.AutoBuilder.BuildEnv
 #if !MIN_VERSION_base(4,8,0)
 import Control.Applicative (Applicative)
 #endif
+import Control.Lens (set)
 import Control.Monad (when)
 import Control.Monad.Catch (MonadMask)
 import Control.Monad.State (MonadIO)
@@ -58,6 +59,5 @@ prepareDependOS params rel extra =
 prepareBuildOS :: (MonadTop m, MonadRepos m, Applicative m) => ReleaseName -> OSImage -> m EnvRoot
 prepareBuildOS rel os = do
   r <- envSet rel >>= return . EnvRoot . buildOS
-  let os' = os {osRoot = r}
-  putOSImage os'
+  putOSImage (set osRoot r os)
   return r

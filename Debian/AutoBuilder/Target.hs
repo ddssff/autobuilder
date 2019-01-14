@@ -27,6 +27,7 @@ import Control.Applicative ((<$>))
 import Control.Applicative.Error (Failing(..))
 import Control.Arrow (second)
 import Control.Exception (AsyncException(UserInterrupt), fromException, SomeException, throw, toException)
+import Control.Lens (view)
 import Control.Monad.Catch (MonadCatch, catch, try, MonadMask)
 import Control.Monad.RWS (liftIO, MonadIO, when)
 import Control.Monad.Trans (lift)
@@ -64,7 +65,7 @@ import Debian.Relation.ByteString (Relation(..), Relations)
 import Debian.Release (ReleaseName(relName), releaseName')
 import Debian.Repo.Changes (saveChangesFile)
 import Debian.Repo.Dependencies (prettySimpleRelation, simplifyRelations, solutions)
-import Debian.Repo.EnvPath (EnvRoot(EnvRoot, rootPath))
+import Debian.Repo.EnvPath (EnvRoot(EnvRoot), rootPath)
 import Debian.Repo.Fingerprint (RetrieveMethod, dependencyChanges, DownstreamFingerprint, Fingerprint, packageFingerprint, showDependencies', showFingerprint)
 import Debian.Repo.Internal.Apt (MonadApt)
 import Debian.Repo.Internal.Repos (MonadRepos)
@@ -407,7 +408,7 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
   checkDryRun
   source <- noisier 2 $ prepareBuildTree cache dependOS buildOS newFingerprint target
   logEntry source
-  result <- evalMonadOS (withProcAndSys (rootPath buildOS) $ build source) buildOS
+  result <- evalMonadOS (withProcAndSys (view rootPath buildOS) $ build source) buildOS
   result' <- find result
   -- Upload to the local repo without a PGP key
   evalInstall (doLocalUpload result') repo Nothing
@@ -427,7 +428,7 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
              -- so we need to check this version number.  We also
              -- don't want to leave the patches subdirectory here
              -- unless we actually created a patch.
-             root <- rootPath . osRoot <$> getOS
+             root <- view (osRoot . rootPath) <$> getOS
              let path = debdir buildTree
                  path' = fromJust (dropPrefix root path)
              dpkgSource <- liftIO $ modifyProcessEnv [("EDITOR", Just "/bin/true")] ((proc "dpkg-source" ["--commit", ".", "autobuilder.diff"]) {cwd = Just path'})
@@ -508,8 +509,8 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
 prepareBuildTree :: (MonadTop m, MonadRepos m, MonadMask m, T.Download a) =>
                     P.CacheRec -> EnvRoot -> EnvRoot -> Fingerprint -> Target a -> m DebianBuildTree
 prepareBuildTree cache dependOS buildOS sourceFingerprint target = do
-  let dependRoot = rootPath dependOS
-      buildRoot = rootPath buildOS
+  let dependRoot = view rootPath dependOS
+      buildRoot = view rootPath buildOS
   let oldPath = topdir . cleanSource $ target
       newPath = buildRoot ++ fromJust (dropPrefix dependRoot oldPath)
   when (P.strictness (P.params cache) == P.Lax)
@@ -812,7 +813,7 @@ installDependencies = buildDependencies False
 
 buildDependencies :: (MonadOS m, MonadCatch m, MonadIO m, MonadMask m) => Bool -> DebianBuildTree -> [String] -> Fingerprint -> m String
 buildDependencies downloadOnly source extra sourceFingerprint =
-    do root <- rootPath . osRoot <$> getOS
+    do root <- view (osRoot . rootPath) <$> getOS
        let path = pathBelow root (topdir source)
            -- pbuilderCommand = "cd '" ++  path ++ "' && /usr/lib/pbuilder/pbuilder-satisfydepends"
            pbuilderCommand = (proc "/usr/lib/pbuilder/pbuilder-satisfydepends" []) {cwd = Just path}

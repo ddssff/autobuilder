@@ -40,7 +40,7 @@ import Debian.GHC (hvrCompilerPATH, withModifiedPATH)
 import Debian.Pretty (prettyShow, ppShow)
 import Debian.Relation (BinPkgName(unBinPkgName), SrcPkgName(unSrcPkgName))
 import Debian.Release (ReleaseName(ReleaseName, relName), releaseName')
-import Debian.Repo.EnvPath (EnvRoot(rootPath))
+import Debian.Repo.EnvPath (EnvRoot, envPath, envRoot, rootPath)
 import qualified Debian.Repo.Fingerprint as P (RetrieveMethod(Patch, Cd, DebDir, DataFiles, Debianize'', Proc, Quilt, SourceDeb, Twice, Zero))
 import Debian.Repo.Internal.Repos (MonadRepos, runReposCachedT, MonadReposCached)
 import Debian.Repo.LocalRepository(uploadRemote, verifyUploadURI)
@@ -139,10 +139,10 @@ doParameterSet init results params = do
 -- build environment.
 getLocalSources :: (MonadRepos m, MonadOS m, MonadIO m) => m SliceList
 getLocalSources = do
-  root <- repoRoot . osLocalCopy <$> getOS
-  case parseURI ("file://" ++ envPath root) of
+  root <- view (osLocalCopy . repoRoot) <$> getOS
+  case parseURI ("file://" ++ view envPath root) of
     Nothing -> error $ "Invalid local repo root: " ++ show root
-    Just uri -> repoSources (Just (envRoot root)) [SourceOption "trusted" OpSet ["yes"]] uri
+    Just uri -> repoSources (Just (view envRoot root)) [SourceOption "trusted" OpSet ["yes"]] uri
 
 runParameterSet :: (Applicative m, MonadReposCached m, MonadMask m) => CabalT IO () -> C.CacheRec -> m (Failing (ExitCode, L.ByteString, L.ByteString))
 runParameterSet init cache =
@@ -163,7 +163,7 @@ runParameterSet init cache =
           f p = (view P.spec p, nub (view P.flags p), view P.post p)
       -- let allTargets = filter (notZero . view _1) (P.foldPackages (\ p l -> (view P.spec p, view P.flags p, view P.post p) : l) (R.buildPackages params) [])
       qPutStrLn "Preparing build environment"
-      buildOS <- evalMonadOS (do sources <- osBaseDistro <$> getOS
+      buildOS <- evalMonadOS (do sources <- view osBaseDistro <$> getOS
                                  updateCacheSources (R.ifSourcesChanged params) sources
                                  when (R.report params) (ePutStrLn . doReport $ allTargets)
                                  qPutStr ("\n" ++ showTargets allTargets ++ "\n")
@@ -176,7 +176,7 @@ runParameterSet init cache =
       -- used to avoid creating package versions that already exist.  Also include the sources
       -- for the local repository to avoid collisions there as well.
       localSources <- evalMonadOS getLocalSources buildOS
-      local <- evalMonadOS (osLocalMaster <$> getOS) dependOS
+      local <- evalMonadOS (view osLocalMaster <$> getOS) dependOS
       let poolSources = NamedSliceList { sliceListName = ReleaseName (relName (sliceListName buildRelease) ++ "-all")
                                        , sliceList = appendSliceLists [buildRepoSources, localSources] }
 
@@ -196,7 +196,7 @@ runParameterSet init cache =
       retrieveTarget :: (MonadReposCached m) => EnvRoot -> Int -> Int -> (P.RetrieveMethod, [P.PackageFlag], [CabalInfo -> CabalInfo]) -> m (Either String (Buildable SomeDownload))
       retrieveTarget dependOS count index (method, flags, functions) = do
             liftIO (hPutStr stderr (printf "[%2d of %2d]" index count))
-            res <- (Right <$> evalMonadOS (do download <- withProcAndSys (rootPath dependOS) $ retrieve init cache method flags functions
+            res <- (Right <$> evalMonadOS (do download <- withProcAndSys (view rootPath dependOS) $ retrieve init cache method flags functions
                                               when (R.flushSource params) (flushSource download)
                                               buildable <- liftIO (asBuildable download)
                                               let (src, bins) = debianPackageNames (debianSourceTree buildable)

@@ -15,6 +15,7 @@ import Control.Applicative ((<$>))
 #endif
 import Control.Applicative.Error (Failing(Success, Failure), ErrorMsg)
 import Control.Exception as E (SomeException, try, catch, throw)
+import Control.Lens (view)
 import Control.Monad (when)
 import Control.Monad.Catch (MonadMask)
 import Control.Monad.Trans (MonadIO, liftIO)
@@ -36,7 +37,7 @@ import Debian.Repo.MonadOS (MonadOS(getOS))
 import Debian.Repo.OSImage (osRoot)
 import Debian.Repo.SourceTree (DebianBuildTree(..), entry, subdir, debdir, findDebianBuildTrees, findBuildTree, copySourceTree,
                                DebianSourceTree(..), findSourceTree)
-import Debian.Repo.EnvPath (EnvRoot(rootPath))
+import Debian.Repo.EnvPath (EnvRoot, rootPath)
 import qualified Debian.Version
 import System.Directory(renameDirectory)
 import System.FilePath (takeExtension, (</>))
@@ -143,7 +144,7 @@ prepareBuild _cache target =
     where
       copySource :: (MonadOS m, MonadIO m) => DebianSourceTree -> m DebianBuildTree
       copySource debSource =
-          do root <- rootPath . osRoot <$> getOS
+          do root <- view (osRoot . rootPath) <$> getOS
              let name = logPackage . entry $ debSource
                  dest = root ++ "/work/build/" ++ name
                  ver = Debian.Version.version . logVersion . entry $ debSource
@@ -157,7 +158,7 @@ prepareBuild _cache target =
 
       copyBuild :: (MonadOS m, MonadIO m) => DebianBuildTree -> m DebianBuildTree
       copyBuild debBuild =
-          do root <- rootPath . osRoot <$> getOS
+          do root <- view (osRoot . rootPath) <$> getOS
              let name = logPackage . entry $ debBuild
                  dest = root ++ "/work/build/" ++ name
                  ver = Debian.Version.version . logVersion . entry $ debBuild
