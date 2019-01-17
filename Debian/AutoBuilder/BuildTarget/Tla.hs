@@ -44,7 +44,7 @@ instance T.Download TlaDL where
                                     timeTask (readProcessVE (shell cmd) "")
                            True -> (return (Right mempty, 0)))
 
-prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m T.SomeDownload
+prepare :: (MonadRepos m, MonadTop r m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m T.SomeDownload
 prepare cache method flags version =
     do
       dir <- sub ("tla" </> version)

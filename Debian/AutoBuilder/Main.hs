@@ -55,7 +55,7 @@ import Debian.Repo.Slice (NamedSliceList(..), SliceList(slices), Slice(sliceRepo
 import Debian.Repo.State.AptImage (withAptImage)
 import Debian.Repo.State.Repository (foldRepository)
 import Debian.Repo.State.Slice (repoSources, updateCacheSources)
-import Debian.Repo.Top (MonadTop(askTop))
+import Debian.Repo.Top (MonadTop, TopDir(TopDir), toTop)
 import Debian.Repo.EnvPath (EnvPath(..))
 import Debian.Repo.LocalRepository (LocalRepository, repoRoot)
 import Debian.Sources (SourceOption(SourceOption), SourceOp(OpSet), sourceOptions)
@@ -90,7 +90,7 @@ main init myParams =
        case tops of
          -- All the work for a given run must occur in the same top
          -- directory - ~/.autobuilder for example.
-         [top] -> runReposCachedT top (foldM (doParameterSet init) [] recs) `catch` showAndThrow >>= testResults
+         [top] -> runReposCachedT (TopDir top) (foldM (doParameterSet init) [] recs) `catch` showAndThrow >>= testResults
          [] -> IO.hPutStrLn IO.stderr "No parameter sets"
          tops -> IO.hPutStrLn IO.stderr ("Parameter sets have different top directories: " ++ show tops)
     where testResults results =
@@ -117,13 +117,13 @@ isFailure _ = False
 
 -- |Process one set of parameters.  Usually there is only one, but there
 -- can be several which are run sequentially.  Stop on first failure.
-doParameterSet :: MonadReposCached m => CabalT IO () -> [Failing (ExitCode, L.ByteString, L.ByteString)] -> R.ParamRec -> m [Failing (ExitCode, L.ByteString, L.ByteString)]
+doParameterSet :: MonadReposCached r m => CabalT IO () -> [Failing (ExitCode, L.ByteString, L.ByteString)] -> R.ParamRec -> m [Failing (ExitCode, L.ByteString, L.ByteString)]
 -- If one parameter set fails, don't try the rest.  Not sure if
 -- this is the right thing, but it is safe.
 doParameterSet _ results _ | any isFailure results = return results
 doParameterSet init results params = do
   result <- withVerbosity (R.verbosity params)
-            (do top <- askTop
+            (do (TopDir top) <- view toTop
                 withLock (top </> "lockfile") $
                   -- Should we just let the autobuilder deduce from current $PATH?
                   -- Probably not, because packages built with ghc are difficult to
@@ -144,10 +144,10 @@ getLocalSources = do
     Nothing -> error $ "Invalid local repo root: " ++ show root
     Just uri -> repoSources (Just (view envRoot root)) [SourceOption "trusted" OpSet ["yes"]] uri
 
-runParameterSet :: (Applicative m, MonadReposCached m) => CabalT IO () -> C.CacheRec -> m (Failing (ExitCode, L.ByteString, L.ByteString))
+runParameterSet :: (Applicative m, MonadReposCached r m) => CabalT IO () -> C.CacheRec -> m (Failing (ExitCode, L.ByteString, L.ByteString))
 runParameterSet init cache =
     do
-      top <- askTop
+      (TopDir top) <- view toTop
       liftIO doRequiredVersion
       doVerifyBuildRepo cache
       when (R.showParams params) (withVerbosity 1 (liftIO doShowParams))
@@ -193,7 +193,7 @@ runParameterSet init cache =
                         (Failure ms) -> Left ms
                         (Success a) -> Right a) xs
       notZero x = null (listify (\ x -> case x of P.Zero -> True; _ -> False) x)
-      retrieveTarget :: (MonadReposCached m) => EnvRoot -> Int -> Int -> (P.RetrieveMethod, [P.PackageFlag], [CabalInfo -> CabalInfo]) -> m (Either String (Buildable SomeDownload))
+      retrieveTarget :: (MonadReposCached r m) => EnvRoot -> Int -> Int -> (P.RetrieveMethod, [P.PackageFlag], [CabalInfo -> CabalInfo]) -> m (Either String (Buildable SomeDownload))
       retrieveTarget dependOS count index (method, flags, functions) = do
             liftIO (hPutStr stderr (printf "[%2d of %2d]" index count))
             res <- (Right <$> evalMonadOS (do download <- withProcAndSys (view rootPath dependOS) $ retrieve init cache method flags functions
@@ -318,7 +318,7 @@ doVerifyBuildRepo cache =
       g = return . repoReleaseInfo
       params = C.params cache
 
-handleRetrieveException :: MonadReposCached m => P.RetrieveMethod -> SomeException -> m (Either String (Buildable SomeDownload))
+handleRetrieveException :: MonadReposCached r m => P.RetrieveMethod -> SomeException -> m (Either String (Buildable SomeDownload))
 handleRetrieveException method e =
           case (fromException (toException e) :: Maybe AsyncException) of
             Just UserInterrupt ->

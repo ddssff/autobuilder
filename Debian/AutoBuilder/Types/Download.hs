@@ -42,7 +42,7 @@ class Show a => Download a where
     origTarball :: a -> Maybe FilePath
     origTarball _ = Nothing
     -- ^ If we have access to an original tarball, this returns its path.
-    flushSource :: (MonadIO m, MonadTop m) => a -> m ()
+    flushSource :: (MonadIO m, MonadTop r m) => a -> m ()
     -- ^ Remove any existing data before downloading anew
     cleanTarget :: a -> FilePath -> IO ((Either SomeException (ExitCode, L.ByteString, L.ByteString)), NominalDiffTime)
     cleanTarget _ = \ _ -> return (Right (ExitSuccess, mempty, mempty), 0)

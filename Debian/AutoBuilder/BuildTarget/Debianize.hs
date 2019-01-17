@@ -9,6 +9,7 @@ module Debian.AutoBuilder.BuildTarget.Debianize
 
 import Control.Lens ((.=))
 import Control.Monad (when)
+import Control.Monad.Reader (runReaderT)
 import Control.Monad.State (modify)
 --import Control.Monad.Catch (MonadMask, bracket)
 import Control.Monad.Trans (liftIO)
@@ -28,7 +29,7 @@ import Debian.Relation (SrcPkgName(..))
 import Debian.Repo.Fingerprint (RetrieveMethod(Debianize''), retrieveMethodMD5)
 import Debian.Repo.Internal.Repos (MonadRepos)
 import Debian.Repo.Rsync (rsyncOld)
-import Debian.Repo.Top (MonadTop, sub, runTopT)
+import Debian.Repo.Top (MonadTop, sub, TopDir(TopDir))
 import Distribution.Verbosity (normal)
 #if MIN_VERSION_Cabal(2,0,0)
 import Distribution.Version (Version)
@@ -75,7 +76,7 @@ instance DL.Download a => DL.Download (DebianizeDL a) where
     attrs = DL.attrs . cabal
 
 -- | Debianize the download, which is assumed to be a cabal package.
-prepare :: (MonadRepos m, MonadTop m, DL.Download a) => CabalT IO () -> CR.CacheRec -> RetrieveMethod -> [PS.PackageFlag] -> [CabalInfo -> CabalInfo] -> a -> m DL.SomeDownload
+prepare :: (MonadRepos m, MonadTop r m, DL.Download a) => CabalT IO () -> CR.CacheRec -> RetrieveMethod -> [PS.PackageFlag] -> [CabalInfo -> CabalInfo] -> a -> m DL.SomeDownload
 prepare defaultAtoms cache method@(Debian.Repo.Fingerprint.Debianize'' _ sourceName) flags functions cabal =
     do let cabdir = DL.getTop cabal
        debdir <- sub ("debianize" </> retrieveMethodMD5 method)
@@ -127,7 +128,7 @@ autobuilderCabal cache flags functions sourceName debianizeDirectory defaultAtom
     Cabal.withCurrentDirectory debianizeDirectory $
     do let rel = PR.buildRelease $ CR.params cache
        top <- computeTopDir (CR.params cache)
-       eset <- runTopT top (envSet rel)
+       eset <- runReaderT (envSet rel) (TopDir top)
        -- let (functions, flags) = partitionEithers (map (\ x -> case x of P.ModifyAtoms fn -> Left fn; _ -> Right x) pflags)
        v <- return 0 -- verbosity
        let args =

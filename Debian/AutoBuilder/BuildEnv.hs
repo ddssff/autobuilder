@@ -27,26 +27,26 @@ import Debian.Repo.Top (MonadTop, sub)
 import Prelude hiding (null)
 import System.FilePath ((</>))
 
-envSet :: (MonadIO m, MonadTop m) => ReleaseName -> m EnvSet
+envSet :: (MonadIO m, MonadTop r m) => ReleaseName -> m EnvSet
 envSet distro = sub ("dists" </> releaseName' distro) >>= \ parent ->
                 return (EnvSet {cleanOS = parent </> "clean", dependOS = parent </> "depend", buildOS = parent </> "build"})
 
 {-
-buildRoot :: (MonadIO m, MonadTop m) => ReleaseName -> m EnvRoot
+buildRoot :: (MonadIO m, MonadTop r m) => ReleaseName -> m EnvRoot
 buildRoot distro = sub ("dists" </> releaseName' distro </> "build") >>= return . EnvRoot
 
-dependRoot :: (MonadIO m, MonadTop m) => ReleaseName -> m EnvRoot
+dependRoot :: (MonadIO m, MonadTop r m) => ReleaseName -> m EnvRoot
 dependRoot distro = sub ("dists" </> releaseName' distro </> "depend") >>= return . EnvRoot
 
-cleanEnv :: (MonadIO m, MonadTop m) => ReleaseName -> m EnvRoot
+cleanEnv :: (MonadIO m, MonadTop r m) => ReleaseName -> m EnvRoot
 cleanEnv distro = cleanEnvOfRelease distro
 
-cleanEnvOfRelease :: (MonadIO m, MonadTop m) => ReleaseName -> m EnvRoot
+cleanEnvOfRelease :: (MonadIO m, MonadTop r m) => ReleaseName -> m EnvRoot
 cleanEnvOfRelease distro =
     sub ("dists" </> releaseName' distro </> "clean") >>= return . EnvRoot
 -}
 
-prepareDependOS :: (Applicative m, MonadRepos m, MonadTop m, MonadMask m) => P.ParamRec -> NamedSliceList -> [Slice] -> m EnvRoot
+prepareDependOS :: (MonadRepos m, MonadTop r m) => P.ParamRec -> NamedSliceList -> [Slice] -> m EnvRoot
 prepareDependOS params rel extra =
     do localRepo <- Local.prepare (P.flushPool params) (P.buildRelease params) (P.archSet params)
        -- release <- prepareRelease repo (P.buildRelease params) [] [parseSection' "main"] (P.archSet params)
@@ -56,7 +56,7 @@ prepareDependOS params rel extra =
        (_cOS, dOS) <- prepareOS eset rel extra localRepo (P.flushRoot params) (P.flushDepends params) (P.ifSourcesChanged params) (P.includePackages params) (P.optionalIncludePackages params) (P.excludePackages params) (P.components params)
        return dOS
 
-prepareBuildOS :: (MonadTop m, MonadRepos m, Applicative m) => ReleaseName -> OSImage -> m EnvRoot
+prepareBuildOS :: (MonadTop r m, MonadRepos m) => ReleaseName -> OSImage -> m EnvRoot
 prepareBuildOS rel os = do
   r <- envSet rel >>= return . EnvRoot . buildOS
   putOSImage (set osRoot r os)

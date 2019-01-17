@@ -2,7 +2,8 @@
 {-# LANGUAGE CPP, GADTs, OverloadedStrings, ScopedTypeVariables #-}
 module Debian.AutoBuilder.BuildTarget.Bzr where
 
-import Control.Monad.Error (catchError, throwError)
+import Control.Lens (view)
+import Control.Monad.Except (catchError, throwError)
 import Control.Monad.Trans
 import qualified Data.ByteString.Lazy.Char8 as L
 import Data.Digest.Pure.MD5 (md5)
@@ -50,10 +51,10 @@ instance Download BzrDL where
                           timeTask (readProcessVE (shell cmd) L.empty)
                  True -> return (Right mempty, 0)
 
-prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m SomeDownload
+prepare :: (MonadRepos m, MonadTop r m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m SomeDownload
 prepare cache method flags version =
   do
-    dir <- askTop >>= \ top -> return $ top </> "bzr" </> show (md5 (L.pack (maybe "" uriRegName (uriAuthority uri) ++ (uriPath uri))))
+    dir <- view toTop >>= \(TopDir top) -> return $ top </> "bzr" </> show (md5 (L.pack (maybe "" uriRegName (uriAuthority uri) ++ (uriPath uri))))
     exists <- liftIO $ doesDirectoryExist dir
     tree <- liftIO $ if exists then updateSource dir else createSource dir
     return $ SomeDownload $ BzrDL { bzrCache = cache

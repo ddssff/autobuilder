@@ -51,7 +51,7 @@ instance Download AptDL where
     flushSource x = liftIO $ removeRecursiveSafely $ apt x
     attrs = singleton . AptVersion . show . prettyDebianVersion . logVersion . entry . debTree' . tree
 
-prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> SrcPkgName -> m SomeDownload
+prepare :: (MonadRepos m, MonadTop r m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> SrcPkgName -> m SomeDownload
 prepare cache method flags dist package =
     withAptImage (P.ifSourcesChanged (P.params cache)) distro $ do
       apt <- aptDir package

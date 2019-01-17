@@ -41,7 +41,7 @@ instance (Download a, Download b) => Download (DebDirDL a b) where
     flushSource = flushSource . upstream
     attrs x = union (attrs (upstream x)) (attrs (debian x))
 
-prepare :: (MonadRepos m, MonadTop m, T.Download a, T.Download b) =>
+prepare :: (MonadRepos m, MonadTop r m, T.Download a, T.Download b) =>
            RetrieveMethod -> [P.PackageFlag] -> a -> b -> m SomeDownload
 prepare method flags upstream debian = do
   dir <- sub "deb-dir"

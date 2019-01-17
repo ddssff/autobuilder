@@ -9,6 +9,7 @@ module Debian.AutoBuilder.Params
     , adjustVendorTag -- Export for testing
     ) where
 
+import Control.Lens (view)
 import Control.Monad.Trans (liftIO)
 import Data.List (isSuffixOf)
 import Data.Maybe (catMaybes, fromMaybe)
@@ -20,16 +21,16 @@ import Debian.Release (ReleaseName(ReleaseName, relName))
 import Debian.Repo.Slice (NamedSliceList(..), SliceList(..))
 import Debian.Repo.Internal.Repos (MonadRepos)
 import Debian.Repo.State.Slice (repoSources, verifySourcesList)
-import Debian.Repo.Top (MonadTop(askTop), sub)
+import Debian.Repo.Top (MonadTop, sub, TopDir(TopDir), toTop)
 import System.Directory (createDirectoryIfMissing, getPermissions, writable)
 import System.Environment (getEnv)
 import Debian.Repo.Prelude.Verbosity (qPutStrLn)
 import Debian.Sources (SourceOption(..), SourceOp(..))
 
 -- |Create a Cache object from a parameter set.
-buildCache :: (MonadRepos m, MonadTop m) => ParamRec -> m CacheRec
+buildCache :: (MonadRepos m, MonadTop r m) => ParamRec -> m CacheRec
 buildCache params' =
-    do top <- askTop
+    do (TopDir top) <- view toTop
        qPutStrLn ("Preparing autobuilder cache in " ++ top ++ "...")
        mapM_ (\ name -> sub name >>= \ path -> liftIO (createDirectoryIfMissing True path))
                   [".", "darcs", "deb-dir", "dists", "hackage", Local.subDir, "quilt", "tmp"]

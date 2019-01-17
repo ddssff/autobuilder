@@ -80,11 +80,10 @@ instance T.Download DarcsDL where
     buildWrapper _ = id
     attrs x = singleton (DarcsChangesId (attr x))
 
-prepare :: (MonadRepos m, MonadTop m) => RetrieveMethod -> [P.PackageFlag] -> String -> m T.SomeDownload
+prepare :: (MonadRepos m, MonadTop r m) => RetrieveMethod -> [P.PackageFlag] -> String -> m T.SomeDownload
 prepare method flags theUri = sub "darcs" >>= prepare' method flags theUri
 
-prepare' :: forall m. (MonadRepos m, MonadTop m) =>
-           RetrieveMethod -> [P.PackageFlag] -> String -> FilePath -> m T.SomeDownload
+prepare' :: forall m. MonadRepos m => RetrieveMethod -> [P.PackageFlag] -> String -> FilePath -> m T.SomeDownload
 prepare' method flags theUri base = do
   update >>= maybe recreate (return . Just) >>= finish
     where

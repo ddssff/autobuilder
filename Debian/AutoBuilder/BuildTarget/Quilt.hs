@@ -53,7 +53,7 @@ getEntry (Patch x) = x
 
 quiltPatchesDir = "quilt-patches"
 
-makeQuiltTree :: (MonadRepos m, MonadTop m, T.Download a, T.Download b) => RetrieveMethod -> a -> b -> m (SourceTree, FilePath)
+makeQuiltTree :: (MonadRepos m, MonadTop r m, T.Download a, T.Download b) => RetrieveMethod -> a -> b -> m (SourceTree, FilePath)
 makeQuiltTree m base patch =
     do qPutStrLn $ "Quilt base: " ++ T.getTop base
        qPutStrLn $ "Quilt patch: " ++ T.getTop patch
@@ -103,7 +103,7 @@ instance (T.Download a, T.Download b) => T.Download (QuiltDL a b) where
     cleanTarget x = (\ top -> T.cleanTarget (base x) top)
     attrs x = union (T.attrs (base x)) (T.attrs (patch x))
 
-prepare :: (MonadRepos m, MonadTop m, T.Download a, T.Download b) => RetrieveMethod -> [P.PackageFlag] -> a -> b -> m T.SomeDownload
+prepare :: (MonadRepos m, MonadTop r m, T.Download a, T.Download b) => RetrieveMethod -> [P.PackageFlag] -> a -> b -> m T.SomeDownload
 prepare method flags base patch = do
     qPutStrLn "Preparing quilt target"
     T.SomeDownload <$> (makeQuiltTree method base patch >>= liftIO . withUpstreamQuiltHidden make)

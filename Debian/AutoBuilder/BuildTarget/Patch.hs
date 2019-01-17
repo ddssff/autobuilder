@@ -56,7 +56,7 @@ instance T.Download a => T.Download (PatchDL a) where
     cleanTarget x = T.cleanTarget (base x)
     attrs = T.attrs . base
 
-prepare :: (MonadRepos m, MonadTop m, T.Download a) => RetrieveMethod -> [P.PackageFlag] -> B.ByteString -> a -> m T.SomeDownload
+prepare :: (MonadRepos m, MonadTop r m, T.Download a) => RetrieveMethod -> [P.PackageFlag] -> B.ByteString -> a -> m T.SomeDownload
 prepare method flags patch base =
     do copyDir <- sub ("quilt" </> retrieveMethodMD5 method)
        baseTree <- liftIO $ findSourceTree (T.getTop base)

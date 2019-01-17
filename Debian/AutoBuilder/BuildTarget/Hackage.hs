@@ -41,7 +41,7 @@ import System.Process (CreateProcess, proc, showCommandForUser, cmdspec)
 import System.Process.ListLike (readCreateProcessWithExitCode, readProcessWithExitCode, showCmdSpecForUser)
 import System.Unix.Directory (removeRecursiveSafely)
 import Text.XML.HaXml.Html.Parse (htmlParse')
-import Text.XML.HaXml.Posn (Posn(..))
+import Text.XML.HaXml.Posn (Posn)
 import Text.XML.HaXml (Document(..), Element(..), Content(..), QName(..), AttValue(..))
 import Text.ParserCombinators.ReadP (readP_to_S)
 
@@ -69,7 +69,7 @@ instance T.Download HackageDL where
     origTarball = Just . tar
     flushSource _ = error "flushSource HackageDL unimplemented"
 
-prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m T.SomeDownload
+prepare :: (MonadRepos m, MonadTop r m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m T.SomeDownload
 prepare cache method flags name =
     do let server = P.hackageServer (P.params cache) -- typically "hackage.haskell.org"
        version <- maybe (liftIO $ getVersion' server name) return (maybe Nothing readVersion versionString)
@@ -119,7 +119,7 @@ trimInfix :: String -> String -> String
 trimInfix i s = take (length (takeWhile (not . isPrefixOf i) (tails s))) s
 
 -- | Check for file in cache and validate, on failure download and validate.
-downloadCached :: forall m. (MonadCatch m, MonadIO m, MonadTop m) => String -> String -> Version -> m FilePath
+downloadCached :: forall r m. (MonadCatch m, MonadIO m, MonadTop r m) => String -> String -> Version -> m FilePath
 downloadCached server name version = do
   -- Look for the cached version, if that fails try unpacking the tarball, if that fails try downloading.
   cache >>= maybe (download >>= either throw return) return
@@ -165,7 +165,7 @@ downloadCached server name version = do
       validate text = Tar.foldEntries (\ _ n -> n + 1) 0 throw (Tar.read (Z.decompress text))
 
       -- Unpack and save the files of a tarball.
-      untar :: (MonadIO m, MonadTop m) => L.ByteString -> m ()
+      untar :: (MonadIO m, MonadTop r m) => L.ByteString -> m ()
       untar tarText = do
         tmp <- tmpDir
         liftIO $ Tar.unpack tmp (Tar.read (Z.decompress tarText))
@@ -182,13 +182,13 @@ tryNTimes n failed action =
 versionURL server name version = "http://" ++ server ++ "/package/" ++ name ++ "-" ++ showVersion version ++ "/" ++ name ++ "-" ++ showVersion version ++ ".tar.gz"
 cabalURL server name version = "http://" ++ server ++ "/package/" ++ name ++ "-" ++ showVersion version ++ "/" ++ name ++ ".cabal"
 
-unpacked :: MonadTop m => String -> Version -> m FilePath
+unpacked :: MonadTop r m => String -> Version -> m FilePath
 unpacked name version = tmpDir >>= \ tmp -> return $ tmp </> name ++ "-" ++ showVersion version
 
-tarball :: MonadTop m => String -> Version -> m FilePath
+tarball :: MonadTop r m => String -> Version -> m FilePath
 tarball name version  = tmpDir >>= \ tmp -> return $ tmp </> name ++ "-" ++ showVersion version ++ ".tar.gz"
 
-tmpDir :: MonadTop m => m FilePath
+tmpDir :: MonadTop r m => m FilePath
 tmpDir = sub "hackage"
 
 ---------------- version code --------------------
@@ -218,7 +218,7 @@ getVersion server name = do
 
 packagePage :: String -> String -> IO (Either String String)
 packagePage server name =
-    do result@(code, out, _) <- readProcessWithExitCode cmd args T.empty
+    do (code, out, _) <- readProcessWithExitCode cmd args T.empty
        case code of
          ExitSuccess -> return $ Right $ stripLines ("<script>", "</script>") $ T.unpack $ fixHrefs out
          _ -> return $ Left "Failure retrieving hackage page"

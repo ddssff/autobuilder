@@ -59,7 +59,7 @@ instance T.Download UriDL where
 -- | A URI that returns a tarball, with an optional md5sum which must
 -- match if given.  The purpose of the md5sum is to be able to block
 -- changes to the tarball on the remote host.
-prepare :: (MonadRepos m, MonadTop m) => RetrieveMethod -> [P.PackageFlag] -> String -> String -> m UriDL
+prepare :: (MonadRepos m, MonadTop r m) => RetrieveMethod -> [P.PackageFlag] -> String -> String -> m UriDL
 prepare method flags u s =
     do (uri, cksum, tree) <- checkTarget >>= downloadTarget >> validateTarget >>= unpackTarget
        tar <- tarball (uriToString' uri) cksum
@@ -72,7 +72,7 @@ prepare method flags u s =
                       , tree = tree
                       , tar = tar }
     where
-      checkTarget :: (MonadRepos m, MonadTop m) => m Bool
+      checkTarget :: (MonadRepos m, MonadTop r m) => m Bool
       checkTarget =
           do tar <- tarball u s
              exists <- liftIO (doesFileExist tar)
@@ -85,7 +85,7 @@ prepare method flags u s =
 
       -- See if the file is already available in the checksum directory
       -- Download the target into the tmp directory, compute its checksum, and see if it matches.
-      downloadTarget :: (MonadRepos m, MonadTop m) => Bool -> m ()
+      downloadTarget :: (MonadRepos m, MonadTop r m) => Bool -> m ()
       downloadTarget True = return ()
       downloadTarget False =
           do sum <- sumDir s
@@ -99,13 +99,13 @@ prepare method flags u s =
              -- We should do something with the output
              return ()
       -- Make sure what we just downloaded has the correct checksum
-      validateTarget :: (MonadRepos m, MonadTop m) => m String
+      validateTarget :: (MonadRepos m, MonadTop r m) => m String
       validateTarget =
           (tarball u s) >>= \ tar ->
           (liftIO (B.readFile tar >>= return . show . md5) >>= \ realSum ->
            if realSum == s then return realSum else error ("Checksum mismatch for " ++ tar ++ ": expected " ++ s ++ ", saw " ++ realSum ++ "."))
             `catch` (\ (e :: SomeException) -> error ("Checksum failure for " ++ tar ++ ": " ++ show e))
-      unpackTarget :: (MonadRepos m, MonadTop m) => String -> m (URI, FilePath, R.SourceTree)
+      unpackTarget :: (MonadRepos m, MonadTop r m) => String -> m (URI, FilePath, R.SourceTree)
       unpackTarget realSum =
           rmdir >> mkdir >> untar >>= read >>= search >>= verify
           where
@@ -133,7 +133,7 @@ prepare method flags u s =
             read (_output, _elapsed) = sourceDir s >>= \ src -> liftIO (getDir src)
             getDir dir = getDirectoryContents dir >>= return . filter (not . flip elem [".", ".."])
             search files = checkContents (filter (not . flip elem [".", ".."]) files)
-            checkContents :: (MonadRepos m, MonadTop m) => [FilePath] -> m R.SourceTree
+            checkContents :: (MonadRepos m, MonadTop r m) => [FilePath] -> m R.SourceTree
             checkContents [] = error ("Empty tarball? " ++ show (mustParseURI u))
             checkContents [subdir] =
                 sourceDir s >>= \ src ->

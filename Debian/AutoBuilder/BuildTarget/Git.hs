@@ -81,7 +81,7 @@ gitSum flags theUri gitspecs = show (md5 (B.pack uriAndBranch))
                                 [] -> ""
                                 _ -> "=" ++ show (sort gitspecs)
 
-prepare :: (MonadRepos m, MonadTop m) => RetrieveMethod -> [P.PackageFlag] -> String -> [GitSpec] -> m T.SomeDownload
+prepare :: (MonadRepos m, MonadTop r m) => RetrieveMethod -> [P.PackageFlag] -> String -> [GitSpec] -> m T.SomeDownload
 prepare method flags theUri gitspecs = do
   base <- sub "git"
   dir <- sub ("git" </> gitSum flags theUri gitspecs)

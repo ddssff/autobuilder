@@ -64,7 +64,7 @@ instance T.Download SvnDL where
                                     timeTask (readProcessVE (shell cmd) "")
                            True -> return (Right mempty, 0))
 
-prepare :: (MonadRepos m, MonadTop m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m T.SomeDownload
+prepare :: (MonadRepos m, MonadTop r m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m T.SomeDownload
 prepare cache method flags uri =
     do dir <- sub ("svn" </> show (md5 (L.pack (maybe "" uriRegName (uriAuthority uri') ++ (uriPath uri')))))
        exists <- liftIO $ doesDirectoryExist dir
