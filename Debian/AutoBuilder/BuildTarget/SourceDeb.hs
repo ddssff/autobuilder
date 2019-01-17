@@ -12,7 +12,7 @@ import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.Control.String as S
 import Debian.Repo.Fingerprint (RetrieveMethod)
-import Debian.Repo.Internal.Repos (MonadRepos)
+import Debian.Repo.MonadRepos (MonadRepos)
 import Debian.Repo.Prelude.Process (readProcessV)
 import qualified Debian.Version as V
 import System.Directory

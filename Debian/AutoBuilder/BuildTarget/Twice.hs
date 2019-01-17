@@ -4,7 +4,7 @@ module Debian.AutoBuilder.BuildTarget.Twice where
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Repo.Fingerprint (RetrieveMethod)
-import Debian.Repo.Internal.Repos (MonadRepos)
+import Debian.Repo.MonadRepos (MonadRepos)
 
 documentation = [ "twice:<target> - A target of this form modifies another target by"
                 , "ensuring that dpkg-buildpackage is run a second time if it fails"

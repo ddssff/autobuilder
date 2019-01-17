@@ -18,7 +18,7 @@ import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec(archSet, build
 import Debian.Debianize (EnvSet(..))
 import Debian.Release (ReleaseName, releaseName')
 import Debian.Repo.EnvPath (EnvRoot(EnvRoot))
-import Debian.Repo.Internal.Repos (MonadRepos, putOSImage)
+import Debian.Repo.MonadRepos (MonadRepos, putOSImage)
 import Debian.Repo.OSImage (OSImage, osRoot)
 import Debian.Repo.Slice (NamedSliceList, Slice)
 import Debian.Repo.State.OSImage (prepareOS)

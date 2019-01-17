@@ -6,7 +6,7 @@ import Debian.AutoBuilder.Types.Download (Download(..), SomeDownload(..))
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Repo.Fingerprint (RetrieveMethod)
-import Debian.Repo.Internal.Repos (MonadRepos)
+import Debian.Repo.MonadRepos (MonadRepos)
 import System.FilePath ((</>))
 
 documentation = [ "cd:<relpath>:<target> - A target of this form modifies another target by"

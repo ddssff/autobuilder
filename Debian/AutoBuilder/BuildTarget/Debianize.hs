@@ -27,7 +27,7 @@ import Debian.Debianize as Cabal (CabalInfo, withCurrentDirectory, dependOS, per
 import Debian.Pretty (ppShow)
 import Debian.Relation (SrcPkgName(..))
 import Debian.Repo.Fingerprint (RetrieveMethod(Debianize''), retrieveMethodMD5)
-import Debian.Repo.Internal.Repos (MonadRepos)
+import Debian.Repo.MonadRepos (MonadRepos)
 import Debian.Repo.Rsync (rsyncOld)
 import Debian.Repo.Top (MonadTop, sub, TopDir(TopDir))
 import Distribution.Verbosity (normal)
