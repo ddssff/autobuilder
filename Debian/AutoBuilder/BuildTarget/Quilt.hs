@@ -9,7 +9,7 @@ import Control.Applicative ((<$>))
 #endif
 import Control.Applicative.Error (Failing(..))
 import Control.Monad (when)
-import Control.Monad.Error (catchError)
+import Control.Monad.Except (catchError)
 import Control.Monad.Trans
 import qualified Data.ByteString.Lazy as L
 import Data.Either (partitionEithers)

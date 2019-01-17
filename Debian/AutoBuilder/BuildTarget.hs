@@ -102,11 +102,11 @@ instance Download ZeroDL where
 -- | Given a RetrieveMethod, perform the retrieval and return the result.
 -- This wrapper ensures that /proc and /sys are mounted, even though the
 -- underlying code in retrieve' hasn't been updated to enforce this.
-retrieve :: forall m. (MonadOS m, MonadRepos m, MonadTop m, MonadCatch m) =>
+retrieve :: forall m. (MonadOS m, MonadRepos m, MonadTop m) =>
             CabalT IO () -> C.CacheRec -> P.RetrieveMethod -> [P.PackageFlag] -> [CabalInfo -> CabalInfo] -> WithProcAndSys m SomeDownload
 retrieve defaultAtoms cache method flags functions = lift $ retrieve' defaultAtoms cache method flags functions
 
-retrieve' :: forall m. (MonadOS m, MonadRepos m, MonadTop m, MonadCatch m) =>
+retrieve' :: forall m. (MonadOS m, MonadRepos m, MonadTop m) =>
             CabalT IO () -> C.CacheRec -> P.RetrieveMethod -> [P.PackageFlag] -> [CabalInfo -> CabalInfo] -> m SomeDownload
 retrieve' defaultAtoms cache method flags functions =
     case method of

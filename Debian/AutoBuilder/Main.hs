@@ -117,7 +117,7 @@ isFailure _ = False
 
 -- |Process one set of parameters.  Usually there is only one, but there
 -- can be several which are run sequentially.  Stop on first failure.
-doParameterSet :: (Applicative m, MonadReposCached m, MonadMask m) => CabalT IO () -> [Failing (ExitCode, L.ByteString, L.ByteString)] -> R.ParamRec -> m [Failing (ExitCode, L.ByteString, L.ByteString)]
+doParameterSet :: MonadReposCached m => CabalT IO () -> [Failing (ExitCode, L.ByteString, L.ByteString)] -> R.ParamRec -> m [Failing (ExitCode, L.ByteString, L.ByteString)]
 -- If one parameter set fails, don't try the rest.  Not sure if
 -- this is the right thing, but it is safe.
 doParameterSet _ results _ | any isFailure results = return results
@@ -137,14 +137,14 @@ doParameterSet init results params = do
 -- | Get the sources.list for the local upload repository associated
 -- with the OSImage.  The resulting paths are for running inside the
 -- build environment.
-getLocalSources :: (MonadRepos m, MonadOS m, MonadIO m) => m SliceList
+getLocalSources :: (MonadRepos m, MonadOS m) => m SliceList
 getLocalSources = do
   root <- view (osLocalCopy . repoRoot) <$> getOS
   case parseURI ("file://" ++ view envPath root) of
     Nothing -> error $ "Invalid local repo root: " ++ show root
     Just uri -> repoSources (Just (view envRoot root)) [SourceOption "trusted" OpSet ["yes"]] uri
 
-runParameterSet :: (Applicative m, MonadReposCached m, MonadMask m) => CabalT IO () -> C.CacheRec -> m (Failing (ExitCode, L.ByteString, L.ByteString))
+runParameterSet :: (Applicative m, MonadReposCached m) => CabalT IO () -> C.CacheRec -> m (Failing (ExitCode, L.ByteString, L.ByteString))
 runParameterSet init cache =
     do
       top <- askTop
