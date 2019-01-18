@@ -51,7 +51,7 @@ instance Download BzrDL where
                           timeTask (readProcessVE (shell cmd) L.empty)
                  True -> return (Right mempty, 0)
 
-prepare :: (MonadRepos m, MonadTop r m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m SomeDownload
+prepare :: (MonadRepos s m, MonadTop r m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m SomeDownload
 prepare cache method flags version =
   do
     dir <- view toTop >>= \(TopDir top) -> return $ top </> "bzr" </> show (md5 (L.pack (maybe "" uriRegName (uriAuthority uri) ++ (uriPath uri))))

@@ -76,7 +76,7 @@ instance DL.Download a => DL.Download (DebianizeDL a) where
     attrs = DL.attrs . cabal
 
 -- | Debianize the download, which is assumed to be a cabal package.
-prepare :: (MonadRepos m, MonadTop r m, DL.Download a) => CabalT IO () -> CR.CacheRec -> RetrieveMethod -> [PS.PackageFlag] -> [CabalInfo -> CabalInfo] -> a -> m DL.SomeDownload
+prepare :: (MonadRepos s m, MonadTop r m, DL.Download a) => CabalT IO () -> CR.CacheRec -> RetrieveMethod -> [PS.PackageFlag] -> [CabalInfo -> CabalInfo] -> a -> m DL.SomeDownload
 prepare defaultAtoms cache method@(Debian.Repo.Fingerprint.Debianize'' _ sourceName) flags functions cabal =
     do let cabdir = DL.getTop cabal
        debdir <- sub ("debianize" </> retrieveMethodMD5 method)

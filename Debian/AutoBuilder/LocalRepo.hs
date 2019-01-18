@@ -30,7 +30,7 @@ subDir = "localpools"
 poolDir :: MonadTop r m => ReleaseName -> m FilePath
 poolDir rel = view toTop >>= \(TopDir top) -> return $ top </> subDir </> releaseName' rel
 
-prepare :: (MonadRepos m, MonadTop r m) => Bool -> ReleaseName -> Set Arch -> m LocalRepository
+prepare :: (MonadRepos s m, MonadTop r m) => Bool -> ReleaseName -> Set Arch -> m LocalRepository
 prepare flush rel archset =
     do localRepo <- poolDir rel
        when flush (liftIO (removeRecursiveSafely localRepo))

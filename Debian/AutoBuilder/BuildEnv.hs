@@ -11,7 +11,6 @@ import Control.Applicative (Applicative)
 #endif
 import Control.Lens (set)
 import Control.Monad (when)
-import Control.Monad.Catch (MonadMask)
 import Control.Monad.State (MonadIO)
 import qualified Debian.AutoBuilder.LocalRepo as Local (prepare)
 import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec(archSet, buildRelease, cleanUp, components, excludePackages, flushDepends, flushPool, flushRoot, ifSourcesChanged, includePackages, optionalIncludePackages))
@@ -19,7 +18,7 @@ import Debian.Debianize (EnvSet(..))
 import Debian.Release (ReleaseName, releaseName')
 import Debian.Repo.EnvPath (EnvRoot(EnvRoot))
 import Debian.Repo.MonadRepos (MonadRepos, putOSImage)
-import Debian.Repo.OSImage (OSImage, osRoot)
+import Debian.Repo.OSImage (OSImage, OSKey(OSKey), osRoot)
 import Debian.Repo.Slice (NamedSliceList, Slice)
 import Debian.Repo.State.OSImage (prepareOS)
 import Debian.Repo.State.Package (deleteGarbage, evalInstall)
@@ -46,7 +45,7 @@ cleanEnvOfRelease distro =
     sub ("dists" </> releaseName' distro </> "clean") >>= return . EnvRoot
 -}
 
-prepareDependOS :: (MonadRepos m, MonadTop r m) => P.ParamRec -> NamedSliceList -> [Slice] -> m EnvRoot
+prepareDependOS :: (MonadRepos s m, MonadTop r m) => P.ParamRec -> NamedSliceList -> [Slice] -> m OSKey
 prepareDependOS params rel extra =
     do localRepo <- Local.prepare (P.flushPool params) (P.buildRelease params) (P.archSet params)
        -- release <- prepareRelease repo (P.buildRelease params) [] [parseSection' "main"] (P.archSet params)
@@ -56,8 +55,8 @@ prepareDependOS params rel extra =
        (_cOS, dOS) <- prepareOS eset rel extra localRepo (P.flushRoot params) (P.flushDepends params) (P.ifSourcesChanged params) (P.includePackages params) (P.optionalIncludePackages params) (P.excludePackages params) (P.components params)
        return dOS
 
-prepareBuildOS :: (MonadTop r m, MonadRepos m) => ReleaseName -> OSImage -> m EnvRoot
+prepareBuildOS :: (MonadTop r m, MonadRepos s m) => ReleaseName -> OSImage -> m OSKey
 prepareBuildOS rel os = do
-  r <- envSet rel >>= return . EnvRoot . buildOS
+  r <- (OSKey . EnvRoot . buildOS) <$> envSet rel
   putOSImage (set osRoot r os)
   return r

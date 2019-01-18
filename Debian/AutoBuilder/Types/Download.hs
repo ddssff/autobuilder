@@ -21,10 +21,10 @@ import Data.Version (Version)
 #endif
 import Debian.AutoBuilder.Types.Packages (PackageFlag)
 import Debian.Repo.Fingerprint (RetrieveMethod(..), RetrieveAttribute(..))
-import Debian.Repo.MonadOS (MonadOS)
+import Debian.Repo.MonadRepos (MonadRepos)
 import Debian.Repo.Top (MonadTop)
 import System.Exit (ExitCode(ExitSuccess))
-import System.Unix.Mount (WithProcAndSys)
+--import System.Unix.Mount (WithProcAndSys)
 
 class Show a => Download a where
     method :: a -> RetrieveMethod
@@ -48,7 +48,7 @@ class Show a => Download a where
     cleanTarget _ = \ _ -> return (Right (ExitSuccess, mempty, mempty), 0)
     -- ^ Clean version control info out of a target after it has
     -- been moved to the given location.
-    buildWrapper :: forall m. (MonadOS m, MonadMask m, MonadIO m) => a -> WithProcAndSys m NominalDiffTime -> WithProcAndSys m NominalDiffTime
+    buildWrapper :: forall s m. MonadRepos s m => a -> {-WithProcAndSys-} m NominalDiffTime -> {-WithProcAndSys-} m NominalDiffTime
     buildWrapper _ = id -- getOS >>= \ os -> withProcAndSys (rootPath $ osRoot os) task
     -- ^ Modify the build process in some way - currently only the
     -- proc target modifies this by mounting and then unmounting /proc.

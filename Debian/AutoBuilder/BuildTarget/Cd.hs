@@ -28,7 +28,7 @@ instance Download a => Download (CdDL a) where
     flushSource = flushSource . cdParent
     cleanTarget = cleanTarget . cdParent
 
-prepare :: (MonadRepos m, Download a) =>
+prepare :: (MonadRepos s m, Download a) =>
            P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> FilePath -> a -> m SomeDownload
 prepare _cache method flags subdir target =
     return $ SomeDownload $ CdDL { cdMethod = method

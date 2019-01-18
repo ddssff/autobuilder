@@ -42,7 +42,7 @@ instance T.Download HgDL where
                               timeTask (readProcessVE (shell cmd) B.empty)
                      _ -> return (Right mempty, 0))
 
-prepare :: (MonadRepos m, MonadTop r m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m T.SomeDownload
+prepare :: (MonadRepos s m, MonadTop r m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m T.SomeDownload
 prepare cache method flags archive =
     do
       dir <- sub ("hg" </> archive)

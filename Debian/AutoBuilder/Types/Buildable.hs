@@ -15,7 +15,7 @@ import Control.Applicative ((<$>))
 #endif
 import Control.Applicative.Error (Failing(Success, Failure), ErrorMsg)
 import Control.Exception as E (SomeException, try, catch, throw)
-import Control.Lens (view)
+import Control.Lens (to, view)
 import Control.Monad (when)
 import Control.Monad.Catch (MonadMask)
 import Control.Monad.Trans (MonadIO, liftIO)
@@ -33,8 +33,9 @@ import Debian.Control.Policy (DebianControl, debianSourcePackageName, parseDebia
 import qualified Debian.GenBuildDeps as G
 import Debian.Relation (SrcPkgName(..), BinPkgName(..))
 import Debian.Relation.ByteString(Relations)
-import Debian.Repo.MonadOS (MonadOS(getOS))
-import Debian.Repo.OSImage (osRoot)
+import Debian.Repo.MonadOS (getOS, MonadOS)
+import Debian.Repo.MonadRepos (MonadRepos)
+import Debian.Repo.OSImage (OSKey(_root), osRoot)
 import Debian.Repo.SourceTree (DebianBuildTree(..), entry, subdir, debdir, findDebianBuildTrees, findBuildTree, copySourceTree,
                                DebianSourceTree(..), findSourceTree)
 import Debian.Repo.EnvPath (EnvRoot, rootPath)
@@ -116,7 +117,7 @@ instance Show download => Eq (Target download) where
 -- |Prepare a target for building in the given environment.  At this
 -- point, the target needs to be a DebianSourceTree or a
 -- DebianBuildTree.
-prepareTarget :: (MonadOS m, MonadIO m, MonadMask m, T.Download a) => C.CacheRec -> Buildable a -> m (Target a)
+prepareTarget :: (MonadOS r s m, T.Download a) => C.CacheRec -> Buildable a -> m (Target a)
 prepareTarget cache source =
     prepareBuild cache (download source) >>= \ tree ->
     liftIO (getTargetControlInfo tree) >>= \ ctl ->
@@ -128,7 +129,7 @@ prepareTarget cache source =
 -- revision control files.  This ensures that the tarball and\/or the
 -- .diff.gz file in the deb don't contain extra junk.  It also makes
 -- sure that debian\/rules is executable.
-prepareBuild :: (MonadOS m, MonadIO m, MonadMask m, T.Download a) => C.CacheRec -> a -> m DebianBuildTree
+prepareBuild :: (MonadOS r s m, T.Download a) => C.CacheRec -> a -> m DebianBuildTree
 prepareBuild _cache target =
     liftIO (try (findSourceTree (T.getTop target))) >>=
     either (\ (_ :: SomeException) ->
@@ -142,9 +143,9 @@ prepareBuild _cache target =
                       _ -> error $ "Multiple debian source trees found in " ++ T.getTop target)
            copySource
     where
-      copySource :: (MonadOS m, MonadIO m) => DebianSourceTree -> m DebianBuildTree
+      copySource :: MonadOS r s m => DebianSourceTree -> m DebianBuildTree
       copySource debSource =
-          do root <- view (osRoot . rootPath) <$> getOS
+          do root <- view (osRoot . to _root . rootPath) <$> getOS
              let name = logPackage . entry $ debSource
                  dest = root ++ "/work/build/" ++ name
                  ver = Debian.Version.version . logVersion . entry $ debSource
@@ -156,9 +157,9 @@ prepareBuild _cache target =
              maybe (return ()) (liftIO . copyOrigTarball dest name ver) (T.origTarball target)
              liftIO $ findBuildTree dest newdir
 
-      copyBuild :: (MonadOS m, MonadIO m) => DebianBuildTree -> m DebianBuildTree
+      copyBuild :: MonadOS r s m => DebianBuildTree -> m DebianBuildTree
       copyBuild debBuild =
-          do root <- view (osRoot . rootPath) <$> getOS
+          do root <- view (osRoot . to _root . rootPath) <$> getOS
              let name = logPackage . entry $ debBuild
                  dest = root ++ "/work/build/" ++ name
                  ver = Debian.Version.version . logVersion . entry $ debBuild
@@ -201,7 +202,7 @@ getRelaxedDependencyInfo globalBuildDeps relaxInfo tree =
     do deps <- getTargetDependencyInfo globalBuildDeps tree
        return (deps, head (G.relaxDeps relaxInfo [deps]))
 
-targetRelaxed :: (T.Download a) => Relations -> G.RelaxInfo -> Target a -> G.DepInfo
+targetRelaxed :: Relations -> G.RelaxInfo -> Target a -> G.DepInfo
 targetRelaxed globalBuildDeps relaxInfo target = head $ G.relaxDeps relaxInfo [targetDepends globalBuildDeps target]
 
 -- |Retrieve the dependency information for a single target

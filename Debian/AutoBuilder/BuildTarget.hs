@@ -38,7 +38,7 @@ import Debian.Debianize (CabalT, CabalInfo)
 import Debian.Relation (SrcPkgName(..))
 import qualified Debian.Repo.Fingerprint as P
 import Debian.Repo.MonadOS (MonadOS)
-import Debian.Repo.MonadRepos (MonadRepos(..))
+import Debian.Repo.MonadRepos (MonadRepos)
 import Debian.Repo.SourceTree (SourceTree(dir'), copySourceTree, findSourceTree, topdir)
 import Debian.Repo.Top (MonadTop)
 import System.FilePath ((</>))
@@ -102,11 +102,11 @@ instance Download ZeroDL where
 -- | Given a RetrieveMethod, perform the retrieval and return the result.
 -- This wrapper ensures that /proc and /sys are mounted, even though the
 -- underlying code in retrieve' hasn't been updated to enforce this.
-retrieve :: forall r m. (MonadOS m, MonadRepos m, MonadTop r m) =>
+retrieve :: forall r s m. (MonadOS r s m, MonadTop r m) =>
             CabalT IO () -> C.CacheRec -> P.RetrieveMethod -> [P.PackageFlag] -> [CabalInfo -> CabalInfo] -> WithProcAndSys m SomeDownload
 retrieve defaultAtoms cache method flags functions = lift $ retrieve' defaultAtoms cache method flags functions
 
-retrieve' :: forall r m. (MonadOS m, MonadRepos m, MonadTop r m) =>
+retrieve' :: forall r s m. (MonadOS r s m, MonadTop r m) =>
             CabalT IO () -> C.CacheRec -> P.RetrieveMethod -> [P.PackageFlag] -> [CabalInfo -> CabalInfo] -> m SomeDownload
 retrieve' defaultAtoms cache method flags functions =
     case method of

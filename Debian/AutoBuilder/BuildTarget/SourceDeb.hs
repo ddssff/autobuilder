@@ -39,7 +39,7 @@ instance T.Download a => T.Download (SourceDebDL a) where
 
 -- |Given the BuildTarget for the base target, prepare a SourceDeb BuildTarget
 -- by unpacking the source deb.
-prepare :: (MonadRepos m, T.Download a) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> a -> m T.SomeDownload
+prepare :: (MonadRepos s m, T.Download a) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> a -> m T.SomeDownload
 prepare _cache method flags base =
     do dscFiles <- liftIO (getDirectoryContents top) >>= return . filter (isSuffixOf ".dsc")
        dscInfo <- mapM (\ name -> liftIO (readFile (top ++ "/" ++ name) >>= return . S.parseControl name)) dscFiles

@@ -69,7 +69,7 @@ instance T.Download HackageDL where
     origTarball = Just . tar
     flushSource _ = error "flushSource HackageDL unimplemented"
 
-prepare :: (MonadRepos m, MonadTop r m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m T.SomeDownload
+prepare :: (MonadRepos s m, MonadTop r m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m T.SomeDownload
 prepare cache method flags name =
     do let server = P.hackageServer (P.params cache) -- typically "hackage.haskell.org"
        version <- maybe (liftIO $ getVersion' server name) return (maybe Nothing readVersion versionString)

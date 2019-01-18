@@ -28,7 +28,7 @@ import Debian.Repo.Prelude.Verbosity (qPutStrLn)
 import Debian.Sources (SourceOption(..), SourceOp(..))
 
 -- |Create a Cache object from a parameter set.
-buildCache :: (MonadRepos m, MonadTop r m) => ParamRec -> m CacheRec
+buildCache :: (MonadRepos s m, MonadTop r m) => ParamRec -> m CacheRec
 buildCache params' =
     do (TopDir top) <- view toTop
        qPutStrLn ("Preparing autobuilder cache in " ++ top ++ "...")

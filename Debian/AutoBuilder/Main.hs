@@ -13,7 +13,7 @@ import Data.Monoid (mconcat, mempty)
 #endif
 import Control.Applicative.Error (Failing(..), ErrorMsg)
 import Control.Exception(SomeException, AsyncException(UserInterrupt), fromException, toException)
-import Control.Lens (view)
+import Control.Lens (to, view)
 import Control.Monad(foldM, when)
 import Control.Monad.Catch (MonadMask, catch, throwM)
 import Control.Monad.State (MonadIO(liftIO))
@@ -43,9 +43,9 @@ import Debian.Release (ReleaseName(ReleaseName, relName), releaseName')
 import Debian.Repo.EnvPath (EnvRoot, envPath, envRoot, rootPath)
 import qualified Debian.Repo.Fingerprint as P (RetrieveMethod(Patch, Cd, DebDir, DataFiles, Debianize'', Proc, Quilt, SourceDeb, Twice, Zero))
 import Debian.Repo.LocalRepository(uploadRemote, verifyUploadURI)
-import Debian.Repo.MonadOS (MonadOS(getOS), evalMonadOS)
+import Debian.Repo.MonadOS (MonadOS, getOS, evalMonadOS)
 import Debian.Repo.MonadRepos (MonadRepos, runReposCachedT, MonadReposCached)
-import Debian.Repo.OSImage (osLocalMaster, osLocalCopy, osBaseDistro)
+import Debian.Repo.OSImage (OSKey(_root), osLocalMaster, osLocalCopy, osBaseDistro)
 import Debian.Repo.Prelude.Process (readProcessVE)
 import Debian.Repo.Prelude.Verbosity (ePutStrLn, ePutStr, qPutStrLn, qPutStr, withVerbosity, noisier)
 import Debian.Repo.Release (Release(releaseName))
@@ -117,7 +117,12 @@ isFailure _ = False
 
 -- |Process one set of parameters.  Usually there is only one, but there
 -- can be several which are run sequentially.  Stop on first failure.
-doParameterSet :: MonadReposCached r m => CabalT IO () -> [Failing (ExitCode, L.ByteString, L.ByteString)] -> R.ParamRec -> m [Failing (ExitCode, L.ByteString, L.ByteString)]
+doParameterSet ::
+    MonadReposCached r s m
+    => CabalT IO ()
+    -> [Failing (ExitCode, L.ByteString, L.ByteString)]
+    -> R.ParamRec
+    -> m [Failing (ExitCode, L.ByteString, L.ByteString)]
 -- If one parameter set fails, don't try the rest.  Not sure if
 -- this is the right thing, but it is safe.
 doParameterSet _ results _ | any isFailure results = return results
@@ -137,14 +142,14 @@ doParameterSet init results params = do
 -- | Get the sources.list for the local upload repository associated
 -- with the OSImage.  The resulting paths are for running inside the
 -- build environment.
-getLocalSources :: (MonadRepos m, MonadOS m) => m SliceList
+getLocalSources :: MonadOS r s m => m SliceList
 getLocalSources = do
   root <- view (osLocalCopy . repoRoot) <$> getOS
   case parseURI ("file://" ++ view envPath root) of
     Nothing -> error $ "Invalid local repo root: " ++ show root
     Just uri -> repoSources (Just (view envRoot root)) [SourceOption "trusted" OpSet ["yes"]] uri
 
-runParameterSet :: (Applicative m, MonadReposCached r m) => CabalT IO () -> C.CacheRec -> m (Failing (ExitCode, L.ByteString, L.ByteString))
+runParameterSet :: (Applicative m, MonadReposCached r s m) => CabalT IO () -> C.CacheRec -> m (Failing (ExitCode, L.ByteString, L.ByteString))
 runParameterSet init cache =
     do
       (TopDir top) <- view toTop
@@ -193,10 +198,10 @@ runParameterSet init cache =
                         (Failure ms) -> Left ms
                         (Success a) -> Right a) xs
       notZero x = null (listify (\ x -> case x of P.Zero -> True; _ -> False) x)
-      retrieveTarget :: (MonadReposCached r m) => EnvRoot -> Int -> Int -> (P.RetrieveMethod, [P.PackageFlag], [CabalInfo -> CabalInfo]) -> m (Either String (Buildable SomeDownload))
+      retrieveTarget :: (MonadReposCached r s m) => OSKey -> Int -> Int -> (P.RetrieveMethod, [P.PackageFlag], [CabalInfo -> CabalInfo]) -> m (Either String (Buildable SomeDownload))
       retrieveTarget dependOS count index (method, flags, functions) = do
             liftIO (hPutStr stderr (printf "[%2d of %2d]" index count))
-            res <- (Right <$> evalMonadOS (do download <- withProcAndSys (view rootPath dependOS) $ retrieve init cache method flags functions
+            res <- (Right <$> evalMonadOS (do download <- withProcAndSys (view (to _root . rootPath) dependOS) $ retrieve init cache method flags functions
                                               when (R.flushSource params) (flushSource download)
                                               buildable <- liftIO (asBuildable download)
                                               let (src, bins) = debianPackageNames (debianSourceTree buildable)
@@ -242,7 +247,7 @@ runParameterSet init cache =
                True -> return ()
                False -> do qPutStr "You must be superuser to run the autobuilder (to use chroot environments.)"
                            liftIO $ exitWith (ExitFailure 1)
-      upload :: MonadRepos m => (LocalRepository, [Target SomeDownload]) -> m [Failing (ExitCode, L.ByteString, L.ByteString)]
+      upload :: MonadRepos s m => (LocalRepository, [Target SomeDownload]) -> m [Failing (ExitCode, L.ByteString, L.ByteString)]
       upload (repo, [])
           | R.doUpload params =
               case R.uploadURI params of
@@ -293,7 +298,7 @@ runParameterSet init cache =
 -- | Make sure the build release ("P.buildRelease params") - the
 -- release and repository to which we intend to upload the packages
 -- that we build - exists on the upload server ("P.uploadURI params").
-doVerifyBuildRepo :: MonadRepos m => C.CacheRec -> m ()
+doVerifyBuildRepo :: MonadRepos s m => C.CacheRec -> m ()
 doVerifyBuildRepo cache =
     do repoNames <- mapM (foldRepository f g) (map sliceRepoKey . slices . C.buildRepoSources $ cache) >>= return . map releaseName . concat
        when (not (any (== (R.buildRelease params)) repoNames))
@@ -318,7 +323,7 @@ doVerifyBuildRepo cache =
       g = return . repoReleaseInfo
       params = C.params cache
 
-handleRetrieveException :: MonadReposCached r m => P.RetrieveMethod -> SomeException -> m (Either String (Buildable SomeDownload))
+handleRetrieveException :: MonadReposCached r s m => P.RetrieveMethod -> SomeException -> m (Either String (Buildable SomeDownload))
 handleRetrieveException method e =
           case (fromException (toException e) :: Maybe AsyncException) of
             Just UserInterrupt ->
