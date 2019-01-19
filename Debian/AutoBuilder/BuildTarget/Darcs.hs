@@ -20,7 +20,7 @@ import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Repo
 import Debian.Repo.Fingerprint (RetrieveMethod, RetrieveAttribute(DarcsChangesId))
-import Debian.Repo.Prelude.Process (readProcessQE, readProcessVE, readProcessV)
+import Debian.Repo.Prelude.Process (runQE, runVE, runV)
 import Network.URI (URI(..), URIAuth(..), uriToString, parseURI)
 import System.Directory
 import System.Exit (ExitCode(..))
@@ -75,7 +75,7 @@ instance T.Download DarcsDL where
           theUri' = mustParseURI (uri x)
     cleanTarget x = \ top -> case any P.isKeepRCS (flags x) of
                                False -> let cmd = shell ("find " ++ top ++ " -name '_darcs' -maxdepth 1 -prune | xargs rm -rf") in
-                                        timeTask (readProcessVE cmd "")
+                                        timeTask (runVE cmd "")
                                True -> return ((Right mempty), 0)
     buildWrapper _ = id
     attrs x = singleton (DarcsChangesId (attr x))
@@ -92,11 +92,11 @@ prepare' method flags theUri base = do
         exists <- liftIO $ doesDirectoryExist dir
         case exists of
           True -> do
-            result <- readProcessQE ((proc "darcs" ["whatsnew"]) {cwd = Just dir}) ("" :: String)
+            result <- runQE ((proc "darcs" ["whatsnew"]) {cwd = Just dir}) ("" :: String)
             case result of
               Right (ExitFailure 1, "No changes!\n", "") -> do
                 do let cmd = (proc "darcs" ["pull", "--all", "--no-allow-conflicts", renderForDarcs theUri']) {cwd = Just dir}
-                   result <- readProcessVE cmd B.empty
+                   result <- runVE cmd B.empty
                    case result of
                      Right (ExitSuccess, _, _) -> liftIO $ Just <$> findSourceTree dir
                      _ -> return Nothing
@@ -108,7 +108,7 @@ prepare' method flags theUri base = do
         liftIO $ removeRecursiveSafely dir
         liftIO $ createDirectoryIfMissing True parent
         let cmd = proc "darcs" (["get", renderForDarcs theUri'] ++ maybe [] (\ tag -> [" --tag", tag]) theTag ++ [dir])
-        result <- readProcessVE cmd B.empty
+        result <- runVE cmd B.empty
         case result of
           Right (ExitSuccess, _, _) -> liftIO $ Just <$> findSourceTree dir
           _ -> return Nothing
@@ -116,7 +116,7 @@ prepare' method flags theUri base = do
       finish :: Maybe SourceTree -> m T.SomeDownload
       finish Nothing = error $ "Failure retrieving darcs repo " ++ theUri
       finish (Just tree) = do
-          attr <- liftIO (readProcessQE ((proc "darcs" ["log"]) {cwd = Just dir}) B.empty) >>=
+          attr <- liftIO (runQE ((proc "darcs" ["log"]) {cwd = Just dir}) B.empty) >>=
                   either (\ e -> error $ "Failure examining darcs log: " ++ show e) (\ (_, b, _) -> return $ darcsLogChecksum b)
           _ <- liftIO $ fixLink -- this link is just for the convenience of someone poking around in ~/.autobuilder
           return $ T.SomeDownload $ DarcsDL { method = method
@@ -129,8 +129,8 @@ prepare' method flags theUri base = do
       fixLink = do
           let rm = proc "rm" ["-rf", link]
               ln = proc "ln" ["-s", sum, link]
-          _ <- readProcessV rm B.empty
-          _ <- readProcessV ln B.empty
+          _ <- runV rm B.empty
+          _ <- runV ln B.empty
           return ()
 
       -- Collect all the checksum lines, sort them, and checksum the

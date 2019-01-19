@@ -47,7 +47,7 @@ import Debian.Repo.MonadOS (MonadOS, getOS, evalMonadOS)
 import Debian.Repo.MonadRepos (MonadRepos, runReposCachedT, MonadReposCached)
 import Debian.Repo.OSImage (osLocalMaster, osLocalCopy, osBaseDistro)
 import Debian.Repo.OSKey (OSKey(_root))
-import Debian.Repo.Prelude.Process (readProcessVE)
+import Debian.Repo.Prelude.Process (runVE)
 import Debian.Repo.Prelude.Verbosity (ePutStrLn, ePutStr, qPutStrLn, qPutStr, withVerbosity, noisier)
 import Debian.Repo.Release (Release(releaseName))
 import Debian.Repo.Repo (repoReleaseInfo)
@@ -279,7 +279,7 @@ runParameterSet init cache =
                                          args = ["--sign", "--root", uriPath uri] in
                                      (proc cmd args)
                        qPutStrLn (" -> " ++ showCmdSpecForUser (cmdspec p))
-                       result <- readProcessVE p L.empty >>= return . either (\ (e :: SomeException) -> Failure [show e]) testOutput
+                       result <- runVE p L.empty >>= return . either (\ (e :: SomeException) -> Failure [show e]) testOutput
                        case result of
                          (Success _) -> return result
                          (Failure msgs) -> ePutStrLn (intercalate "\n " ("newdist failed:" : msgs)) >> return result

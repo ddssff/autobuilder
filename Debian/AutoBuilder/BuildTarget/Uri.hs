@@ -22,7 +22,7 @@ import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.Repo as R (topdir, SourceTree, findSourceTree)
 import Debian.Repo.Fingerprint (RetrieveMethod)
 import Debian.Repo.MonadRepos (MonadRepos)
-import Debian.Repo.Prelude.Process (readProcessV, timeTask)
+import Debian.Repo.Prelude.Process (runV, timeTask)
 import Debian.Repo.Top (MonadTop, sub)
 import Debian.URI
 import Magic
@@ -95,7 +95,7 @@ prepare method flags u s =
              _output <-
                  case exists of
                    True -> return mempty
-                   False -> readProcessV (shell ("curl -s '" ++ uriToString' (mustParseURI u) ++ "' > '" ++ tar ++ "'")) B.empty
+                   False -> runV (shell ("curl -s '" ++ uriToString' (mustParseURI u) ++ "' > '" ++ tar ++ "'")) B.empty
              -- We should do something with the output
              return ()
       -- Make sure what we just downloaded has the correct checksum
@@ -121,15 +121,15 @@ prepare method flags u s =
                    fileInfo <- liftIO $ magicFile magic tar
                    case () of
                      _ | isPrefixOf "Zip archive data" fileInfo ->
-                           liftIO $ timeTask $ readProcessV (shell ("unzip " ++ tar ++ " -d " ++ src)) B.empty
+                           timeTask $ runV (shell ("unzip " ++ tar ++ " -d " ++ src)) B.empty
                        | isPrefixOf "gzip" fileInfo ->
-                           liftIO $ timeTask $ readProcessV (shell ("tar xfz " ++ tar ++ " -C " ++ src)) B.empty
+                           timeTask $ runV (shell ("tar xfz " ++ tar ++ " -C " ++ src)) B.empty
                        | isPrefixOf "bzip2" fileInfo ->
-                           liftIO $ timeTask $ readProcessV (shell ("tar xfj " ++ tar ++ " -C " ++ src)) B.empty
+                           timeTask $ runV (shell ("tar xfj " ++ tar ++ " -C " ++ src)) B.empty
                        | isPrefixOf "XZ compressed data" fileInfo ->
-                           liftIO $ timeTask $ readProcessV (shell ("tar xfJ " ++ tar ++ " -C " ++ src)) B.empty
+                           timeTask $ runV (shell ("tar xfJ " ++ tar ++ " -C " ++ src)) B.empty
                        | True ->
-                           liftIO $ timeTask $ readProcessV (shell ("cp " ++ tar ++ " " ++ src ++ "/")) B.empty
+                           timeTask $ runV (shell ("cp " ++ tar ++ " " ++ src ++ "/")) B.empty
             read (_output, _elapsed) = sourceDir s >>= \ src -> liftIO (getDir src)
             getDir dir = getDirectoryContents dir >>= return . filter (not . flip elem [".", ".."])
             search files = checkContents (filter (not . flip elem [".", ".."]) files)

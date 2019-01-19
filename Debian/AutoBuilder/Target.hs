@@ -70,6 +70,7 @@ import Debian.Repo.EnvPath (rootPath)
 import Debian.Repo.Fingerprint (RetrieveMethod, dependencyChanges, DownstreamFingerprint, Fingerprint, packageFingerprint, showDependencies', showFingerprint)
 import Debian.Repo.LocalRepository (LocalRepository, uploadLocal)
 import Debian.Repo.MonadOS (MonadOS, getOS, evalMonadOS, buildEssential, syncOS)
+import qualified Debian.Repo.MonadOS as OS (runVE, runV)
 import Debian.Repo.MonadRepos (MonadRepos)
 import Debian.Repo.OSImage (osRoot)
 import Debian.Repo.OSKey (OSKey(_root))
@@ -77,7 +78,8 @@ import Debian.Repo.Package (binaryPackageSourceVersion, sourcePackageBinaryNames
 import Debian.Repo.PackageID (PackageID(packageVersion))
 import Debian.Repo.PackageIndex (BinaryPackage(packageInfo), SourcePackage(sourceParagraph, sourcePackageID), sortBinaryPackages, sortSourcePackages{-, prettyBinaryPackage-})
 import Debian.Repo.Prelude (symbol)
-import Debian.Repo.Prelude.Process (readProcessVE, readProcessV, modifyProcessEnv)
+import Debian.Repo.Prelude.Process (modifyProcessEnv)
+import qualified Debian.Repo.Prelude.Process as IO (runV, runVE)
 import Debian.Repo.Prelude.Verbosity (ePutStrLn, noisier, qPutStrLn, quieter, ePutStr)
 import Debian.Repo.SourceTree (addLogEntry, buildDebs, copySourceTree, DebianBuildTree, findChanges, findOneDebianBuildTree, SourcePackageStatus(..), BuildDecision(..), HasChangeLog(entry), HasDebDir(debdir), HasTopDir(topdir))
 import Debian.Repo.State.AptImage (aptSourcePackages)
@@ -435,27 +437,27 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
              root <- view (osRoot . to _root . rootPath) <$> getOS
              let path = debdir buildTree
                  path' = fromJust (dropPrefix root path)
-             dpkgSource <- liftIO $ modifyProcessEnv [("EDITOR", Just "/bin/true")] ((proc "dpkg-source" ["--commit", ".", "autobuilder.diff"]) {cwd = Just path'})
+             dpkgSource <- modifyProcessEnv [("EDITOR", Just "/bin/true")] ((proc "dpkg-source" ["--commit", ".", "autobuilder.diff"]) {cwd = Just path'})
              let doDpkgSource False = do
-                   createDirectoryIfMissing True (path' </> "debian/patches")
-                   _ <- readProcessV dpkgSource L.empty
-                   exists <- doesFileExist (path' </> "debian/patches/autobuilder.diff")
-                   when (not exists) (removeDirectory (path' </> "debian/patches"))
-                 doDpkgSource True = readProcessV dpkgSource L.empty >> return ()
+                   liftIO $ createDirectoryIfMissing True (path' </> "debian/patches")
+                   _ <- IO.runV dpkgSource L.empty
+                   exists <- liftIO $ doesFileExist (path' </> "debian/patches/autobuilder.diff")
+                   when (not exists) (liftIO $ removeDirectory (path' </> "debian/patches"))
+                 doDpkgSource True = IO.runV dpkgSource L.empty >> return ()
                  -- doDpkgSource' = setEnv "EDITOR" "/bin/true" >> readCreateProcess ((proc "dpkg-source" ["--commit", ".", "autobuilder.diff"]) {cwd = Just path'}) L.empty
-             _ <- liftIO $ useEnv' root (\ _ -> return ())
+             _ <- useEnv' root (\ _ -> return ())
                              (do -- Get the version number of dpkg-dev in the build environment
                                  let p = shell ("dpkg -s dpkg-dev | sed -n 's/^Version: //p'")
-                                 result <- readProcessVE p ""
+                                 result <- OS.runVE p ""
                                  installed <- case result of
                                                 Right (ExitSuccess, out, _) -> return . head . words . L.unpack $ out
                                                 _ -> error $ showCreateProcessForUser p ++ " -> " ++ show result
                                  -- If it is >= 1.16.1 we may need to run dpkg-source --commit.
-                                 result <- readProcessVE (shell ("dpkg --compare-versions '" ++ installed ++ "' ge 1.16.1")) ""
+                                 result <- OS.runVE (shell ("dpkg --compare-versions '" ++ installed ++ "' ge 1.16.1")) ""
                                  newer <- case result of
                                             Right (ExitSuccess, _, _ :: L.ByteString) -> return True
                                             _ -> return False
-                                 when newer (liftIO $ doesDirectoryExist (path' </> "debian/patches") >>= doDpkgSource))
+                                 when newer (liftIO (doesDirectoryExist (path' </> "debian/patches")) >>= doDpkgSource))
              -- If newVersion is set, pass a parameter to cabal-debian
              -- to set the exact version number.
              let ver = maybe [] (\ v -> [("CABALDEBIAN", Just (show ["--deb-version", show (prettyDebianVersion v)]))]) newVersion
@@ -528,7 +530,7 @@ prepareBuildTree cache dependOS buildOS sourceFingerprint target = do
                      liftIO (findOneDebianBuildTree newPath) >>=
                      maybe (error ("No build tree at " ++ show newPath)) return
                  False ->
-                     liftIO $ copySourceTree (cleanSource target) newPath
+                     copySourceTree (cleanSource target) newPath
   when (P.strictness (P.params cache) /= P.Lax)
        (do -- Strict mode - download dependencies to depend environment,
            -- sync downloads to build environment and install dependencies there.
@@ -771,10 +773,10 @@ updateChangesFile elapsed changes = do
 {-    autobuilderVersion <- processOutput "dpkg -s autobuilder | sed -n 's/^Version: //p'" >>=
                             return . either (const Nothing) Just >>=
                             return . maybe Nothing (listToMaybe . lines) -}
-      hostname <- let p = shell "hostname" in readProcessV p "" >>= (\ (_, out, _) -> return out) >>= return . listToMaybe . lines . L.unpack
+      hostname <- let p = shell "hostname" in IO.runV p "" >>= (\ (_, out, _) -> return out) >>= return . listToMaybe . lines . L.unpack
       cpuInfo <- parseProcCpuinfo
       memInfo <- parseProcMeminfo
-      machine <- let p = shell "uname -m" in readProcessV p "" >>= (\ (_, out, _) -> return out) >>= return . listToMaybe . lines . L.unpack
+      machine <- let p = shell "uname -m" in IO.runV p "" >>= (\ (_, out, _) -> return out) >>= return . listToMaybe . lines . L.unpack
       date <- getCurrentLocalRFC822Time
       let buildInfo = ["Autobuilder-Version: " ++ V.autoBuilderVersion] ++
                       ["Time: " ++ show elapsed] ++
@@ -828,10 +830,10 @@ buildDependencies downloadOnly source extra sourceFingerprint =
        command <- liftIO $ modifyProcessEnv [("DEBIAN_FRONTEND", Just "noninteractive")] (if True then aptGetCommand else pbuilderCommand)
        if downloadOnly then (qPutStrLn $ "Dependency packages:\n " ++ intercalate "\n  " (showDependencies' sourceFingerprint)) else return ()
        qPutStrLn $ (if downloadOnly then "Downloading" else "Installing") ++ " build dependencies into " ++ root
-       liftIO (do result <- useEnv' root return (liftIO $ noisier 2 $ readProcessVE command mempty)
-                  case result of
-                    Right (ExitSuccess, out :: L.ByteString, _) -> return $ decode out
-                    _ -> error $ "buildDependencies: " ++ showCreateProcessForUser command ++ " -> " ++ show result)
+       result <- useEnv' root return (noisier 2 $ OS.runVE command mempty)
+       case result of
+         Right (ExitSuccess, out :: L.ByteString, _) -> return $ decode out
+         _ -> error $ "buildDependencies: " ++ showCreateProcessForUser command ++ " -> " ++ show result
 
 -- | This should probably be what the real useEnv does.
 useEnv' :: (MonadIO m, MonadMask m) => FilePath -> (a -> m a) -> m a -> m a

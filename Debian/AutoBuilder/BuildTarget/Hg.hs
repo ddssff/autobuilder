@@ -13,7 +13,7 @@ import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Repo
 import Debian.Repo.Fingerprint (RetrieveMethod)
-import Debian.Repo.Prelude.Process (readProcessVE, readProcessV, timeTask)
+import Debian.Repo.Prelude.Process (runVE, runV, timeTask)
 import System.Directory
 import System.FilePath (splitFileName, (</>))
 import System.Process (shell)
@@ -39,7 +39,7 @@ instance T.Download HgDL where
     cleanTarget x =
         (\ path -> case any P.isKeepRCS (flags x) of
                      False -> let cmd = "rm -rf " ++ path ++ "/.hg" in
-                              timeTask (readProcessVE (shell cmd) B.empty)
+                              timeTask (runVE (shell cmd) B.empty)
                      _ -> return (Right mempty, 0))
 
 prepare :: (MonadRepos s m, MonadTop r m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m T.SomeDownload
@@ -55,18 +55,18 @@ prepare cache method flags archive =
                                      , tree = tree }
     where
       verifySource dir =
-          try (readProcessV (shell ("cd " ++ dir ++ " && hg status | grep -q .")) B.empty) >>=
+          try (runV (shell ("cd " ++ dir ++ " && hg status | grep -q .")) B.empty) >>=
           either (\ (_ :: SomeException) -> updateSource dir)   -- failure means there were no changes
                  (\ _ -> removeSource dir >> createSource dir)  -- success means there was a change
 
       removeSource dir = liftIO $ removeRecursiveSafely dir
 
       updateSource dir =
-          readProcessV (shell ("cd " ++ dir ++ " && hg pull -u")) B.empty >>
+          runV (shell ("cd " ++ dir ++ " && hg pull -u")) B.empty >>
           findSourceTree dir :: IO SourceTree
 
       createSource dir =
           let (parent, _) = splitFileName dir in
           liftIO (createDirectoryIfMissing True parent) >>
-          readProcessV (shell ("hg clone " ++ archive ++ " " ++ dir)) B.empty >>
+          runV (shell ("hg clone " ++ archive ++ " " ++ dir)) B.empty >>
           findSourceTree dir :: IO SourceTree

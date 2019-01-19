@@ -25,7 +25,7 @@ import Debian.Changes (ChangeLogEntry(..), parseEntries, parseEntry)
 import Debian.Pretty (ppShow)
 import Debian.Repo (HasDebDir(debdir), HasTopDir(topdir), SourceTree, DebianBuildTree, findSourceTree, findOneDebianBuildTree, copySourceTree, sub, MonadRepos, MonadTop)
 import Debian.Repo.Fingerprint (RetrieveMethod, retrieveMethodMD5)
-import Debian.Repo.Prelude.Process (readProcessVE, readProcessV)
+import Debian.Repo.Prelude.Process (runVE, runV)
 import Debian.Version
 import Extra.Files (replaceFile)
 import Extra.List ()
@@ -77,7 +77,7 @@ makeQuiltTree m base patch =
        let cmd1 = ("set -x && cd '" ++ quiltDir ++ "' && rm -f '" ++ quiltPatchesDir ++
                    "' && ln -s '" ++ patchDir ++ "' '" ++ quiltPatchesDir ++ "'")
        -- runTaskAndTest (linkStyle (commandTask cmd1))
-       _output <- readProcessV (shell cmd1) L.empty
+       _output <- runV (shell cmd1) L.empty
        -- Now we need to have created a DebianSourceTree so
        -- that there is a changelog for us to reconstruct.
        return (copyTree, quiltDir)
@@ -114,21 +114,21 @@ prepare method flags base patch = do
                 unhide x = doesDirectoryExist pch >>= (flip when) (rmrf pc >> renameDirectory pch pc) >> return x
                 pc = (quiltDir ++ "/.pc")
                 pch = (quiltDir ++ "/.pc.hide")
-                rmrf d = readProcessV (shell ("rm -rf '"  ++ d ++ "'")) L.empty
+                rmrf d = runV (shell ("rm -rf '"  ++ d ++ "'")) L.empty
       make :: (SourceTree, FilePath) -> IO T.SomeDownload
       make (quiltTree, quiltDir) =
-          do applied <- readProcessVE (shell cmd1a) "" >>= qMessage "Checking for applied patches"
+          do applied <- runVE (shell cmd1a) "" >>= qMessage "Checking for applied patches"
              case applied of
                Right (ExitFailure 1, _, err)
                    | decode err == "No patches applied\n" ->
                           findUnapplied >>= apply >> buildLog >> cleanSource
                           where
-                            findUnapplied = do unapplied <- liftIO (readProcessVE (shell cmd1b) "") >>= qMessage "Checking for unapplied patches"
+                            findUnapplied = do unapplied <- runVE (shell cmd1b) "" >>= qMessage "Checking for unapplied patches"
                                                case unapplied of
                                                  Right (ExitSuccess, text, _) -> return (lines (decode text))
                                                  _ -> fail $ target ++ " - No patches to apply"
                             apply patches =
-                                do result2 <- liftIO (readProcessVE (shell (cmd2 patches)) "") >>= qMessage "Patching Quilt target"
+                                do result2 <- runVE (shell (cmd2 patches)) "" >>= qMessage "Patching Quilt target"
                                    case result2 of
                                      Right (ExitSuccess, _, _) -> return ()
                                      Right (_, _, err) -> fail $ target ++ " - Failed to apply quilt patches: " ++ decode err
@@ -143,7 +143,7 @@ prepare method flags base patch = do
                                      False -> fail (target ++ "- Missing changelog file: " ++ show (quiltDir ++ "/" ++ quiltPatchesDir ++ "/changelog"))
                                      True -> mergeChangelogs' (quiltDir ++ "/debian/changelog") (quiltDir ++ "/" ++ quiltPatchesDir ++ "/changelog")
                             cleanSource =
-                                do result3 <- liftIO (readProcessVE (shell cmd3) L.empty) >>= qMessage "Cleaning Quilt target"
+                                do result3 <- runVE (shell cmd3) L.empty >>= qMessage "Cleaning Quilt target"
                                    case result3 of
                                      Right (ExitSuccess, _, _) ->
                                          do tree <- findSourceTree (topdir quiltTree) :: IO SourceTree

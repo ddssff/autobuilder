@@ -165,7 +165,7 @@ prepareBuild _cache target =
                  ver = Debian.Version.version . logVersion . entry $ debBuild
                  newdir = escapeForBuild $ name ++ "-" ++ ver
              -- ePutStrLn ("copyBuild " ++ topdir' debBuild ++ " -> " ++ dest ++ ", tarball=" ++ show (T.origTarball target))
-             _copy <- liftIO $ copySourceTree debBuild dest
+             _copy <- copySourceTree debBuild dest
              (_output, _time) <- liftIO $ T.cleanTarget target (dest </> newdir)
              when (newdir /= (subdir debBuild))
                       (liftIO $ renameDirectory (dest ++ "/" ++ subdir debBuild) (dest ++ "/" ++ newdir))

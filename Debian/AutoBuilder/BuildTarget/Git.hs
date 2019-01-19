@@ -15,7 +15,7 @@ import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Repo (SourceTree, topdir, MonadRepos, MonadTop, sub, findSourceTree)
 import Debian.Repo.Fingerprint (RetrieveMethod, RetrieveAttribute(GitCommit), GitSpec(Branch, Commit))
-import Debian.Repo.Prelude.Process (readProcessVE, readProcessV, timeTask)
+import Debian.Repo.Prelude.Process (runVE, runV, timeTask)
 import Network.URI (URI(..), URIAuth(..), uriToString, parseURI)
 import System.Directory
 import System.Exit (ExitCode(..))
@@ -37,7 +37,7 @@ documentation = [ "darcs:<string> - a target of this form obtains the source cod
 
 darcsRev :: SourceTree -> RetrieveMethod -> IO (Either SomeException String)
 darcsRev tree m =
-    try (readProcessV (cmd {cwd = Just path}) mempty >>= (\ (_, out, _) -> return out) >>=
+    try (runV (cmd {cwd = Just path}) mempty >>= (\ (_, out, _) -> return out) >>=
          return . matchRegex (mkRegex "hash='([^']*)'") . B.unpack) >>=
     return . either Left (maybe (fail $ "could not find hash field in output of '" ++ showCmdSpecForUser (cmdspec cmd) ++ "'")
                                 (\ rev -> Right (show m ++ "=" ++ head rev)))
@@ -66,7 +66,7 @@ instance T.Download GitDL where
     flushSource x = sub ("git" </> gitSum (_gitFlags x) (_gitUri x) (_gitSpecs x)) >>= liftIO . removeRecursiveSafely
     cleanTarget x =
         (\ top -> case any P.isKeepRCS (_gitFlags x) of
-                    False -> let cmd = "find " ++ top ++ " -name '.git' -maxdepth 1 -prune | xargs rm -rf" in timeTask (readProcessVE (shell cmd) "")
+                    False -> let cmd = "find " ++ top ++ " -name '.git' -maxdepth 1 -prune | xargs rm -rf" in timeTask (runVE (shell cmd) "")
                     True -> return (Right mempty, 0))
     attrs x = singleton $ GitCommit $ _gitLatestCommit x
 
@@ -131,15 +131,15 @@ prepare method flags theUri gitspecs = do
              createDirectoryIfMissing True parent
              removeRecursiveSafely dir
              let clone = proc "git" (["clone", renderForGit theUri'] ++ concat (map (\ x -> case x of (Branch s) -> ["--branch", s]; _ -> []) gitspecs) ++ [dir])
-             readProcessVE clone B.empty >>= test1
+             runVE clone B.empty >>= test1
 
-      readProc pr inp = readProcessV pr inp >>= testCode pr
+      readProc pr inp = runV pr inp >>= testCode pr
       testCode _pr (ExitSuccess, _, _) = return ()
       testCode pr (ExitFailure s, out, err) = error (prettyShow pr ++ " -> " ++ show s ++ "\n  out: " ++ show out ++ "\n  err: " ++ show err)
 
 {-
       testSource dir =
-          do result <- readProcessVE ((proc "git" ["status", "--porcelain"]) {cwd = Just dir}) mempty
+          do result <- runVE ((proc "git" ["status", "--porcelain"]) {cwd = Just dir}) mempty
              case result of
                Right (ExitSuccess, out, _) | B.null out -> return True
                _ -> return False
@@ -149,8 +149,8 @@ prepare method flags theUri gitspecs = do
 
       fixLink base =
           let link = base </> name in
-          readProcessV (proc "rm" ["-rf", link]) B.empty >>
-          readProcessV (proc "ln" ["-s", gitSum flags theUri gitspecs, link]) B.empty
+          runV (proc "rm" ["-rf", link]) B.empty >>
+          runV (proc "ln" ["-s", gitSum flags theUri gitspecs, link]) B.empty
       name = snd . splitFileName $ (uriPath theUri')
 
       theUri' = mustParseURI theUri

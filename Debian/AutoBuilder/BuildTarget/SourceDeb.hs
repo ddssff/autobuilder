@@ -13,7 +13,7 @@ import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.Control.String as S
 import Debian.Repo.Fingerprint (RetrieveMethod)
 import Debian.Repo.MonadRepos (MonadRepos)
-import Debian.Repo.Prelude.Process (readProcessV)
+import Debian.Repo.Prelude.Process (runV)
 import qualified Debian.Version as V
 import System.Directory
 import System.Process (CreateProcess(cwd), proc)
@@ -47,7 +47,7 @@ prepare _cache method flags base =
          [] -> return $  error ("Invalid sourcedeb base: no .dsc file in " ++ show (T.method base))
          (dscName, Right (S.Control (dscInfo : _))) : _ ->
              let p = unpack top dscName in
-             liftIO (readProcessV p B.empty >>
+             liftIO (runV p B.empty >>
                      makeTarget dscInfo dscName)
          (dscName, _) : _ -> error ("Invalid .dsc file: " ++ dscName)
     where
