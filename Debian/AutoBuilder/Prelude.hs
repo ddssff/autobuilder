@@ -16,12 +16,6 @@ import qualified Data.ByteString.Lazy as L (ByteString)
 import Data.Generics (Data, Typeable, listify)
 import Data.ListLike.IO (writeFile)
 import Data.ListLike.Instances ({-instance ListLikeIO L.ByteString Word8-})
-import Distribution.Package
-#if MIN_VERSION_Cabal(2,0,0)
-import Distribution.Version
-#else
-import Data.Version
-#endif
 import Prelude hiding (writeFile)
 import System.Directory (removeFile)
 import System.IO.Error (isDoesNotExistError)
