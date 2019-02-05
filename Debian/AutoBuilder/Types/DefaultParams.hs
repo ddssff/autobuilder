@@ -1,9 +1,11 @@
 {-# OPTIONS_GHC -Wall -fno-warn-missing-signatures #-}
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP, FlexibleContexts, TemplateHaskell #-}
 module Debian.AutoBuilder.Types.DefaultParams
     ( defaultParams
     ) where
 
+import Control.Lens (review, view)
+import Control.Monad.Except (MonadError)
 import Data.List as List (isSuffixOf, map)
 import Data.Maybe
 import Data.Set as Set (empty, fromList)
@@ -16,8 +18,10 @@ import Debian.Arch (Arch(Binary), ArchCPU(ArchCPU), ArchOS(ArchOS))
 import Debian.AutoBuilder.Types.ParamRec (ParamRec(..), Strictness(..), TargetSpec(..))
 import Debian.Relation (BinPkgName(BinPkgName))
 import Debian.Release (ReleaseName(ReleaseName, relName))
+import Debian.Releases (ReleaseTree, ReleaseURI, releaseURI)
 import Debian.Repo (SourcesChangedAction(SourcesChangedError))
-import Debian.Sources (DebSource, parseSourceLine)
+import Debian.Sources (DebSource, parseSourceLine, VendorURI, vendorURI)
+import Debian.TH (here)
 import Debian.URI
 import Debian.Version (parseDebianVersion')
 import Prelude hiding (map)
@@ -26,27 +30,30 @@ import System.FilePath ((</>))
 -- You would put your organization name here.
 defaultVendor = "extra"
 
-defaultParams :: String
+defaultParams :: ReleaseTree
+              -> String
               -> Maybe Version
               -> String
               -> String
               -> [String]
               -> ParamRec
-defaultParams myBuildRelease -- e.g. wheezy or precise
+defaultParams myReleaseTree
+              myBuildRelease -- e.g. wheezy or precise
               myCompilerVersion
               myUploadURIPrefix
               myBuildURIPrefix
               myDevelopmentReleaseNames =
     ParamRec
-    { vendorTag = defaultVendorTag
+    { buildReleaseTree = myReleaseTree
+    , vendorTag = defaultVendorTag
     , oldVendorTags = []
     , hvrVersion = myCompilerVersion
     , autobuilderEmail = "SeeReason Autobuilder <partners@seereason.com>"
     , releaseSuffixes = defaultReleaseSuffixes
     , buildRelease = ReleaseName {relName = myBuildRelease}
     , extraRepos = []
-    , uploadURI = defaultUploadURI myBuildRelease myUploadURIPrefix
-    , buildURI = defaultBuildURI myBuildRelease myBuildURIPrefix myUploadURIPrefix
+    , theVendorURI = defaultUploadURI myBuildRelease myUploadURIPrefix
+    , theReleaseURI = defaultReleaseURI myBuildRelease myBuildURIPrefix myUploadURIPrefix
     -- What we plan to build
     , targets = TargetSpec {allTargets = False, groups = Set.empty}
     , patterns = []
@@ -145,9 +152,9 @@ defaultUbuntuMirrorHost = "us.archive.ubuntu.com/ubuntu"
 -- it is built for use as build dependencies of other packages during
 -- the same run.
 --
-defaultUploadURI :: String -> String -> Maybe  URI
+defaultUploadURI :: MonadError URIError m => String -> String -> m VendorURI
 defaultUploadURI myBuildRelease myUploadURIPrefix =
-    parseURI (if isPrivateRelease myBuildRelease then myPrivateUploadURI else myPublicUploadURI)
+    review vendorURI <$> parseURI' (if isPrivateRelease myBuildRelease then myPrivateUploadURI else myPublicUploadURI)
     where
       myPrivateUploadURI = myUploadURIPrefix </> "deb-private" </> releaseRepoName myBuildRelease
       myPublicUploadURI = myUploadURIPrefix </> "deb" </> releaseRepoName myBuildRelease
@@ -156,9 +163,17 @@ defaultUploadURI myBuildRelease myUploadURIPrefix =
 -- used for downloading packages that have already been installed
 -- there.
 --
-defaultBuildURI :: String -> String -> String -> Maybe URI
-defaultBuildURI myBuildRelease myBuildURIPrefix myUploadURIPrefix =
-    parseURI uriString
+defaultReleaseURI :: String -> String -> String -> Either URIError ReleaseURI
+defaultReleaseURI myBuildRelease myBuildURIPrefix myUploadURIPrefix =
+    review releaseURI <$> parseURI' uriString
+    where
+      uriString = (if isPrivateRelease myBuildRelease then myUploadBuildURI else myPublicBuildURI)
+      myUploadBuildURI = myUploadURIPrefix </> "deb-private" </> releaseRepoName myBuildRelease </> "dists" </> myBuildRelease
+      myPublicBuildURI = myBuildURIPrefix </> releaseRepoName myBuildRelease </> "dists" </> myBuildRelease
+
+defaultVendorURI :: String -> String -> String -> Either URIError VendorURI
+defaultVendorURI myBuildRelease myBuildURIPrefix myUploadURIPrefix =
+    review vendorURI <$> parseURI' uriString
     where
       uriString = (if isPrivateRelease myBuildRelease then myUploadBuildURI else myPublicBuildURI)
       myUploadBuildURI = myUploadURIPrefix </> "deb-private" </> releaseRepoName myBuildRelease
@@ -175,21 +190,20 @@ defaultSources myBuildRelease myUploadURIPrefix myPublicURIPrefix debianMirrorHo
              concatMap (derivedReleaseNames myBuildRelease) (debianReleases ++ ubuntuReleases))
     where
       releaseSources release =
-          (release, releaseSourceLines buildURI' release debianMirrorHost ubuntuMirrorHost)
-      Just buildURI' = defaultBuildURI myBuildRelease myPublicURIPrefix myUploadURIPrefix
+          (release, releaseSourceLines venuri release debianMirrorHost ubuntuMirrorHost)
+      Right venuri = defaultVendorURI myBuildRelease myPublicURIPrefix myUploadURIPrefix
 
 -- Build a sources.list for one of our build relases.
 --
-releaseSourceLines :: URI -> String -> String -> String -> [DebSource]
-releaseSourceLines myBuildURI release debianMirrorHost ubuntuMirrorHost =
+releaseSourceLines :: VendorURI -> String -> String -> String -> [DebSource]
+releaseSourceLines myVendorURI release debianMirrorHost ubuntuMirrorHost =
     case releaseSuffix release of
       Nothing -> baseReleaseSourceLines release debianMirrorHost ubuntuMirrorHost
       Just suff ->
-          releaseSourceLines myBuildURI (dropSuffix suff release) debianMirrorHost ubuntuMirrorHost ++
-          List.map parseSourceLine [ "deb " ++ uri ++ " " ++ release ++ " main"
-                                   , "deb-src " ++ uri ++ " " ++ release ++ " main" ]
-    where
-      uri = show myBuildURI
+          releaseSourceLines myVendorURI (dropSuffix suff release) debianMirrorHost ubuntuMirrorHost ++
+          List.map (parseSourceLine $here)
+            [ "deb " ++ show (view vendorURI myVendorURI) ++ " " ++ release ++ " main"
+            , "deb-src " ++ show (view vendorURI myVendorURI) ++ " " ++ release ++ " main" ]
 
 baseReleaseSourceLines release debianMirrorHost ubuntuMirrorHost =
     case releaseRepoName release of
@@ -198,12 +212,12 @@ baseReleaseSourceLines release debianMirrorHost ubuntuMirrorHost =
       x -> error $ "Unknown release repository: " ++ show x
 
 debianSourceLines debianMirrorHost release =
-    List.map parseSourceLine $
+    List.map (parseSourceLine $here) $
     [ "deb http://" ++ debianMirrorHost ++ "/debian " ++ release ++ " main contrib non-free"
     , "deb-src http://" ++ debianMirrorHost ++ "/debian " ++ release ++ " main contrib non-free" ]
 
 ubuntuSourceLines ubuntuMirrorHost release =
-    List.map parseSourceLine $
+    List.map (parseSourceLine $here) $
     [ "deb http://" ++ ubuntuMirrorHost ++ "/ubuntu/ " ++ release ++ " main restricted universe multiverse"
     , "deb-src http://" ++ ubuntuMirrorHost ++ "/ubuntu/ " ++ release ++ " main restricted universe multiverse"
     , "deb http://" ++ ubuntuMirrorHost ++ "/ubuntu/ " ++ release ++ "-updates main restricted universe multiverse"

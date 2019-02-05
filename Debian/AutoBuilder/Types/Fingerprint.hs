@@ -80,7 +80,7 @@ buildDecision :: T.Download a =>
                                      -- are available, or none, or only the architecture independent.
 -}
               -> BuildDecision
-buildDecision cache globalBuildDeps target info@(ReleaseControlInfo {releaseSourcePackage = Just p}) upstream | isJust (P.packageFingerprint p) =
+buildDecision cache globalBuildDeps target rci@(ReleaseControlInfo {releaseSourcePackage = Just p}) upstream | isJust (P.packageFingerprint p) =
     case () of
       _ | elem (packageName $ sourcePackageID p) (P.forceBuild (P.params cache)) ->
             Yes ("--force-build " ++ (unSrcPkgName $ packageName $ sourcePackageID p) ++ " set")
@@ -118,10 +118,10 @@ buildDecision cache globalBuildDeps target info@(ReleaseControlInfo {releaseSour
         | isArchIndep ->
             -- The binary packages are missing, we need an arch only build.
             Arch ("Version " ++ show (prettyDebianVersion repoVersion) ++ " needs arch only build. (Missing: " ++ show missingDebs ++ ")")
-        | releaseStatus info == All ->
+        | releaseStatus rci == All ->
             No ("Version " ++ show (prettyDebianVersion oldSrcVersion) ++ " is already in release.")
       _ -> -- releaseStatus == None ->
-            error ("Unexpected releaseStatus: " ++ show (releaseStatus info))
+            error ("Unexpected releaseStatus: " ++ show (releaseStatus rci))
     where
       allowBuildDependencyRegressions = P.allowBuildDependencyRegressions (P.params cache)
 
@@ -139,11 +139,11 @@ buildDecision cache globalBuildDeps target info@(ReleaseControlInfo {releaseSour
       failVersion v = any (== (show v)) (mapMaybe (\x -> case x of P.FailVersion s -> Just s; _ -> Nothing) . T.flags . download . tgt $ target)
       skipPackage = any (\x -> case x of P.SkipPackage -> True; _ -> False) (T.flags . download . tgt $ target)
       failPackage = any (\x -> case x of P.FailPackage -> True; _ -> False) (T.flags . download . tgt $ target)
-      isArchIndep = case releaseStatus info of
+      isArchIndep = case releaseStatus rci of
                       Indep _ -> True
                       _ -> False
       notArchDep = all (== Just "all") . List.map (fieldValue "Architecture") . debianBinaryParagraphs
-      missingDebs = case releaseStatus info of
+      missingDebs = case releaseStatus rci of
                       Indep xs -> xs
                       _ -> []
       displayDependencyChanges dependencies =
@@ -172,7 +172,7 @@ buildDecision cache globalBuildDeps target info@(ReleaseControlInfo {releaseSour
             (new, unchanged) = partition (isNothing . builtVersion) notChanged
             -- What version of this dependency was most recently used to build?
       builtVersion x = maybe Nothing (\ ver -> Just (PackageID (packageName x) ver)) (Map.findWithDefault Nothing (packageName x) builtDeps)
-      builtDeps = Map.fromList (Set.toList (Set.map (\ p -> (packageName p, Just (packageVersion p))) builtDependencies))
+      builtDeps = Map.fromList (Set.toList (Set.map (\p' -> (packageName p', Just (packageVersion p'))) builtDependencies))
       -- Remove any package not mentioned in the relaxed dependency list
       -- from the list of build dependencies which can trigger a rebuild.
       sourceDependencies' = toList $ Set.filter (\ x -> elem (packageName x) (packageNames (targetRelaxed globalBuildDeps (relaxDepends cache (tgt target)) target))) sourceDependencies

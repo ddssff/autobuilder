@@ -33,12 +33,12 @@ import qualified Debian.GenBuildDeps as G
 import Debian.Relation (SrcPkgName(..), BinPkgName(..))
 import Debian.Relation.ByteString(Relations)
 import Debian.Repo.MonadOS (getOS, MonadOS)
-import Debian.Repo.MonadRepos (MonadRepos)
+--import Debian.Repo.MonadRepos (MonadRepos)
 import Debian.Repo.OSImage (osRoot)
 import Debian.Repo.OSKey (OSKey(_root))
 import Debian.Repo.SourceTree (DebianBuildTree(..), entry, subdir, debdir, findDebianBuildTrees, findBuildTree, copySourceTree,
                                DebianSourceTree(..), findSourceTree)
-import Debian.Repo.EnvPath (EnvRoot, rootPath)
+import Debian.Repo.EnvPath (rootPath)
 import qualified Debian.Version
 import System.Directory(renameDirectory)
 import System.FilePath (takeExtension, (</>))

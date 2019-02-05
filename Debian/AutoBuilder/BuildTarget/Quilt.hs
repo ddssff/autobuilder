@@ -87,21 +87,21 @@ failing _ s (Success x) = s x
 
 data QuiltDL a b
     = QuiltDL
-      { method :: RetrieveMethod
-      , flags :: [P.PackageFlag]
-      , base :: a
-      , patch :: b
-      , tree :: SourceTree
+      { _method :: RetrieveMethod
+      , _flags :: [P.PackageFlag]
+      , _base :: a
+      , _patch :: b
+      , _tree :: SourceTree
       } deriving Show
 
 instance (T.Download a, T.Download b) => T.Download (QuiltDL a b) where
-    method = method
-    flags = flags
-    getTop = topdir . tree
-    logText x = "Quilt revision " ++ show (method x)
+    method = _method
+    flags = _flags
+    getTop = topdir . _tree
+    logText x = "Quilt revision " ++ show (_method x)
     flushSource _ = error "QuiltDB flushSource unimplemented"
-    cleanTarget x = (\ top -> T.cleanTarget (base x) top)
-    attrs x = union (T.attrs (base x)) (T.attrs (patch x))
+    cleanTarget x = (\ top -> T.cleanTarget (_base x) top)
+    attrs x = union (T.attrs (_base x)) (T.attrs (_patch x))
 
 prepare :: (MonadRepos s m, MonadTop r m, T.Download a, T.Download b) => RetrieveMethod -> [P.PackageFlag] -> a -> b -> m T.SomeDownload
 prepare method flags base patch = do
@@ -148,11 +148,11 @@ prepare method flags base patch = do
                                      Right (ExitSuccess, _, _) ->
                                          do tree <- findSourceTree (topdir quiltTree) :: IO SourceTree
                                             -- return $ Quilt base patch tree m
-                                            return $ T.SomeDownload $ QuiltDL { method = method
-                                                                              , flags = flags
-                                                                              , base = T.SomeDownload base
-                                                                              , patch = T.SomeDownload patch
-                                                                              , tree = tree }
+                                            return $ T.SomeDownload $ QuiltDL { _method = method
+                                                                              , _flags = flags
+                                                                              , _base = T.SomeDownload base
+                                                                              , _patch = T.SomeDownload patch
+                                                                              , _tree = tree }
                                      _ -> fail $ target ++ " - Failure removing quilt directory: " ++ cmd3
                Right (ExitFailure _, _, err) -> fail $ target ++ " - Unexpected output from quilt applied: " ++ decode err
                _ -> fail $ target ++ " - Unexpected result code (ExitSuccess) from " ++ show cmd1a

@@ -195,6 +195,7 @@ Test-Suite autobuilder-tests
   Hs-Source-Dirs: Test
   Main-Is: Test.hs
   ghc-options: -O2 -threaded -Wall
+  Other-Modules: Fingerprint ParamRec
   Build-Depends: base, containers, Cabal, debian >= 3.89, HUnit
 
   if flag (local-libs)

@@ -6,7 +6,7 @@ module Debian.AutoBuilder.Types.Packages
     , PackageId
     , GroupName(..)
     , TSt
-    , TargetState, release, deps, nodes, packageMap, groups
+    , TargetState, release, deps, nodes, packageMap, groups, home
     , inGroup, inGroups
     , targetState
     , depends
@@ -236,7 +236,7 @@ plist ps = mapM reach ps >>= return . Set.toList . Set.unions
     where
       reach :: Monad m => PackageId -> TSt m (Set PackageId)
       reach p = use nodes >>= maybe (return (singleton p)) (reach' p) . Map.lookup p
-      reach' p n = do
+      reach' _p n = do
         g <- use deps
         -- fromJust because we know these nodes have labels
         return $ Set.fromList $ map (fromJust . lab g) $ {-tr p n $-} reachable n g
@@ -294,7 +294,7 @@ relaxInfo flags' =
 -- Combinators for the Packages type
 
 method :: Monad m => Int -> RetrieveMethod -> TSt m PackageId
-method n m = do
+method _n m = do
   i <- newId
   let p = Package { _pid = i, _spec = m, _flags = mempty, _post = mempty, _groups = mempty }
   packageMap %= Map.insert i p
@@ -322,6 +322,7 @@ createPackage s f p = do
   packageMap %= Map.insert i r
   return i
 
+#if 0
 mergePackages :: MonadFail m => (Package -> Package -> Package) -> PackageId -> PackageId -> TSt m PackageId
 mergePackages f i1 i2 = do
   Just p1 <- use (packageMap . at i1)
@@ -339,6 +340,7 @@ mergePackages' f i j = do
   packageMap %= Map.delete j
   packageMap %= Map.insert i r
   return i
+#endif
 
 -- | Add a flag to p
 flag :: Monad m => PackageFlag -> PackageId -> TSt m PackageId
@@ -373,11 +375,11 @@ datafiles' :: MonadFail m => PackageId -> PackageId -> FilePath -> TSt m Package
 datafiles' cabal files dest = do
   Just cabal' <- use (packageMap . at cabal)
   Just files' <- use (packageMap . at files)
-  modifyPackage (const (set spec (DataFiles (view spec cabal') (view spec files') dest) cabal')) cabal
+  packid <- modifyPackage (const (set spec (DataFiles (view spec cabal') (view spec files') dest) cabal')) cabal
   return cabal
 
 debianize :: Monad m => [String] -> PackageId -> TSt m PackageId
-debianize args = modifyPackage (\p -> set spec (Debianize'' (view spec p) Nothing) p)
+debianize _args = modifyPackage (\p -> set spec (Debianize'' (view spec p) Nothing) p)
 
 debdir :: Monad m => RetrieveMethod -> PackageId -> TSt m PackageId
 debdir debian i = modifyPackage (\p -> set spec (DebDir (view spec p) debian) p) i

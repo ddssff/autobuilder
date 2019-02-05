@@ -6,7 +6,7 @@ module Debian.AutoBuilder.Types.Download
     ) where
 
 import Control.Exception (SomeException)
-import Control.Monad.Catch (MonadMask)
+--import Control.Monad.Catch (MonadMask)
 import Control.Monad.Trans (MonadIO)
 import qualified Data.ByteString.Lazy as L (ByteString)
 #if !MIN_VERSION_base(4,8,0)

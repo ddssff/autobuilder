@@ -13,9 +13,9 @@ import Data.Monoid (mconcat, mempty)
 #endif
 import Control.Applicative.Error (Failing(..), ErrorMsg)
 import Control.Exception(SomeException, AsyncException(UserInterrupt), fromException, toException)
-import Control.Lens (to, view)
+import Control.Lens (review, to, view)
 import Control.Monad(foldM, when)
-import Control.Monad.Catch (MonadMask, catch, throwM)
+import Control.Monad.Catch (catch, throwM)
 import Control.Monad.State (MonadIO(liftIO))
 import qualified Data.ByteString.Lazy as L
 import Data.Either (partitionEithers)
@@ -40,9 +40,10 @@ import Debian.GHC (hvrCompilerPATH, withModifiedPATH)
 import Debian.Pretty (prettyShow, ppShow)
 import Debian.Relation (BinPkgName(unBinPkgName), SrcPkgName(unSrcPkgName))
 import Debian.Release (ReleaseName(ReleaseName, relName), releaseName')
-import Debian.Repo.EnvPath (EnvRoot, envPath, envRoot, rootPath)
+import Debian.Releases (releaseURI)
+import Debian.Repo.EnvPath (envPath, envRoot, rootPath)
 import qualified Debian.Repo.Fingerprint as P (RetrieveMethod(Patch, Cd, DebDir, DataFiles, Debianize'', Proc, Quilt, SourceDeb, Twice, Zero))
-import Debian.Repo.LocalRepository(uploadRemote, verifyUploadURI)
+import Debian.Repo.LocalRepository(uploadRemote, verifyReleaseURI)
 import Debian.Repo.MonadOS (MonadOS, getOS, evalMonadOS)
 import Debian.Repo.MonadRepos (MonadRepos, runReposCachedT, MonadReposCached)
 import Debian.Repo.OSImage (osLocalMaster, osLocalCopy, osBaseDistro)
@@ -56,11 +57,11 @@ import Debian.Repo.Slice (NamedSliceList(..), SliceList(slices), Slice(sliceRepo
 import Debian.Repo.State.AptImage (withAptImage)
 import Debian.Repo.State.Repository (foldRepository)
 import Debian.Repo.State.Slice (repoSources, updateCacheSources)
-import Debian.Repo.Top (MonadTop, TopDir(TopDir), toTop)
-import Debian.Repo.EnvPath (EnvPath(..))
+import Debian.Repo.Top (TopDir(TopDir), toTop)
 import Debian.Repo.LocalRepository (LocalRepository, repoRoot)
-import Debian.Sources (SourceOption(SourceOption), SourceOp(OpSet), sourceOptions)
-import Debian.URI(URI(uriPath, uriAuthority), URIAuth(uriUserInfo, uriRegName, uriPort), parseURI)
+import Debian.Sources (SourceOption(SourceOption), SourceOp(OpSet), sourceOptions, vendorURI)
+import Debian.TH (here)
+import Debian.URI(parseURI, URI(uriPath, uriAuthority), URIAuth(uriUserInfo, uriRegName, uriPort), uriPathLens)
 import Debian.Version(DebianVersion, parseDebianVersion', prettyDebianVersion)
 import Extra.Lock(withLock)
 import Extra.Misc(checkSuperUser)
@@ -78,7 +79,7 @@ import System.Unix.Mount (withProcAndSys)
 import Text.Printf ( printf )
 
 main :: CabalT IO () -> (FilePath -> String -> R.ParamRec) -> IO ()
-main init myParams =
+main ini myParams =
     do IO.hPutStrLn IO.stderr "Autobuilder starting..."
        args <- getArgs
        home <- getEnv "HOME"
@@ -91,7 +92,7 @@ main init myParams =
        case tops of
          -- All the work for a given run must occur in the same top
          -- directory - ~/.autobuilder for example.
-         [top] -> runReposCachedT (TopDir top) (foldM (doParameterSet init) [] recs) `catch` showAndThrow >>= testResults
+         [top] -> runReposCachedT (TopDir top) (foldM (doParameterSet ini) [] recs) `catch` showAndThrow >>= testResults
          [] -> IO.hPutStrLn IO.stderr "No parameter sets"
          tops -> IO.hPutStrLn IO.stderr ("Parameter sets have different top directories: " ++ show tops)
     where testResults results =
@@ -127,7 +128,8 @@ doParameterSet ::
 -- If one parameter set fails, don't try the rest.  Not sure if
 -- this is the right thing, but it is safe.
 doParameterSet _ results _ | any isFailure results = return results
-doParameterSet init results params = do
+doParameterSet ini results params = do
+  qPutStrLn (prettyShow $here <> " - sources=" ++ show (fmap fst (R.sources params)))
   result <- withVerbosity (R.verbosity params)
             (do (TopDir top) <- view toTop
                 withLock (top </> "lockfile") $
@@ -136,7 +138,7 @@ doParameterSet init results params = do
                   -- distinguish from those built with ghc-8.0.1 as things stand.  But then
                   -- we need our --hvr-version option back.
                   withModifiedPATH (maybe id hvrCompilerPATH (R.hvrVersion params)) $
-                    P.buildCache params >>= runParameterSet init)
+                    P.buildCache params >>= runParameterSet ini)
               `catch` (\ (e :: SomeException) -> return (Failure [show e]))
   return (result : results)
 
@@ -148,10 +150,10 @@ getLocalSources = do
   root <- view (osLocalCopy . repoRoot) <$> getOS
   case parseURI ("file://" ++ view envPath root) of
     Nothing -> error $ "Invalid local repo root: " ++ show root
-    Just uri -> repoSources (Just (view envRoot root)) [SourceOption "trusted" OpSet ["yes"]] uri
+    Just uri -> repoSources (Just (view envRoot root)) [SourceOption "trusted" OpSet ["yes"]] (review releaseURI uri)
 
 runParameterSet :: (Applicative m, MonadReposCached r s m) => CabalT IO () -> C.CacheRec -> m (Failing (ExitCode, L.ByteString, L.ByteString))
-runParameterSet init cache =
+runParameterSet ini cache =
     do
       (TopDir top) <- view toTop
       liftIO doRequiredVersion
@@ -160,7 +162,7 @@ runParameterSet init cache =
       when (R.showSources params) (withVerbosity 1 (liftIO doShowSources))
       when (R.flushAll params) (liftIO $ doFlush top)
       liftIO checkPermissions
-      maybe (return ()) (verifyUploadURI (R.doSSHExport $ params)) (R.uploadURI params)
+      either (\_ -> return ()) (verifyReleaseURI (R.doSSHExport $ params)) (R.theReleaseURI params)
       qPutStrLn "Preparing dependency environment"
       extraSlices <- mapM (either (return . (: [])) (liftIO . expandPPASlice (P.baseRelease params))) (R.extraRepos params) >>= return . concat
       dependOS <- prepareDependOS params buildRelease extraSlices
@@ -202,7 +204,7 @@ runParameterSet init cache =
       retrieveTarget :: (MonadReposCached r s m) => OSKey -> Int -> Int -> (P.RetrieveMethod, [P.PackageFlag], [CabalInfo -> CabalInfo]) -> m (Either String (Buildable SomeDownload))
       retrieveTarget dependOS count index (method, flags, functions) = do
             liftIO (hPutStr stderr (printf "[%2d of %2d]" index count))
-            res <- (Right <$> evalMonadOS (do download <- withProcAndSys (view (to _root . rootPath) dependOS) $ retrieve init cache method flags functions
+            res <- (Right <$> evalMonadOS (do download <- withProcAndSys (view (to _root . rootPath) dependOS) $ retrieve ini cache method flags functions
                                               when (R.flushSource params) (flushSource download)
                                               buildable <- liftIO (asBuildable download)
                                               let (src, bins) = debianPackageNames (debianSourceTree buildable)
@@ -211,7 +213,7 @@ runParameterSet init cache =
                                               return buildable) dependOS) `catch` handleRetrieveException method
             return res
       params = C.params cache
-      baseRelease =  either (\e -> error $ "Could not find slice " ++ show (P.baseRelease params) ++ ": " ++ show e) id (P.findSlice cache (P.baseRelease params))
+      baseRelease =  either (\e -> error $ "Could not find slice " ++ show (P.baseRelease params) ++ ": " ++ show e) id (P.findSlice $here cache (P.baseRelease params))
       buildRepoSources = C.buildRepoSources cache
       buildReleaseSources = releaseSlices (R.buildRelease params) (inexactPathSlices buildRepoSources)
       buildRelease = NamedSliceList { sliceListName = ReleaseName (releaseName' (R.buildRelease params))
@@ -232,7 +234,7 @@ runParameterSet init cache =
                 ePutStr (" Version >= " ++ show (prettyDebianVersion v) ++ " is required" ++ maybe "" ((++) ":") s)
       doShowParams = ePutStr $ "Configuration parameters:\n" ++ R.prettyPrint params
       doShowSources =
-          either (error . show) doShow (P.findSlice cache (ReleaseName (releaseName' (R.buildRelease params))))
+          either (error . show) doShow (P.findSlice $here cache (ReleaseName (releaseName' (R.buildRelease params))))
           where
             doShow sources =
                 do qPutStrLn $ (relName . sliceListName $ sources) ++ ":"
@@ -251,9 +253,9 @@ runParameterSet init cache =
       upload :: MonadRepos s m => (LocalRepository, [Target SomeDownload]) -> m [Failing (ExitCode, L.ByteString, L.ByteString)]
       upload (repo, [])
           | R.doUpload params =
-              case R.uploadURI params of
-                Nothing -> error "Cannot upload, no 'Upload-URI' parameter given"
-                Just uri -> qPutStrLn "Uploading from local repository to remote" >> liftIO (uploadRemote repo uri)
+              case R.theVendorURI params of
+                Left e -> error "Cannot upload, no 'Upload-URI' parameter given"
+                Right uri -> qPutStrLn "Uploading from local repository to remote" >> liftIO (uploadRemote repo uri)
           | True = return []
       upload (_, failed) =
           do let msg = ("Some targets failed to build:\n  " ++ intercalate "\n  " (map (ppShow . debianSourcePackageName) failed))
@@ -265,18 +267,18 @@ runParameterSet init cache =
       newDist :: ([ErrorMsg], [(ExitCode, L.ByteString, L.ByteString)]) -> IO (Failing (ExitCode, L.ByteString, L.ByteString))
       newDist ([], _)
           | R.doNewDist params =
-              case R.uploadURI params of
-                Just uri ->
-                    do let p = case uriAuthority uri of
+              case R.theVendorURI params of
+                Right uri ->
+                    do let p = case view (vendorURI . to uriAuthority) uri of
                                  Just auth ->
                                      let cmd = "ssh"
                                          args = [uriUserInfo auth ++ uriRegName auth, R.newDistProgram params,
-                                                 "--sign", "--root", uriPath uri] ++
+                                                 "--sign", "--root", view (vendorURI . uriPathLens) uri] ++
                                                 (concat . map (\ rel -> ["--create", rel]) . R.createRelease $ params) in
                                      (proc cmd args)
                                  _ ->
                                      let cmd = R.newDistProgram params
-                                         args = ["--sign", "--root", uriPath uri] in
+                                         args = ["--sign", "--root", view (vendorURI . uriPathLens) uri] in
                                      (proc cmd args)
                        qPutStrLn (" -> " ++ showCmdSpecForUser (cmdspec p))
                        result <- runVE p L.empty >>= return . either (\ (e :: SomeException) -> Failure [show e]) testOutput
@@ -284,7 +286,7 @@ runParameterSet init cache =
                          (Success _) -> return result
                          (Failure msgs) -> ePutStrLn (intercalate "\n " ("newdist failed:" : msgs)) >> return result
                        return result
-                _ -> error "Missing Upload-URI parameter"
+                Left e -> error "Missing Upload-URI parameter"
           | True = return (Success mempty)
       newDist (errors, _) = return $ Failure errors
 
@@ -301,18 +303,18 @@ runParameterSet init cache =
 -- that we build - exists on the upload server ("P.uploadURI params").
 doVerifyBuildRepo :: MonadRepos s m => C.CacheRec -> m ()
 doVerifyBuildRepo cache =
-    do repoNames <- mapM (foldRepository f g) (map sliceRepoKey . slices . C.buildRepoSources $ cache) >>= return . map releaseName . concat
+    do repoNames <- (map releaseName . concat) <$> mapM (foldRepository f g) (map sliceRepoKey . slices . C.buildRepoSources $ cache)
        when (not (any (== (R.buildRelease params)) repoNames))
-            (case R.uploadURI params of
-               Nothing -> error "No uploadURI?"
-               Just uri ->
-                   let ssh = case uriAuthority uri of
+            (case R.theVendorURI params of
+               Left _e -> error "No uploadURI?"
+               Right uri ->
+                   let ssh = case view (vendorURI . to uriAuthority) uri of
                                Just auth -> uriUserInfo auth ++ uriRegName auth ++ uriPort auth
                                Nothing -> "user@hostname"
                        rel = releaseName' (R.buildRelease params)
-                       top = uriPath uri in -- "/home/autobuilder/deb-private/debian"
+                       top = view (vendorURI . to uriPath) uri in -- "/home/autobuilder/deb-private/debian"
                    error $ "Build repository does not exist on remote server: " ++ show (R.buildRelease params) ++
-                           "\nuploadURI: " ++ show (R.uploadURI params) ++
+                           "\nuploadURI: " ++ show (R.theVendorURI params) ++
                            "\nrepoNames: " ++ show repoNames ++
                            "\nUse newdist there to create it:" ++
                            "\n  ssh " ++ ssh ++ " " ++ R.newDistProgram params ++ " --root=" ++ top ++ " --create-release=" ++ rel ++

@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleInstances, PackageImports, ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleContexts, FlexibleInstances, PackageImports, ScopedTypeVariables, TemplateHaskell #-}
 module Debian.AutoBuilder.Params
     ( computeTopDir
     , buildCache
@@ -19,13 +19,15 @@ import Debian.AutoBuilder.Types.ParamRec (ParamRec(..))
 import Debian.Release (ReleaseName(ReleaseName, relName))
 -- import Debian.Repo.MonadOS (MonadOS, buildEssential)
 import Debian.Repo.MonadRepos (MonadRepos)
-import Debian.Repo.Slice (NamedSliceList(..), SliceList(..))
-import Debian.Repo.State.Slice (repoSources, verifySourcesList)
+import Debian.Repo.Slice (NamedSliceList(..){-, SliceList(..)-})
+import Debian.Repo.State.Slice ({-repoSources,-} repoSources', verifySourcesList)
 import Debian.Repo.Top (MonadTop, sub, TopDir(TopDir), toTop)
 import System.Directory (createDirectoryIfMissing, getPermissions, writable)
 import System.Environment (getEnv)
 import Debian.Repo.Prelude.Verbosity (qPutStrLn)
 import Debian.Sources (SourceOption(..), SourceOp(..))
+import Debian.TH (here, Loc)
+import Text.PrettyPrint.HughesPJClass (prettyShow)
 
 -- |Create a Cache object from a parameter set.
 buildCache :: (MonadRepos s m, MonadTop r m) => ParamRec -> m CacheRec
@@ -35,8 +37,8 @@ buildCache params' =
        mapM_ (\ name -> sub name >>= \ path -> liftIO (createDirectoryIfMissing True path))
                   [".", "darcs", "deb-dir", "dists", "hackage", Local.subDir, "quilt", "tmp"]
        allSlices <- mapM parseNamedSliceList (sources params')
-       let uri = maybe (uploadURI params') Just (buildURI params')
-       build <- maybe (return $ SliceList { slices = [] }) (repoSources Nothing [SourceOption "trusted" OpSet ["yes"]]) uri
+       --let uri = either (\_ -> uploadURI params') Right (buildURI params')
+       build <- repoSources' Nothing [SourceOption "trusted" OpSet ["yes"]] (buildReleaseTree params')
        return $ CacheRec {params = params', allSources = allSlices, buildRepoSources = build}
     where
       parseNamedSliceList (name, lines') =
@@ -64,12 +66,12 @@ computeTopDir params' =
          True -> return top
 
 -- |Find a release by name, among all the "Sources" entries given in the configuration.
-findSlice :: CacheRec -> ReleaseName -> Either String NamedSliceList
-findSlice cache dist =
+findSlice :: Loc -> CacheRec -> ReleaseName -> Either String NamedSliceList
+findSlice loc cache dist =
     case filter ((== dist) . sliceListName) (allSources cache) of
       [x] -> Right x
-      [] -> Left ("Debian.AutoBuilder.Params - no sources.list found for " ++ relName dist ++ ".  Is it in Debian.Releases.baseReleaseList?  allSources cache = " ++ show (fmap (relName . sliceListName) (allSources cache)))
-      xs -> Left ("Multiple sources.lists found for " ++ relName dist ++ "\n" ++ show (map (relName . sliceListName) xs))
+      [] -> Left (prettyShow loc <> " -> " <> prettyShow $here <> " - no sources.list found for " ++ relName dist ++ ".  Is it in Debian.Releases.baseReleaseList?  allSources cache = " ++ show (fmap (relName . sliceListName) (allSources cache)))
+      xs -> Left (prettyShow loc <> " -> " <> prettyShow $here <> " - Multiple sources.lists found for " ++ relName dist ++ "\n" ++ show xs)
 
 -- | Packages uploaded to the build release will be compatible
 -- with packages in this release.

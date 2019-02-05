@@ -26,11 +26,12 @@ import Debian.AutoBuilder.Types.Packages (Package, PackageId, GroupName(GroupNam
 import Debian.Pretty (PP(..), ppPrint)
 import Debian.Relation (BinPkgName, SrcPkgName(SrcPkgName))
 import Debian.Release (ReleaseName)
+import Debian.Releases (ReleaseTree, ReleaseURI)
 --import Debian.Repo.Fingerprint (RetrieveMethod)
 import Debian.Repo.Slice (SourcesChangedAction, Slice, PPASlice)
-import Debian.Sources (DebSource)
+import Debian.Sources (DebSource, VendorURI)
 import Debian.Version ( DebianVersion, prettyDebianVersion )
-import Debian.URI ( URI )
+import Debian.URI (URIError)
 import Prelude hiding (map)
 import System.Console.GetOpt
 import Text.PrettyPrint.HughesPJClass (Pretty(pPrint), text, vcat)
@@ -45,7 +46,9 @@ import Text.PrettyPrint.HughesPJClass (Pretty(pPrint), text, vcat)
 -- order of importance.
 data ParamRec =
     ParamRec
-    { vendorTag :: String
+    { buildReleaseTree :: ReleaseTree
+    -- ^ The Release we will be building packages for.
+    , vendorTag :: String
     -- ^ The string used to construct modified version numbers to identify
     -- them as part of your repository (rather than Debian's or Ubuntu's.)
     , oldVendorTags :: [String]
@@ -73,7 +76,7 @@ data ParamRec =
     -- one of them results in the base release.
     , extraRepos :: [Either Slice PPASlice]
     -- ^ Additional repositories to add to the os image via add-apt-repository.
-    , uploadURI :: Maybe URI
+    , theVendorURI :: Either URIError VendorURI
     -- ^ This URI is the address of the remote repository to which packages
     -- will be uploaded after a run with no failures, when the myDoUpload
     -- flag is true.  Packages are uploaded to the directory created by
@@ -81,7 +84,8 @@ data ParamRec =
     -- local repository, where each packages is uploaded immediately after
     -- it is built for use as build dependencies of other packages during
     -- the same run.
-    , buildURI :: Maybe URI
+    -- , theBuildURI :: Either URIError VendorURI
+    , theReleaseURI :: Either URIError ReleaseURI
     -- ^ An alternate url for the same repository the @uploadURI@ points to,
     -- used for downloading packages that have already been installed
     -- there.
@@ -356,8 +360,8 @@ prettyPrint x =
             , "doUpload=" ++ take 120 (show (doUpload x))
             , "doNewDist=" ++ take 120 (show (doNewDist x))
             , "newDistProgram=" ++ take 120 (show (newDistProgram x))
-            , "uploadURI=" ++ take 120 (show (uploadURI x))
-            , "buildURI=" ++ take 120 (show (buildURI x))
+            , "uploadURI=" ++ take 120 (show (theVendorURI x))
+            , "releaseURI=" ++ take 120 (show (theReleaseURI x))
             , "createRelease=" ++ take 120 (show (createRelease x))
             , "hackageServer=" ++ take 120 (show (hackageServer x))
             --, "ifSourcesChanged=" ++ take 120 (show (ifSourcesChanged x))
