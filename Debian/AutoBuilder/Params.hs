@@ -17,6 +17,7 @@ import qualified Debian.AutoBuilder.LocalRepo as Local (subDir)
 import Debian.AutoBuilder.Types.CacheRec (CacheRec(..))
 import Debian.AutoBuilder.Types.ParamRec (ParamRec(..))
 import Debian.Release (ReleaseName(ReleaseName, relName))
+import Debian.Releases (ReleaseTree, ReleaseURI)
 -- import Debian.Repo.MonadOS (MonadOS, buildEssential)
 import Debian.Repo.MonadRepos (MonadRepos)
 import Debian.Repo.Slice (NamedSliceList(..){-, SliceList(..)-})
@@ -27,18 +28,23 @@ import System.Environment (getEnv)
 import Debian.Repo.Prelude.Verbosity (qPutStrLn)
 import Debian.Sources (SourceOption(..), SourceOp(..))
 import Debian.TH (here, Loc)
+import Debian.URI (URIError)
 import Text.PrettyPrint.HughesPJClass (prettyShow)
 
 -- |Create a Cache object from a parameter set.
-buildCache :: (MonadRepos s m, MonadTop r m) => ParamRec -> m CacheRec
-buildCache params' =
+buildCache ::
+    (MonadRepos s m, MonadTop r m)
+    => (ReleaseTree -> Either URIError ReleaseURI)
+    -> ParamRec
+    -> m CacheRec
+buildCache myUploadURI params' =
     do (TopDir top) <- view toTop
        qPutStrLn ("Preparing autobuilder cache in " ++ top ++ "...")
        mapM_ (\ name -> sub name >>= \ path -> liftIO (createDirectoryIfMissing True path))
                   [".", "darcs", "deb-dir", "dists", "hackage", Local.subDir, "quilt", "tmp"]
        allSlices <- mapM parseNamedSliceList (sources params')
        --let uri = either (\_ -> uploadURI params') Right (buildURI params')
-       build <- repoSources' Nothing [SourceOption "trusted" OpSet ["yes"]] (buildReleaseTree params')
+       build <- repoSources' myUploadURI Nothing [SourceOption "trusted" OpSet ["yes"]] (buildReleaseTree params')
        return $ CacheRec {params = params', allSources = allSlices, buildRepoSources = build}
     where
       parseNamedSliceList (name, lines') =

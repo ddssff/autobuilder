@@ -310,7 +310,7 @@ data TargetSpec
      deriving Show
 
 instance Pretty (PP (String, [DebSource])) where
-    pPrint (PP (name, ss)) = text $ show $ (ppPrint name, map pPrint ss)
+    pPrint (PP (tree, ss)) = text $ show $ (ppPrint tree, map pPrint ss)
 
 -- |Output a (somewhat) readable representation of the parameter set.
 prettyPrint :: ParamRec -> String

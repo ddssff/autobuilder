@@ -40,7 +40,7 @@ import Debian.GHC (hvrCompilerPATH, withModifiedPATH)
 import Debian.Pretty (prettyShow, ppShow)
 import Debian.Relation (BinPkgName(unBinPkgName), SrcPkgName(unSrcPkgName))
 import Debian.Release (ReleaseName(ReleaseName, relName), releaseName')
-import Debian.Releases (releaseURI)
+import Debian.Releases (ReleaseTree, ReleaseURI, releaseURI)
 import Debian.Repo.EnvPath (envPath, envRoot, rootPath)
 import qualified Debian.Repo.Fingerprint as P (RetrieveMethod(Patch, Cd, DebDir, DataFiles, Debianize'', Proc, Quilt, SourceDeb, Twice, Zero))
 import Debian.Repo.LocalRepository(uploadRemote, verifyReleaseURI)
@@ -61,7 +61,7 @@ import Debian.Repo.Top (TopDir(TopDir), toTop)
 import Debian.Repo.LocalRepository (LocalRepository, repoRoot)
 import Debian.Sources (SourceOption(SourceOption), SourceOp(OpSet), sourceOptions, vendorURI)
 import Debian.TH (here)
-import Debian.URI(parseURI, URI(uriPath, uriAuthority), URIAuth(uriUserInfo, uriRegName, uriPort), uriPathLens)
+import Debian.URI(parseURI, URI(uriPath, uriAuthority), URIAuth(uriUserInfo, uriRegName, uriPort), URIError, uriPathLens)
 import Debian.Version(DebianVersion, parseDebianVersion', prettyDebianVersion)
 import Extra.Lock(withLock)
 import Extra.Misc(checkSuperUser)
@@ -78,8 +78,8 @@ import System.Unix.Directory(removeRecursiveSafely)
 import System.Unix.Mount (withProcAndSys)
 import Text.Printf ( printf )
 
-main :: CabalT IO () -> (FilePath -> String -> R.ParamRec) -> IO ()
-main ini myParams =
+main :: CabalT IO () -> (ReleaseTree -> Either URIError ReleaseURI) -> (FilePath -> String -> R.ParamRec) -> IO ()
+main ini myBuildURI myParams =
     do IO.hPutStrLn IO.stderr "Autobuilder starting..."
        args <- getArgs
        home <- getEnv "HOME"
@@ -92,7 +92,7 @@ main ini myParams =
        case tops of
          -- All the work for a given run must occur in the same top
          -- directory - ~/.autobuilder for example.
-         [top] -> runReposCachedT (TopDir top) (foldM (doParameterSet ini) [] recs) `catch` showAndThrow >>= testResults
+         [top] -> runReposCachedT (TopDir top) (foldM (doParameterSet myBuildURI ini) [] recs) `catch` showAndThrow >>= testResults
          [] -> IO.hPutStrLn IO.stderr "No parameter sets"
          tops -> IO.hPutStrLn IO.stderr ("Parameter sets have different top directories: " ++ show tops)
     where testResults results =
@@ -121,15 +121,15 @@ isFailure _ = False
 -- can be several which are run sequentially.  Stop on first failure.
 doParameterSet ::
     MonadReposCached r s m
-    => CabalT IO ()
+    => (ReleaseTree -> Either URIError ReleaseURI)
+    -> CabalT IO ()
     -> [Failing (ExitCode, L.ByteString, L.ByteString)]
     -> R.ParamRec
     -> m [Failing (ExitCode, L.ByteString, L.ByteString)]
 -- If one parameter set fails, don't try the rest.  Not sure if
 -- this is the right thing, but it is safe.
-doParameterSet _ results _ | any isFailure results = return results
-doParameterSet ini results params = do
-  qPutStrLn (prettyShow $here <> " - sources=" ++ show (fmap fst (R.sources params)))
+doParameterSet _ _ results _ | any isFailure results = return results
+doParameterSet myBuildURI ini results params = do
   result <- withVerbosity (R.verbosity params)
             (do (TopDir top) <- view toTop
                 withLock (top </> "lockfile") $
@@ -138,7 +138,7 @@ doParameterSet ini results params = do
                   -- distinguish from those built with ghc-8.0.1 as things stand.  But then
                   -- we need our --hvr-version option back.
                   withModifiedPATH (maybe id hvrCompilerPATH (R.hvrVersion params)) $
-                    P.buildCache params >>= runParameterSet ini)
+                    P.buildCache myBuildURI params >>= runParameterSet ini)
               `catch` (\ (e :: SomeException) -> return (Failure [show e]))
   return (result : results)
 
@@ -303,7 +303,7 @@ runParameterSet ini cache =
 -- that we build - exists on the upload server ("P.uploadURI params").
 doVerifyBuildRepo :: MonadRepos s m => C.CacheRec -> m ()
 doVerifyBuildRepo cache =
-    do repoNames <- (map releaseName . concat) <$> mapM (foldRepository f g) (map sliceRepoKey . slices . C.buildRepoSources $ cache)
+    do repoNames <- (map releaseName . concat) <$> mapM (foldRepository f g) keys
        when (not (any (== (R.buildRelease params)) repoNames))
             (case R.theVendorURI params of
                Left _e -> error "No uploadURI?"
@@ -322,6 +322,7 @@ doVerifyBuildRepo cache =
                            "\nYou will also need to remove the local file ~/.autobuilder/repoCache." ++
                            "\n(Available: " ++ show repoNames ++ ")")
     where
+      keys = map sliceRepoKey . slices . C.buildRepoSources $ cache
       f = return . repoReleaseInfo
       g = return . repoReleaseInfo
       params = C.params cache
