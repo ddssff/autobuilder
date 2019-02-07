@@ -29,5 +29,5 @@ instance T.Download a => T.Download (TwiceDL a) where
     attrs = T.attrs . base
 
 prepare :: (MonadRepos s m, T.Download a) => RetrieveMethod -> [P.PackageFlag] -> a -> m T.SomeDownload
-prepare method flags base =
-    do return $ T.SomeDownload $ TwiceDL {method = method, flags = flags, base = T.SomeDownload base}
+prepare method' flags' base' =
+    do return $ T.SomeDownload $ TwiceDL {method = method', flags = flags', base = T.SomeDownload base'}

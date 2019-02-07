@@ -1,18 +1,13 @@
-{-# LANGUAGE CPP, GADTs, OverloadedStrings, PackageImports, RankNTypes, ScopedTypeVariables #-}
+{-# LANGUAGE CPP, FlexibleContexts, GADTs, OverloadedStrings, PackageImports, RankNTypes, ScopedTypeVariables #-}
 module Debian.AutoBuilder.BuildTarget
     ( retrieve
     , targetDocumentation
     ) where
 
-#if !MIN_VERSION_base(4,8,0)
-import Control.Applicative ((<$>))
-#endif
-import Control.Monad.Catch (MonadCatch)
-import Control.Monad.Trans (lift, liftIO)
+import Control.Exception (Exception)
+import Control.Monad.Catch (MonadMask)
+import Control.Monad.Except (lift, liftIO, MonadError, MonadIO)
 import Data.List (intersperse)
-#if !MIN_VERSION_base(4,8,0)
-import Data.Monoid (mempty)
-#endif
 import qualified Debian.AutoBuilder.BuildTarget.Apt as Apt
 import qualified Debian.AutoBuilder.BuildTarget.Cd as Cd
 import qualified Debian.AutoBuilder.BuildTarget.Darcs as Darcs
@@ -35,30 +30,31 @@ import Debian.AutoBuilder.Types.Download (Download(..), SomeDownload(..))
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Debianize (CabalT, CabalInfo)
+import Debian.Except (HasIOException)
 import Debian.Relation (SrcPkgName(..))
 import qualified Debian.Repo.Fingerprint as P
 import Debian.Repo.MonadOS (MonadOS)
-import Debian.Repo.MonadRepos (MonadRepos)
-import Debian.Repo.SourceTree (SourceTree(dir'), copySourceTree, findSourceTree, topdir)
+import Debian.Repo.Rsync (HasRsyncError)
+import Debian.Repo.SourceTree (HasSourceTree, SourceTree(dir'), copySourceTree, findSourceTree, topdir)
 import Debian.Repo.Top (MonadTop)
 import System.FilePath ((</>))
 import System.Unix.Mount (WithProcAndSys)
 
 data CdDL a
-    = CdDL { cd :: P.RetrieveMethod
-           , fs :: [P.PackageFlag]
-           , dir :: FilePath
-           , parent :: a
+    = CdDL { _cd :: P.RetrieveMethod
+           , _fs :: [P.PackageFlag]
+           , _dir :: FilePath
+           , _parent :: a
            } deriving Show
 
 instance Download a => Download (CdDL a) where
-    method = cd
-    flags = fs
-    getTop x = getTop (parent x) </> dir x
-    logText x = logText (parent x) ++ " (in subdirectory " ++ dir x ++ ")"
-    flushSource x = flushSource (parent x)
-    cleanTarget x = cleanTarget (parent x)
-    attrs = attrs . parent
+    method = _cd
+    flags = _fs
+    getTop x = getTop (_parent x) </> _dir x
+    logText x = logText (_parent x) ++ " (in subdirectory " ++ _dir x ++ ")"
+    flushSource x = flushSource (_parent x)
+    cleanTarget x = cleanTarget (_parent x)
+    attrs = attrs . _parent
 
 data ProcDL a
     = ProcDL { procMethod :: P.RetrieveMethod
@@ -102,11 +98,11 @@ instance Download ZeroDL where
 -- | Given a RetrieveMethod, perform the retrieval and return the result.
 -- This wrapper ensures that /proc and /sys are mounted, even though the
 -- underlying code in retrieve' hasn't been updated to enforce this.
-retrieve :: forall r s m. (MonadOS r s m, MonadTop r m) =>
+retrieve :: forall r s e m. (MonadIO m, MonadMask m, Exception e, HasIOException e, HasRsyncError e, MonadError e m, MonadOS r s m, MonadTop r m, HasSourceTree SourceTree m) =>
             CabalT IO () -> C.CacheRec -> P.RetrieveMethod -> [P.PackageFlag] -> [CabalInfo -> CabalInfo] -> WithProcAndSys m SomeDownload
-retrieve defaultAtoms cache method flags functions = lift $ retrieve' defaultAtoms cache method flags functions
+retrieve defaultAtoms cache method' flags' functions = lift $ retrieve' defaultAtoms cache method' flags' functions
 
-retrieve' :: forall r s m. (MonadOS r s m, MonadTop r m) =>
+retrieve' :: forall r s e m. (MonadIO m, MonadMask m, Exception e, HasIOException e, HasRsyncError e, MonadError e m, MonadOS r s m, MonadTop r m, HasSourceTree SourceTree m) =>
             CabalT IO () -> C.CacheRec -> P.RetrieveMethod -> [P.PackageFlag] -> [CabalInfo -> CabalInfo] -> m SomeDownload
 retrieve' defaultAtoms cache method flags functions =
     case method of
@@ -115,7 +111,7 @@ retrieve' defaultAtoms cache method flags functions =
 
       P.Cd dir spec' ->
           retrieve' defaultAtoms cache spec' flags functions >>= \ target' ->
-          return $ SomeDownload $ CdDL { cd = method, fs = flags, dir = dir, parent = target' }
+          return $ SomeDownload $ CdDL { _cd = method, _fs = flags, _dir = dir, _parent = target' }
 
       P.Darcs uri -> Darcs.prepare method flags uri
 

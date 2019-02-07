@@ -69,7 +69,7 @@ instance T.Download HackageDL where
     origTarball = Just . tar
     flushSource _ = error "flushSource HackageDL unimplemented"
 
-prepare :: (MonadRepos s m, MonadTop r m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m T.SomeDownload
+prepare :: (MonadIO m, MonadCatch m, MonadRepos s m, MonadTop r m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m T.SomeDownload
 prepare cache method flags name =
     do let server = P.hackageServer (P.params cache) -- typically "hackage.haskell.org"
        version <- maybe (liftIO $ getVersion' server name) return (maybe Nothing readVersion versionString)
@@ -165,7 +165,7 @@ downloadCached server name version = do
       validate text = Tar.foldEntries (\ _ n -> n + 1) 0 throw (Tar.read (Z.decompress text))
 
       -- Unpack and save the files of a tarball.
-      untar :: (MonadIO m, MonadTop r m) => L.ByteString -> m ()
+      untar :: L.ByteString -> m ()
       untar tarText = do
         tmp <- tmpDir
         liftIO $ Tar.unpack tmp (Tar.read (Z.decompress tarText))

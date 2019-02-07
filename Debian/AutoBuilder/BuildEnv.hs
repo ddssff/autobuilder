@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, PackageImports #-}
+{-# LANGUAGE CPP, PackageImports, TemplateHaskell #-}
 {-# OPTIONS -Wall #-}
 module Debian.AutoBuilder.BuildEnv
     ( prepareDependOS
@@ -6,29 +6,34 @@ module Debian.AutoBuilder.BuildEnv
     , envSet
     ) where
 
-#if !MIN_VERSION_base(4,8,0)
-import Control.Applicative (Applicative)
-#endif
 import Control.Lens (set)
 import Control.Monad (when)
+import Control.Monad.Catch (MonadMask)
+import Control.Monad.Except (MonadError)
 import Control.Monad.State (MonadIO)
 import qualified Debian.AutoBuilder.LocalRepo as Local (prepare)
 import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec(archSet, buildRelease, cleanUp, components, excludePackages, flushDepends, flushPool, flushRoot, ifSourcesChanged, includePackages, optionalIncludePackages))
 import Debian.Debianize (EnvSet(..))
-import Debian.Release (ReleaseName, releaseName')
+import Debian.Codename (Codename, codename)
+import Debian.Except (HasIOException)
 import Debian.Repo.EnvPath (EnvRoot(EnvRoot))
 import Debian.Repo.MonadRepos (MonadRepos, putOSImage)
 import Debian.Repo.OSImage (OSImage, osRoot)
 import Debian.Repo.OSKey (OSKey(OSKey))
+import Debian.Repo.Prelude.Verbosity (qPutStrLn)
+import Debian.Repo.Rsync (HasRsyncError)
 import Debian.Repo.Slice (NamedSliceList, Slice)
 import Debian.Repo.State.OSImage (prepareOS)
 import Debian.Repo.State.Package (deleteGarbage, evalInstall)
 import Debian.Repo.Top (MonadTop, sub)
+import Debian.TH (here)
+import Debian.URI (HasParseError)
+import Distribution.Pretty (prettyShow)
 import Prelude hiding (null)
 import System.FilePath ((</>))
 
-envSet :: (MonadIO m, MonadTop r m) => ReleaseName -> m EnvSet
-envSet distro = sub ("dists" </> releaseName' distro) >>= \ parent ->
+envSet :: (MonadIO m, MonadTop r m) => Codename -> m EnvSet
+envSet distro = sub ("dists" </> codename distro) >>= \ parent ->
                 return (EnvSet {cleanOS = parent </> "clean", dependOS = parent </> "depend", buildOS = parent </> "build"})
 
 {-
@@ -46,17 +51,18 @@ cleanEnvOfRelease distro =
     sub ("dists" </> releaseName' distro </> "clean") >>= return . EnvRoot
 -}
 
-prepareDependOS :: (MonadRepos s m, MonadTop r m) => P.ParamRec -> NamedSliceList -> [Slice] -> m OSKey
+prepareDependOS :: (MonadIO m, MonadMask m, MonadRepos s m, MonadTop r m, Show e, HasIOException e, HasRsyncError e, HasParseError e, MonadError e m) => P.ParamRec -> NamedSliceList -> [Slice] -> m OSKey
 prepareDependOS params rel extra =
     do localRepo <- Local.prepare (P.flushPool params) (P.buildRelease params) (P.archSet params)
        -- release <- prepareRelease repo (P.buildRelease params) [] [parseSection' "main"] (P.archSet params)
        when (P.cleanUp params) (evalInstall deleteGarbage localRepo Nothing)
        eset <- envSet (P.buildRelease params)
+       qPutStrLn (prettyShow $here <> " - prepareDependOS eset=" ++ show eset)
        -- exists <- liftIO $ doesDirectoryExist dRoot
        (_cOS, dOS) <- prepareOS eset rel extra localRepo (P.flushRoot params) (P.flushDepends params) (P.ifSourcesChanged params) (P.includePackages params) (P.optionalIncludePackages params) (P.excludePackages params) (P.components params)
        return dOS
 
-prepareBuildOS :: (MonadTop r m, MonadRepos s m) => ReleaseName -> OSImage -> m OSKey
+prepareBuildOS :: (MonadIO m, MonadTop r m, MonadRepos s m) => Codename -> OSImage -> m OSKey
 prepareBuildOS rel os = do
   r <- (OSKey . EnvRoot . buildOS) <$> envSet rel
   putOSImage (set osRoot r os)

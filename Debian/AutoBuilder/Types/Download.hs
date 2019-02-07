@@ -5,13 +5,10 @@ module Debian.AutoBuilder.Types.Download
     , SomeDownload(SomeDownload)
     ) where
 
-import Control.Exception (SomeException)
+import Control.Exception (IOException)
 --import Control.Monad.Catch (MonadMask)
 import Control.Monad.Trans (MonadIO)
 import qualified Data.ByteString.Lazy as L (ByteString)
-#if !MIN_VERSION_base(4,8,0)
-import Data.Monoid (mempty)
-#endif
 import Data.Set as Set (Set, empty)
 import Data.Time (NominalDiffTime)
 #if MIN_VERSION_Cabal(2,0,0)
@@ -44,7 +41,7 @@ class Show a => Download a where
     -- ^ If we have access to an original tarball, this returns its path.
     flushSource :: (MonadIO m, MonadTop r m) => a -> m ()
     -- ^ Remove any existing data before downloading anew
-    cleanTarget :: a -> FilePath -> IO ((Either SomeException (ExitCode, L.ByteString, L.ByteString)), NominalDiffTime)
+    cleanTarget :: a -> FilePath -> IO ((Either IOException (ExitCode, L.ByteString, L.ByteString)), NominalDiffTime)
     cleanTarget _ = \ _ -> return (Right (ExitSuccess, mempty, mempty), 0)
     -- ^ Clean version control info out of a target after it has
     -- been moved to the given location.

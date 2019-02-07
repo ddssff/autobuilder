@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, OverloadedStrings, PackageImports, ScopedTypeVariables, TypeFamilies #-}
+{-# LANGUAGE CPP, OverloadedStrings, PackageImports, ScopedTypeVariables, TemplateHaskell, TypeFamilies #-}
 -- |A 'uri:' target is an URI that returns a tarball, with an optional
 -- md5sum if we want to ensure against the tarball changing unexpectedly.
 module Debian.AutoBuilder.BuildTarget.Uri
@@ -9,22 +9,19 @@ module Debian.AutoBuilder.BuildTarget.Uri
     ) where
 
 import Control.Exception (SomeException)
-import Control.Monad.Catch (catch)
-import Control.Monad.Trans (liftIO)
+import Control.Monad.Catch (catch, MonadCatch)
+import Control.Monad.Except (liftIO, MonadError, MonadIO)
 import qualified Data.ByteString.Lazy.Char8 as B (empty, readFile)
 import Data.Digest.Pure.MD5 (md5)
 import Data.List (isPrefixOf)
-#if !MIN_VERSION_base(4,8,0)
-import Data.Monoid (mempty)
-#endif
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.Repo as R (topdir, SourceTree, findSourceTree)
 import Debian.Repo.Fingerprint (RetrieveMethod)
-import Debian.Repo.MonadRepos (MonadRepos)
-import Debian.Repo.Prelude.Process (runV, timeTask)
+import Debian.Repo.Prelude.Process (runV2, timeTask)
 import Debian.Repo.Top (MonadTop, sub)
-import Debian.URI
+import Debian.TH (here)
+import Debian.URI (parseURI, URI, uriPath, uriToString')
 import Magic
 import System.FilePath (splitFileName, (</>))
 import System.Directory
@@ -59,94 +56,94 @@ instance T.Download UriDL where
 -- | A URI that returns a tarball, with an optional md5sum which must
 -- match if given.  The purpose of the md5sum is to be able to block
 -- changes to the tarball on the remote host.
-prepare :: (MonadRepos s m, MonadTop r m) => RetrieveMethod -> [P.PackageFlag] -> String -> String -> m UriDL
-prepare method flags u s =
-    do (uri, cksum, tree) <- checkTarget >>= downloadTarget >> validateTarget >>= unpackTarget
-       tar <- tarball (uriToString' uri) cksum
-       return $ UriDL { method = method
-                      , flags = flags
-                      , u = u
-                      , s = s
-                      , uri = uri
-                      , cksum = cksum
-                      , tree = tree
-                      , tar = tar }
+prepare :: (MonadIO m, MonadCatch m, MonadTop r m, MonadError e m) => RetrieveMethod -> [P.PackageFlag] -> String -> String -> m UriDL
+prepare rmethod pflags u' s' =
+    do (uri', cksum', tree') <- checkTarget >>= downloadTarget >> validateTarget >>= unpackTarget
+       tar' <- tarball (uriToString' uri') cksum'
+       return $ UriDL { method = rmethod
+                      , flags = pflags
+                      , u = u'
+                      , s = s'
+                      , uri = uri'
+                      , cksum = cksum'
+                      , tree = tree'
+                      , tar = tar' }
     where
-      checkTarget :: (MonadRepos s m, MonadTop r m) => m Bool
+      checkTarget :: (MonadIO m, MonadCatch m, MonadTop r m) => m Bool
       checkTarget =
-          do tar <- tarball u s
-             exists <- liftIO (doesFileExist tar)
+          do tar' <- tarball u' s'
+             exists <- liftIO (doesFileExist tar')
              case exists of
                True ->
-                   (liftIO (B.readFile tar >>= return . show . md5) >>= \ realSum ->
-                    if realSum == s then return True else error "checksum mismatch")
-                     `catch` (\ (_ :: SomeException) -> liftIO (removeRecursiveSafely tar) >> return False)
+                   (liftIO (B.readFile tar' >>= return . show . md5) >>= \ realSum ->
+                    if realSum == s' then return True else error "checksum mismatch")
+                     `catch` (\ (_ :: SomeException) -> liftIO (removeRecursiveSafely tar') >> return False)
                False -> return False
 
       -- See if the file is already available in the checksum directory
       -- Download the target into the tmp directory, compute its checksum, and see if it matches.
-      downloadTarget :: (MonadRepos s m, MonadTop r m) => Bool -> m ()
+      downloadTarget :: (MonadIO m, MonadCatch m, MonadTop r m, MonadError e m) => Bool -> m ()
       downloadTarget True = return ()
       downloadTarget False =
-          do sum <- sumDir s
-             tar <- tarball u s
-             liftIO $ createDirectoryIfMissing True sum
-             exists <- liftIO $ doesFileExist tar
+          do sum' <- sumDir s'
+             tar' <- tarball u' s'
+             liftIO $ createDirectoryIfMissing True sum'
+             exists <- liftIO $ doesFileExist tar'
              _output <-
                  case exists of
                    True -> return mempty
-                   False -> runV (shell ("curl -s '" ++ uriToString' (mustParseURI u) ++ "' > '" ++ tar ++ "'")) B.empty
+                   False -> runV2 $here (shell ("curl -s '" ++ uriToString' (mustParseURI u') ++ "' > '" ++ tar' ++ "'")) B.empty
              -- We should do something with the output
              return ()
       -- Make sure what we just downloaded has the correct checksum
-      validateTarget :: (MonadRepos s m, MonadTop r m) => m String
+      validateTarget :: (MonadIO m, MonadCatch m, MonadTop r m) => m String
       validateTarget =
-          (tarball u s) >>= \ tar ->
-          (liftIO (B.readFile tar >>= return . show . md5) >>= \ realSum ->
-           if realSum == s then return realSum else error ("Checksum mismatch for " ++ tar ++ ": expected " ++ s ++ ", saw " ++ realSum ++ "."))
-            `catch` (\ (e :: SomeException) -> error ("Checksum failure for " ++ tar ++ ": " ++ show e))
-      unpackTarget :: (MonadRepos s m, MonadTop r m) => String -> m (URI, FilePath, R.SourceTree)
+          (tarball u' s') >>= \tar' ->
+          (liftIO (B.readFile tar' >>= return . show . md5) >>= \ realSum ->
+           if realSum == s' then return realSum else error ("Checksum mismatch for " ++ tar' ++ ": expected " ++ s' ++ ", saw " ++ realSum ++ "."))
+            `catch` (\ (e :: SomeException) -> error ("Checksum failure for " ++ tar' ++ ": " ++ show e))
+      unpackTarget :: (MonadIO m, MonadCatch m, MonadTop r m, MonadError e m) => String -> m (URI, FilePath, R.SourceTree)
       unpackTarget realSum =
-          rmdir >> mkdir >> untar >>= read >>= search >>= verify
+          rmdir >> mkdir >> untar >>= read' >>= search >>= verify
           where
-            rmdir = sourceDir s >>= \ src -> (liftIO (removeDirectoryRecursive src) `catch` (\ (_ :: SomeException) -> return ()))
+            rmdir = sourceDir s' >>= \src -> (liftIO (removeDirectoryRecursive src) `catch` (\ (_ :: SomeException) -> return ()))
             -- Create the unpack directory
-            mkdir = sourceDir s >>= \ src ->
+            mkdir = sourceDir s' >>= \src ->
                     (liftIO (createDirectoryIfMissing True src) `catch` (\ (e :: SomeException) -> error ("Could not create " ++ src ++ ": " ++ show e)))
             untar =
                 do magic <- liftIO $ magicOpen []
                    liftIO $ magicLoadDefault magic
-                   tar <- tarball u s
-                   src <- sourceDir s
-                   fileInfo <- liftIO $ magicFile magic tar
+                   tar' <- tarball u' s'
+                   src <- sourceDir s'
+                   fileInfo <- liftIO $ magicFile magic tar'
                    case () of
                      _ | isPrefixOf "Zip archive data" fileInfo ->
-                           timeTask $ runV (shell ("unzip " ++ tar ++ " -d " ++ src)) B.empty
+                           timeTask $ runV2 $here (shell ("unzip " ++ tar' ++ " -d " ++ src)) B.empty
                        | isPrefixOf "gzip" fileInfo ->
-                           timeTask $ runV (shell ("tar xfz " ++ tar ++ " -C " ++ src)) B.empty
+                           timeTask $ runV2 $here (shell ("tar xfz " ++ tar' ++ " -C " ++ src)) B.empty
                        | isPrefixOf "bzip2" fileInfo ->
-                           timeTask $ runV (shell ("tar xfj " ++ tar ++ " -C " ++ src)) B.empty
+                           timeTask $ runV2 $here (shell ("tar xfj " ++ tar' ++ " -C " ++ src)) B.empty
                        | isPrefixOf "XZ compressed data" fileInfo ->
-                           timeTask $ runV (shell ("tar xfJ " ++ tar ++ " -C " ++ src)) B.empty
+                           timeTask $ runV2 $here (shell ("tar xfJ " ++ tar' ++ " -C " ++ src)) B.empty
                        | True ->
-                           timeTask $ runV (shell ("cp " ++ tar ++ " " ++ src ++ "/")) B.empty
-            read (_output, _elapsed) = sourceDir s >>= \ src -> liftIO (getDir src)
+                           timeTask $ runV2 $here (shell ("cp " ++ tar' ++ " " ++ src ++ "/")) B.empty
+            read' (_output, _elapsed) = sourceDir s' >>= \ src -> liftIO (getDir src)
             getDir dir = getDirectoryContents dir >>= return . filter (not . flip elem [".", ".."])
             search files = checkContents (filter (not . flip elem [".", ".."]) files)
-            checkContents :: (MonadRepos s m, MonadTop r m) => [FilePath] -> m R.SourceTree
-            checkContents [] = error ("Empty tarball? " ++ show (mustParseURI u))
+            checkContents :: (MonadIO m, MonadCatch m, MonadTop r m) => [FilePath] -> m R.SourceTree
+            checkContents [] = error ("Empty tarball? " ++ show (mustParseURI u'))
             checkContents [subdir] =
-                sourceDir s >>= \ src ->
+                sourceDir s' >>= \ src ->
                 (liftIO (R.findSourceTree (src </> subdir))) `catch` (\ (_ :: SomeException) -> liftIO (R.findSourceTree src))
-            checkContents _ = sourceDir s >>= \ src -> liftIO (R.findSourceTree src)
-            verify tree = return (mustParseURI u, realSum, tree)
+            checkContents _ = sourceDir s' >>= \ src -> liftIO (R.findSourceTree src)
+            verify tree' = return (mustParseURI u', realSum, tree')
 
-sumDir s = sub ("tmp" </> s)
+sumDir s' = sub ("tmp" </> s')
 
-tname u = snd . splitFileName . uriPath $ (mustParseURI u)
+tname u' = snd . splitFileName . uriPath $ (mustParseURI u')
 
-tarball u s = sumDir (s </> tname u)
-sourceDir s = sumDir (s </> "unpack")
+tarball u' s' = sumDir (s' </> tname u')
+sourceDir s' = sumDir (s' </> "unpack")
 
 mustParseURI :: String -> URI
-mustParseURI s = maybe (error ("Uri - parse failure: " ++ show s)) id (parseURI s)
+mustParseURI s' = maybe (error ("Uri - parse failure: " ++ show s')) id (parseURI s')

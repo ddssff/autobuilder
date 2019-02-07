@@ -5,7 +5,7 @@ module Debian.AutoBuilder.BuildTarget.Patch where
 import qualified Debug.Trace as D
 
 import Control.Exception (SomeException, try)
-import Control.Monad.Trans (liftIO)
+import Control.Monad.Except (liftIO, MonadIO)
 import qualified Data.ByteString.Char8 as B
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
@@ -41,22 +41,22 @@ documentation :: [String]
 documentation = [ "Patch <target> <patchtext> - Apply the patch to the target." ]
 
 data PatchDL a
-    = PatchDL { method :: RetrieveMethod
-              , flags :: [P.PackageFlag]
-              , patch :: B.ByteString
-              , base :: a
-              , tree :: SourceTree } deriving Show
+    = PatchDL { _method :: RetrieveMethod
+              , _flags :: [P.PackageFlag]
+              , _patch :: B.ByteString
+              , _base :: a
+              , _tree :: SourceTree } deriving Show
 
 instance T.Download a => T.Download (PatchDL a) where
-    method = method
-    flags = flags
-    getTop = dir' . tree
-    logText x = T.logText (base x) ++ " (with patch applied)"
-    flushSource x = T.flushSource (base x)
-    cleanTarget x = T.cleanTarget (base x)
-    attrs = T.attrs . base
+    method = _method
+    flags = _flags
+    getTop = dir' . _tree
+    logText x = T.logText (_base x) ++ " (with patch applied)"
+    flushSource x = T.flushSource (_base x)
+    cleanTarget x = T.cleanTarget (_base x)
+    attrs = T.attrs . _base
 
-prepare :: (MonadRepos s m, MonadTop r m, T.Download a) => RetrieveMethod -> [P.PackageFlag] -> B.ByteString -> a -> m T.SomeDownload
+prepare :: (MonadIO m, MonadTop r m, T.Download a) => RetrieveMethod -> [P.PackageFlag] -> B.ByteString -> a -> m T.SomeDownload
 prepare method flags patch base =
     do copyDir <- sub ("quilt" </> retrieveMethodMD5 method)
        baseTree <- liftIO $ findSourceTree (T.getTop base)
@@ -71,7 +71,7 @@ prepare method flags patch base =
                                  "\nstderr:\n" ++ indent (B.unpack err) ++
                                  "\npatch:\n" ++ indent (B.unpack patch))
          ExitSuccess ->
-             return $ T.SomeDownload $ PatchDL {method = method, flags = flags, patch = patch, base = T.SomeDownload base, tree = tree}
+             return $ T.SomeDownload $ PatchDL {_method = method, _flags = flags, _patch = patch, _base = T.SomeDownload base, _tree = tree}
     where
       cmd = "/usr/bin/patch"
       args = ["-p1"]

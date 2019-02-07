@@ -1,26 +1,24 @@
-{-# LANGUAGE CPP, GADTs, OverloadedStrings, Rank2Types, ScopedTypeVariables #-}
+{-# LANGUAGE CPP, GADTs, OverloadedStrings, Rank2Types, ScopedTypeVariables, TemplateHaskell #-}
 module Debian.AutoBuilder.BuildTarget.Darcs
     ( documentation
     , prepare
     ) where
 
-#if !MIN_VERSION_base(4,8,0)
-import Control.Applicative ((<$>))
-#endif
-import Control.Monad.Trans (liftIO)
+import Control.Exception (Exception)
+import Control.Monad.Catch (MonadCatch)
+import Control.Monad.Except (MonadError)
+import Control.Monad.Trans (liftIO, MonadIO)
 import qualified Data.ByteString.Lazy.Char8 as B
 import Data.Digest.Pure.MD5 (md5)
 import Data.List (sort)
 import Data.Maybe (mapMaybe)
-#if !MIN_VERSION_base(4,8,0)
-import Data.Monoid (mempty)
-#endif
 import Data.Set (singleton)
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Repo
 import Debian.Repo.Fingerprint (RetrieveMethod, RetrieveAttribute(DarcsChangesId))
-import Debian.Repo.Prelude.Process (runQE, runVE, runV)
+import Debian.Repo.Prelude.Process (runQE2, runVE2, runV2)
+import Debian.TH (here)
 import Network.URI (URI(..), URIAuth(..), uriToString, parseURI)
 import System.Directory
 import System.Exit (ExitCode(..))
@@ -48,42 +46,42 @@ darcsRev tree m =
 
 data DarcsDL
     = DarcsDL
-      { method :: RetrieveMethod
-      , flags :: [P.PackageFlag]
-      , uri :: String
-      , tree :: SourceTree
-      , attr :: String
+      { _method :: RetrieveMethod
+      , _flags :: [P.PackageFlag]
+      , _uri :: String
+      , _tree :: SourceTree
+      , _attr :: String
       } deriving Show
 
 instance T.Download DarcsDL where
-    method = method
-    flags = flags
-    getTop = topdir . tree
-    logText x = "Darcs revision: " ++ show (method x)
+    method = _method
+    flags = _flags
+    getTop = topdir . _tree
+    logText m = "Darcs revision: " ++ show (_method m)
     mVersion _ = Nothing
     origTarball _ = Nothing
-    flushSource x = do
+    flushSource t = do
       base <- sub "darcs"
-      liftIO $ removeRecursiveSafely (base </> sum)
+      liftIO $ removeRecursiveSafely (base </> cksum)
         where
-          sum = show (md5 (B.pack uriAndTag))
+          cksum = show (md5 (B.pack uriAndTag))
           uriAndTag = uriToString id theUri' "" ++ maybe "" (\ tag -> "=" ++ tag) theTag
-          theTag = case mapMaybe P.darcsTag (flags x) of
+          theTag = case mapMaybe P.darcsTag (_flags t) of
                      [] -> Nothing
                      [x] -> Just x
-                     xs -> error ("Conflicting tags for darcs get of " ++ uri x ++ ": " ++ show xs)
-          theUri' = mustParseURI (uri x)
-    cleanTarget x = \ top -> case any P.isKeepRCS (flags x) of
+                     xs -> error ("Conflicting tags for darcs get of " ++ _uri t ++ ": " ++ show xs)
+          theUri' = mustParseURI (_uri t)
+    cleanTarget x = \ top -> case any P.isKeepRCS (_flags x) of
                                False -> let cmd = shell ("find " ++ top ++ " -name '_darcs' -maxdepth 1 -prune | xargs rm -rf") in
-                                        timeTask (runVE cmd "")
+                                        timeTask (runVE2 $here cmd "")
                                True -> return ((Right mempty), 0)
     buildWrapper _ = id
-    attrs x = singleton (DarcsChangesId (attr x))
+    attrs x = singleton (DarcsChangesId (_attr x))
 
-prepare :: (MonadRepos s m, MonadTop r m) => RetrieveMethod -> [P.PackageFlag] -> String -> m T.SomeDownload
+prepare :: (MonadIO m, MonadCatch m, MonadTop r m, Exception e, MonadError e m) => RetrieveMethod -> [P.PackageFlag] -> String -> m T.SomeDownload
 prepare method flags theUri = sub "darcs" >>= prepare' method flags theUri
 
-prepare' :: forall s m. MonadRepos s m => RetrieveMethod -> [P.PackageFlag] -> String -> FilePath -> m T.SomeDownload
+prepare' :: forall e m. (MonadIO m, MonadCatch m, Exception e, MonadError e m) => RetrieveMethod -> [P.PackageFlag] -> String -> FilePath -> m T.SomeDownload
 prepare' method flags theUri base = do
   update >>= maybe recreate (return . Just) >>= finish
     where
@@ -92,23 +90,23 @@ prepare' method flags theUri base = do
         exists <- liftIO $ doesDirectoryExist dir
         case exists of
           True -> do
-            result <- runQE ((proc "darcs" ["whatsnew"]) {cwd = Just dir}) ("" :: String)
+            (result :: Either e (ExitCode, String, String)) <- runQE2 $here ((proc "darcs" ["whatsnew"]) {cwd = Just dir}) ("" :: String)
             case result of
               Right (ExitFailure 1, "No changes!\n", "") -> do
                 do let cmd = (proc "darcs" ["pull", "--all", "--no-allow-conflicts", renderForDarcs theUri']) {cwd = Just dir}
-                   result <- runVE cmd B.empty
-                   case result of
+                   result' <- runVE2 $here cmd B.empty :: m (Either e (ExitCode, B.ByteString, B.ByteString))
+                   case result' of
                      Right (ExitSuccess, _, _) -> liftIO $ Just <$> findSourceTree dir
                      _ -> return Nothing
               _ -> return Nothing -- Not the result expected with a pristine repo
           False -> return Nothing
 
-      recreate :: m (Maybe SourceTree)
+      recreate :: forall m'. (MonadIO m', MonadCatch m', MonadError e m') => m' (Maybe SourceTree)
       recreate = do
         liftIO $ removeRecursiveSafely dir
         liftIO $ createDirectoryIfMissing True parent
         let cmd = proc "darcs" (["get", renderForDarcs theUri'] ++ maybe [] (\ tag -> [" --tag", tag]) theTag ++ [dir])
-        result <- runVE cmd B.empty
+        result <- runVE2 $here cmd B.empty :: m' (Either e (ExitCode, B.ByteString, B.ByteString))
         case result of
           Right (ExitSuccess, _, _) -> liftIO $ Just <$> findSourceTree dir
           _ -> return Nothing
@@ -116,21 +114,21 @@ prepare' method flags theUri base = do
       finish :: Maybe SourceTree -> m T.SomeDownload
       finish Nothing = error $ "Failure retrieving darcs repo " ++ theUri
       finish (Just tree) = do
-          attr <- liftIO (runQE ((proc "darcs" ["log"]) {cwd = Just dir}) B.empty) >>=
-                  either (\ e -> error $ "Failure examining darcs log: " ++ show e) (\ (_, b, _) -> return $ darcsLogChecksum b)
+          attr <- runQE2 $here ((proc "darcs" ["log"]) {cwd = Just dir}) B.empty >>=
+                  either (\(e :: e) -> error $ "Failure examining darcs log: " ++ show e) (\ (_, b, _) -> return $ darcsLogChecksum b)
           _ <- liftIO $ fixLink -- this link is just for the convenience of someone poking around in ~/.autobuilder
-          return $ T.SomeDownload $ DarcsDL { method = method
-                                            , flags = flags
-                                            , uri = theUri
-                                            , tree = tree
-                                            , attr = attr }
+          return $ T.SomeDownload $ DarcsDL { _method = method
+                                            , _flags = flags
+                                            , _uri = theUri
+                                            , _tree = tree
+                                            , _attr = attr }
       -- Maybe we should include the "darcs:" in the string we checksum?
       fixLink :: IO ()
       fixLink = do
           let rm = proc "rm" ["-rf", link]
-              ln = proc "ln" ["-s", sum, link]
-          _ <- runV rm B.empty
-          _ <- runV ln B.empty
+              ln = proc "ln" ["-s", cksum, link]
+          _ <- runV2 $here rm B.empty
+          _ <- runV2 $here ln B.empty
           return ()
 
       -- Collect all the checksum lines, sort them, and checksum the
@@ -139,9 +137,9 @@ prepare' method flags theUri base = do
       darcsLogChecksum :: B.ByteString -> String
       darcsLogChecksum = show . md5 . B.unlines . sort . filter (B.isPrefixOf "patch ") . B.lines
 
-      sum = show (md5 (B.pack uriAndTag))
+      cksum = show (md5 (B.pack uriAndTag))
       name = snd . splitFileName $ (uriPath theUri')
-      dir = base </> sum
+      dir = base </> cksum
       (parent, _) = splitFileName dir
       link = base </> name
       uriAndTag = uriToString id theUri' "" ++ maybe "" (\ tag -> "=" ++ tag) theTag

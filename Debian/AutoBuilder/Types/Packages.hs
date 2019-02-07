@@ -50,8 +50,9 @@ module Debian.AutoBuilder.Types.Packages
 
 import Debug.Trace as D
 
-import Control.Exception (SomeException, try)
+import Control.Exception (IOException)
 import Control.Lens -- (makeLenses, over, set, use, view, (%=))
+import Control.Monad.Catch (try)
 import Control.Monad.Fail (MonadFail)
 import Control.Monad.State (StateT)
 import Data.ByteString (ByteString)
@@ -435,12 +436,13 @@ targetNameFromCabal s = "haskell-" ++ map toLower s
 findSource :: RetrieveMethod -> FilePath -> IO FilePath
 findSource (Patch (Apt _dist _name) _) copyDir =
   try (findDebianSourceTrees copyDir) >>=
-  return . either (\ (e :: SomeException) -> D.trace (" -> " ++ show e) copyDir)
-           (\ (ts :: [(FilePath, DebianSourceTree)]) ->
-             case ts of
-               [(subdir, _)] -> D.trace (" -> " ++ show (copyDir </> subdir)) (copyDir </> subdir)
-               [] -> error "findSource: Internal error"
-               _ -> error $ "Multiple debian source trees in " ++ copyDir ++ ": " ++ show (map fst ts))
+  return . either
+             (\(e :: IOException) -> D.trace (" -> " ++ show e) copyDir)
+             (\(ts :: [(FilePath, DebianSourceTree)]) ->
+                  case ts of
+                    [(subdir, _)] -> D.trace (" -> " ++ show (copyDir </> subdir)) (copyDir </> subdir)
+                    [] -> error "findSource: Internal error"
+                    _ -> error $ "Multiple debian source trees in " ++ copyDir ++ ": " ++ show (map fst ts))
 findSource _ copyDir = return copyDir
 
 isKeepRCS :: PackageFlag -> Bool

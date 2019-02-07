@@ -10,13 +10,14 @@ module Debian.AutoBuilder.Params
     ) where
 
 import Control.Lens (view)
-import Control.Monad.Trans (liftIO)
+import Control.Monad.Except (liftIO, MonadIO, MonadError)
 import Data.List (isSuffixOf)
 import Data.Maybe (catMaybes, fromMaybe)
 import qualified Debian.AutoBuilder.LocalRepo as Local (subDir)
 import Debian.AutoBuilder.Types.CacheRec (CacheRec(..))
 import Debian.AutoBuilder.Types.ParamRec (ParamRec(..))
-import Debian.Release (ReleaseName(ReleaseName, relName))
+import Debian.Codename (Codename, codename, parseCodename)
+import Debian.Except (HasIOException)
 import Debian.Releases (ReleaseTree, ReleaseURI)
 -- import Debian.Repo.MonadOS (MonadOS, buildEssential)
 import Debian.Repo.MonadRepos (MonadRepos)
@@ -28,13 +29,12 @@ import System.Environment (getEnv)
 import Debian.Repo.Prelude.Verbosity (qPutStrLn)
 import Debian.Sources (SourceOption(..), SourceOp(..))
 import Debian.TH (here, Loc)
-import Debian.URI (URIError)
-import Text.PrettyPrint.HughesPJClass (prettyShow)
+import Distribution.Pretty (prettyShow)
 
 -- |Create a Cache object from a parameter set.
 buildCache ::
-    (MonadRepos s m, MonadTop r m)
-    => (ReleaseTree -> Either URIError ReleaseURI)
+    forall s r e m. (MonadIO m, MonadRepos s m, MonadTop r m, Show e, HasIOException e, MonadError e m)
+    => (ReleaseTree -> Either e ReleaseURI)
     -> ParamRec
     -> m CacheRec
 buildCache myUploadURI params' =
@@ -44,12 +44,12 @@ buildCache myUploadURI params' =
                   [".", "darcs", "deb-dir", "dists", "hackage", Local.subDir, "quilt", "tmp"]
        allSlices <- mapM parseNamedSliceList (sources params')
        --let uri = either (\_ -> uploadURI params') Right (buildURI params')
-       build <- repoSources' myUploadURI Nothing [SourceOption "trusted" OpSet ["yes"]] (buildReleaseTree params')
+       build <- repoSources' $here myUploadURI Nothing [SourceOption "trusted" OpSet ["yes"]] (buildReleaseTree params')
        return $ CacheRec {params = params', allSources = allSlices, buildRepoSources = build}
     where
       parseNamedSliceList (name, lines') =
           do sources' <- verifySourcesList Nothing lines'
-             return $ NamedSliceList { sliceListName = ReleaseName name, sliceList = sources' }
+             return $ NamedSliceList { sliceListName = parseCodename name, sliceList = sources' }
 
 -- |An instance of RunClass contains all the information we need to
 -- run the autobuilder.
@@ -72,20 +72,20 @@ computeTopDir params' =
          True -> return top
 
 -- |Find a release by name, among all the "Sources" entries given in the configuration.
-findSlice :: Loc -> CacheRec -> ReleaseName -> Either String NamedSliceList
+findSlice :: Loc -> CacheRec -> Codename -> Either String NamedSliceList
 findSlice loc cache dist =
     case filter ((== dist) . sliceListName) (allSources cache) of
       [x] -> Right x
-      [] -> Left (prettyShow loc <> " -> " <> prettyShow $here <> " - no sources.list found for " ++ relName dist ++ ".  Is it in Debian.Releases.baseReleaseList?  allSources cache = " ++ show (fmap (relName . sliceListName) (allSources cache)))
-      xs -> Left (prettyShow loc <> " -> " <> prettyShow $here <> " - Multiple sources.lists found for " ++ relName dist ++ "\n" ++ show xs)
+      [] -> Left (prettyShow loc <> " -> " <> prettyShow $here <> " - no sources.list found for " ++ codename dist ++ ".  Is it in Debian.Releases.baseReleaseList?  allSources cache = " ++ show (fmap (codename . sliceListName) (allSources cache)))
+      xs -> Left (prettyShow loc <> " -> " <> prettyShow $here <> " - Multiple sources.lists found for " ++ codename dist ++ "\n" ++ show xs)
 
 -- | Packages uploaded to the build release will be compatible
 -- with packages in this release.
-baseRelease :: ParamRec -> ReleaseName
+baseRelease :: ParamRec -> Codename
 baseRelease params' =
-    maybe (error $ "Unknown release suffix: " ++ rel) ReleaseName
+    maybe (error $ "Unknown release suffix: " ++ rel) parseCodename
               (dropOneSuffix (releaseSuffixes params') rel)
-    where rel = (relName (buildRelease params'))
+    where rel = codename (buildRelease params')
 
 dropSuffixMaybe :: String -> String -> Maybe String
 dropSuffixMaybe suffix x =
@@ -106,7 +106,7 @@ dropOneSuffix suffixes s =
 -- worry about trumping.
 isDevelopmentRelease :: ParamRec -> Bool
 isDevelopmentRelease params' =
-    elem (topReleaseName (relName (buildRelease params'))) (developmentReleaseNames params')
+    elem (topReleaseName (codename (buildRelease params'))) (developmentReleaseNames params')
     where
       topReleaseName name =
           foldr dropSuff name (releaseSuffixes params')

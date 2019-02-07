@@ -16,13 +16,15 @@ import Data.Version (Version)
 #endif
 import Debian.Arch (Arch(Binary), ArchCPU(ArchCPU), ArchOS(ArchOS))
 import Debian.AutoBuilder.Types.ParamRec (ParamRec(..), Strictness(..), TargetSpec(..))
+import Debian.Codename (parseCodename)
 import Debian.Relation (BinPkgName(BinPkgName))
-import Debian.Release (ReleaseName(ReleaseName, relName))
 import Debian.Releases (ReleaseTree, ReleaseURI, releaseURI)
 import Debian.Repo (SourcesChangedAction(SourcesChangedError))
-import Debian.Sources (DebSource, parseSourceLine, VendorURI, vendorURI)
+import Debian.Repo.DebError (DebError)
+import Debian.Sources (DebSource, parseSourceLine)
 import Debian.TH (here)
 import Debian.URI
+import Debian.VendorURI (VendorURI, vendorURI)
 import Debian.Version (parseDebianVersion')
 import Prelude hiding (map)
 import System.FilePath ((</>))
@@ -50,7 +52,7 @@ defaultParams myReleaseTree
     , hvrVersion = myCompilerVersion
     , autobuilderEmail = "SeeReason Autobuilder <partners@seereason.com>"
     , releaseSuffixes = defaultReleaseSuffixes
-    , buildRelease = ReleaseName {relName = myBuildRelease}
+    , buildRelease = parseCodename myBuildRelease
     , extraRepos = []
     , theVendorURI = defaultUploadURI myBuildRelease myUploadURIPrefix
     , theReleaseURI = defaultReleaseURI myBuildRelease myBuildURIPrefix myUploadURIPrefix
@@ -152,7 +154,7 @@ defaultUbuntuMirrorHost = "us.archive.ubuntu.com/ubuntu"
 -- it is built for use as build dependencies of other packages during
 -- the same run.
 --
-defaultUploadURI :: MonadError URIError m => String -> String -> m VendorURI
+defaultUploadURI :: MonadError DebError m => String -> String -> m VendorURI
 defaultUploadURI myBuildRelease myUploadURIPrefix =
     review vendorURI <$> parseURI' (if isPrivateRelease myBuildRelease then myPrivateUploadURI else myPublicUploadURI)
     where
@@ -163,7 +165,7 @@ defaultUploadURI myBuildRelease myUploadURIPrefix =
 -- used for downloading packages that have already been installed
 -- there.
 --
-defaultReleaseURI :: String -> String -> String -> Either URIError ReleaseURI
+defaultReleaseURI :: String -> String -> String -> Either DebError ReleaseURI
 defaultReleaseURI myBuildRelease myBuildURIPrefix myUploadURIPrefix =
     review releaseURI <$> parseURI' uriString
     where

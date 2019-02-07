@@ -9,14 +9,13 @@ module Debian.AutoBuilder.BuildTarget.Debianize
 
 import Control.Lens ((.=))
 import Control.Monad (when)
+import Control.Monad.Catch (MonadCatch)
+import Control.Monad.Except (MonadError, MonadIO)
 import Control.Monad.Reader (runReaderT)
 import Control.Monad.State (modify)
 --import Control.Monad.Catch (MonadMask, bracket)
 import Control.Monad.Trans (liftIO)
 import Data.List (isSuffixOf, partition)
-#if !MIN_VERSION_base(4,8,0)
-import Data.Monoid ((<>))
-#endif
 import Debian.AutoBuilder.BuildEnv (envSet)
 import Debian.AutoBuilder.Params (computeTopDir)
 import qualified Debian.AutoBuilder.Types.CacheRec as CR (CacheRec(params))
@@ -24,11 +23,11 @@ import qualified Debian.AutoBuilder.Types.Download as DL
 import qualified Debian.AutoBuilder.Types.Packages as PS
 import qualified Debian.AutoBuilder.Types.ParamRec as PR (buildRelease)
 import Debian.Debianize as Cabal (CabalInfo, withCurrentDirectory, dependOS, performDebianization, (.?=), CabalT, runDebianizeScript, SourceFormat(Native3), sourceFormat, sourcePackageName, debInfo)
+import Debian.Except (HasIOException)
 import Debian.Pretty (ppShow)
 import Debian.Relation (SrcPkgName(..))
 import Debian.Repo.Fingerprint (RetrieveMethod(Debianize''), retrieveMethodMD5)
-import Debian.Repo.MonadRepos (MonadRepos)
-import Debian.Repo.Rsync (rsyncOld)
+import Debian.Repo.Rsync (HasRsyncError, rsyncOld')
 import Debian.Repo.Top (MonadTop, sub, TopDir(TopDir))
 import Distribution.Verbosity (normal)
 #if MIN_VERSION_Cabal(2,0,0)
@@ -76,12 +75,12 @@ instance DL.Download a => DL.Download (DebianizeDL a) where
     attrs = DL.attrs . cabal
 
 -- | Debianize the download, which is assumed to be a cabal package.
-prepare :: (MonadRepos s m, MonadTop r m, DL.Download a) => CabalT IO () -> CR.CacheRec -> RetrieveMethod -> [PS.PackageFlag] -> [CabalInfo -> CabalInfo] -> a -> m DL.SomeDownload
+prepare :: (MonadIO m, MonadCatch m, HasIOException e, HasRsyncError e, MonadError e m, MonadTop r m, DL.Download a) => CabalT IO () -> CR.CacheRec -> RetrieveMethod -> [PS.PackageFlag] -> [CabalInfo -> CabalInfo] -> a -> m DL.SomeDownload
 prepare defaultAtoms cache method@(Debian.Repo.Fingerprint.Debianize'' _ sourceName) flags functions cabal =
     do let cabdir = DL.getTop cabal
        debdir <- sub ("debianize" </> retrieveMethodMD5 method)
        liftIO $ createDirectoryIfMissing True debdir
-       _ <- rsyncOld [] cabdir debdir
+       _ <- rsyncOld' [] cabdir debdir
        cabfiles <- liftIO $ getDirectoryContents cabdir >>= return . filter (isSuffixOf ".cabal")
        case cabfiles of
          [cabfile] ->

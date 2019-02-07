@@ -1,7 +1,9 @@
+{-# LANGUAGE GADTs, TemplateHaskell #-}
+
 -- |A SourceDeb target modifies another target to provide an unpacked debian source tree
 -- when a debian source package is found.  A debian source package is a @.dsc@ file, a
 -- @.tar.gz@ file, and an optional @.diff.gz@ file.
-{-# LANGUAGE GADTs #-}
+
 module Debian.AutoBuilder.BuildTarget.SourceDeb where
 
 import Control.Monad.Trans
@@ -12,8 +14,8 @@ import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.Control.String as S
 import Debian.Repo.Fingerprint (RetrieveMethod)
-import Debian.Repo.MonadRepos (MonadRepos)
-import Debian.Repo.Prelude.Process (runV)
+import Debian.Repo.Prelude.Process (runV2)
+import Debian.TH (here)
 import qualified Debian.Version as V
 import System.Directory
 import System.Process (CreateProcess(cwd), proc)
@@ -25,30 +27,30 @@ documentation = [ "sourcedeb:<target> - A target of this form unpacks the source
                 , ".diff.gz file." ]
 
 data SourceDebDL a
-    = SourceDebDL { method :: RetrieveMethod
-                  , flags :: [P.PackageFlag]
-                  , base :: a } deriving Show
+    = SourceDebDL { _method :: RetrieveMethod
+                  , _flags :: [P.PackageFlag]
+                  , _base :: a } deriving Show
 
 instance T.Download a => T.Download (SourceDebDL a) where
-    method = method
-    flags = flags
-    getTop = T.getTop . base
-    logText x = "Source Deb: " ++ show (method x)
+    method = _method
+    flags = _flags
+    getTop = T.getTop . _base
+    logText x = "Source Deb: " ++ show (_method x)
     flushSource _ = error "SourceDebDL flushSource unimplemented"
-    attrs = T.attrs . base
+    attrs = T.attrs . _base
 
 -- |Given the BuildTarget for the base target, prepare a SourceDeb BuildTarget
 -- by unpacking the source deb.
-prepare :: (MonadRepos s m, T.Download a) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> a -> m T.SomeDownload
+prepare :: (MonadIO m, T.Download a) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> a -> m T.SomeDownload
 prepare _cache method flags base =
     do dscFiles <- liftIO (getDirectoryContents top) >>= return . filter (isSuffixOf ".dsc")
        dscInfo <- mapM (\ name -> liftIO (readFile (top ++ "/" ++ name) >>= return . S.parseControl name)) dscFiles
        case sortBy compareVersions (zip dscFiles dscInfo) of
          [] -> return $  error ("Invalid sourcedeb base: no .dsc file in " ++ show (T.method base))
-         (dscName, Right (S.Control (dscInfo : _))) : _ ->
+         (dscName, Right (S.Control (dscInfo' : _))) : _ ->
              let p = unpack top dscName in
-             liftIO (runV p B.empty >>
-                     makeTarget dscInfo dscName)
+             liftIO (runV2 $here p B.empty >>
+                     makeTarget dscInfo' dscName)
          (dscName, _) : _ -> error ("Invalid .dsc file: " ++ dscName)
     where
       top = T.getTop base
@@ -56,12 +58,12 @@ prepare _cache method flags base =
           case (S.fieldValue "Source" dscInfo, maybe Nothing (Just . V.parseDebianVersion')
                      (S.fieldValue "Version" dscInfo)) of
             (Just _package, Just _version) ->
-                return $ T.SomeDownload $ SourceDebDL { method = method
-                                                      , flags = flags
-                                                      , base = T.SomeDownload base }
+                return $ T.SomeDownload $ SourceDebDL { _method = method
+                                                      , _flags = flags
+                                                      , _base = T.SomeDownload base }
             _ -> error $ "Invalid .dsc file: " ++ dscName
       -- unpack top dscName = "cd " ++ top ++ " && dpkg-source -x " ++ dscName
-      unpack top dscName = (proc "dpkg-source" ["-x", dscName]) {cwd = Just top}
+      unpack top' dscName = (proc "dpkg-source" ["-x", dscName]) {cwd = Just top'}
       compareVersions (name2, info2) (name1, info1) =
           case (info1, info2) of
             (Right (S.Control (para1 : _)), Right (S.Control (para2 : _))) ->

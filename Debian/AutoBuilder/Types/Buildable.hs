@@ -10,14 +10,12 @@ module Debian.AutoBuilder.Types.Buildable
     , getRelaxedDependencyInfo
     ) where
 
-#if !MIN_VERSION_base(4,8,0)
-import Control.Applicative ((<$>))
-#endif
 import Control.Applicative.Error (Failing(Success, Failure), ErrorMsg)
 import Control.Exception as E (SomeException, try, catch, throw)
 import Control.Lens (to, view)
 import Control.Monad (when)
-import Control.Monad.Trans (liftIO)
+import Control.Monad.Catch (MonadMask)
+import Control.Monad.Except (liftIO, MonadError, MonadIO)
 import Data.List (nub)
 import Data.Map ((!))
 import qualified Debian.AutoBuilder.Types.CacheRec as C
@@ -29,6 +27,7 @@ import Debian.AutoBuilder.Types.ParamRec (ParamRec(..))
 import Debian.Changes (logVersion, ChangeLogEntry(..))
 import Debian.Control (HasDebianControl(debianControl))
 import Debian.Control.Policy (DebianControl, debianSourcePackageName, parseDebianControlFromFile)
+import Debian.Except (HasIOException)
 import qualified Debian.GenBuildDeps as G
 import Debian.Relation (SrcPkgName(..), BinPkgName(..))
 import Debian.Relation.ByteString(Relations)
@@ -36,6 +35,7 @@ import Debian.Repo.MonadOS (getOS, MonadOS)
 --import Debian.Repo.MonadRepos (MonadRepos)
 import Debian.Repo.OSImage (osRoot)
 import Debian.Repo.OSKey (OSKey(_root))
+import Debian.Repo.Rsync (HasRsyncError)
 import Debian.Repo.SourceTree (DebianBuildTree(..), entry, subdir, debdir, findDebianBuildTrees, findBuildTree, copySourceTree,
                                DebianSourceTree(..), findSourceTree)
 import Debian.Repo.EnvPath (rootPath)
@@ -117,7 +117,7 @@ instance Show download => Eq (Target download) where
 -- |Prepare a target for building in the given environment.  At this
 -- point, the target needs to be a DebianSourceTree or a
 -- DebianBuildTree.
-prepareTarget :: (MonadOS r s m, T.Download a) => C.CacheRec -> Buildable a -> m (Target a)
+prepareTarget :: (MonadIO m, MonadMask m, HasIOException e, HasRsyncError e, MonadError e m, MonadOS r s m, T.Download a) => C.CacheRec -> Buildable a -> m (Target a)
 prepareTarget cache source =
     prepareBuild cache (download source) >>= \ tree ->
     liftIO (getTargetControlInfo tree) >>= \ ctl ->
@@ -129,7 +129,7 @@ prepareTarget cache source =
 -- revision control files.  This ensures that the tarball and\/or the
 -- .diff.gz file in the deb don't contain extra junk.  It also makes
 -- sure that debian\/rules is executable.
-prepareBuild :: (MonadOS r s m, T.Download a) => C.CacheRec -> a -> m DebianBuildTree
+prepareBuild :: (MonadIO m, MonadMask m, HasIOException e, HasRsyncError e, MonadError e m, MonadOS r s m, T.Download a) => C.CacheRec -> a -> m DebianBuildTree
 prepareBuild _cache target =
     liftIO (try (findSourceTree (T.getTop target))) >>=
     either (\ (_ :: SomeException) ->
@@ -143,7 +143,7 @@ prepareBuild _cache target =
                       _ -> error $ "Multiple debian source trees found in " ++ T.getTop target)
            copySource
     where
-      copySource :: MonadOS r s m => DebianSourceTree -> m DebianBuildTree
+      copySource :: (MonadIO m, MonadOS r s m, HasIOException e, MonadError e m) => DebianSourceTree -> m DebianBuildTree
       copySource debSource =
           do root <- view (osRoot . to _root . rootPath) <$> getOS
              let name = logPackage . entry $ debSource
@@ -157,7 +157,7 @@ prepareBuild _cache target =
              maybe (return ()) (liftIO . copyOrigTarball dest name ver) (T.origTarball target)
              liftIO $ findBuildTree dest newdir
 
-      copyBuild :: MonadOS r s m => DebianBuildTree -> m DebianBuildTree
+      copyBuild :: (MonadIO m, MonadMask m, HasRsyncError e, HasIOException e, MonadError e m, MonadOS r s m) => DebianBuildTree -> m DebianBuildTree
       copyBuild debBuild =
           do root <- view (osRoot . to _root . rootPath) <$> getOS
              let name = logPackage . entry $ debBuild

@@ -23,18 +23,20 @@ import Data.Version (Version)
 #endif
 import Debian.Arch (Arch)
 import Debian.AutoBuilder.Types.Packages (Package, PackageId, GroupName(GroupName), pid, _groups)
+import Debian.Codename (Codename)
 import Debian.Pretty (PP(..), ppPrint)
 import Debian.Relation (BinPkgName, SrcPkgName(SrcPkgName))
-import Debian.Release (ReleaseName)
 import Debian.Releases (ReleaseTree, ReleaseURI)
+import Debian.Repo.DebError (DebError)
 --import Debian.Repo.Fingerprint (RetrieveMethod)
 import Debian.Repo.Slice (SourcesChangedAction, Slice, PPASlice)
-import Debian.Sources (DebSource, VendorURI)
+import Debian.Sources (DebSource)
+import Debian.VendorURI (VendorURI)
 import Debian.Version ( DebianVersion, prettyDebianVersion )
-import Debian.URI (URIError)
 import Prelude hiding (map)
 import System.Console.GetOpt
-import Text.PrettyPrint.HughesPJClass (Pretty(pPrint), text, vcat)
+import Text.PrettyPrint (text, vcat)
+import Distribution.Pretty (Pretty(pretty))
 --import Text.Read (readMaybe)
 
 -- |An instance of 'ParamClass' contains the configuration parameters
@@ -70,13 +72,13 @@ data ParamRec =
     -- release.  We use ["-seereason", "-private"] for this value so
     -- we can build a public release based on any debian or ubuntu
     -- release, and a private release based on each public release.
-    , buildRelease :: ReleaseName
+    , buildRelease :: Codename
     -- ^ The name of the release we will be uploading to.  It must end
     -- with one of the 'releaseSuffixes', and stripping off
     -- one of them results in the base release.
     , extraRepos :: [Either Slice PPASlice]
     -- ^ Additional repositories to add to the os image via add-apt-repository.
-    , theVendorURI :: Either URIError VendorURI
+    , theVendorURI :: Either DebError VendorURI
     -- ^ This URI is the address of the remote repository to which packages
     -- will be uploaded after a run with no failures, when the myDoUpload
     -- flag is true.  Packages are uploaded to the directory created by
@@ -85,7 +87,7 @@ data ParamRec =
     -- it is built for use as build dependencies of other packages during
     -- the same run.
     -- , theBuildURI :: Either URIError VendorURI
-    , theReleaseURI :: Either URIError ReleaseURI
+    , theReleaseURI :: Either DebError ReleaseURI
     -- ^ An alternate url for the same repository the @uploadURI@ points to,
     -- used for downloading packages that have already been installed
     -- there.
@@ -310,7 +312,7 @@ data TargetSpec
      deriving Show
 
 instance Pretty (PP (String, [DebSource])) where
-    pPrint (PP (tree, ss)) = text $ show $ (ppPrint tree, map pPrint ss)
+    pretty (PP (tree, ss)) = text $ show $ (ppPrint tree, map pretty ss)
 
 -- |Output a (somewhat) readable representation of the parameter set.
 prettyPrint :: ParamRec -> String
@@ -464,7 +466,7 @@ readPattern s = maybe (fail $ "Invalid RetrieveMethod: " ++ show s) return (read
 -- build the list of ParamRec which defines the build.
 -- 
 -- Example: getParams ["lucid-seereason" "--all-targets"] >>= return . map buildRelease
---            -> [ReleaseName {relName = "lucid-seereason"}]
+--            -> [Codename "lucid-seereason"]
 getParams :: [String] -> (String -> ParamRec) -> [ParamRec]
 getParams args params =
     doParams (getOpt' (ReturnInOrder Left) optSpecs args)
