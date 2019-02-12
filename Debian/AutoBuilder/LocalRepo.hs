@@ -9,10 +9,11 @@ module Debian.AutoBuilder.LocalRepo
 
 import Control.Lens (view)
 import Control.Monad (when)
-import Control.Monad.Except (liftIO, MonadIO)
+import Control.Monad.Except (liftIO, MonadError, MonadIO)
 import Data.Set (Set)
 import Debian.Arch (Arch)
 import Debian.Codename (Codename, codename)
+import Debian.Except (HasIOException)
 import Debian.Release (parseSection')
 import Debian.Repo.EnvPath (rootEnvPath)
 import Debian.Repo.LocalRepository (LocalRepository)
@@ -34,12 +35,12 @@ subDir = "localpools"
 poolDir :: MonadTop r m => Codename -> m FilePath
 poolDir rel = view toTop >>= \(TopDir top) -> return $ top </> subDir </> codename rel
 
-prepare :: (MonadIO m, MonadRepos s m, MonadTop r m) => Bool -> Codename -> Set Arch -> m LocalRepository
+prepare :: (MonadIO m, MonadRepos s m, MonadTop r m, HasIOException e, MonadError e m) => Bool -> Codename -> Set Arch -> m LocalRepository
 prepare flush rel archset =
     do localRepo <- poolDir rel
        qPutStrLn (prettyShow $here <> " - localRepo=" ++ show localRepo)
        when flush (liftIO (removeRecursiveSafely localRepo))
-       repo <- prepareLocalRepository (rootEnvPath localRepo) Nothing [defaultRelease]
+       repo <- prepareLocalRepository [$here] (rootEnvPath localRepo) Nothing [defaultRelease]
        qPutStrLn (prettyShow $here <> " - repo=" ++ show repo)
        prepareRelease repo rel [] [parseSection' "main"] archset -- May be redundant now
        return repo

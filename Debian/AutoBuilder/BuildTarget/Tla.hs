@@ -40,7 +40,7 @@ instance T.Download TlaDL where
     cleanTarget x = (\ path ->
                          case any P.isKeepRCS (flags x) of
                            False -> let cmd = "find '" ++ path ++ "' -name '.arch-ids' -o -name '{arch}' -prune | xargs rm -rf" in
-                                    timeTask (runVE2 $here (shell cmd) "" :: IO (Either IOException (ExitCode, B.ByteString, B.ByteString)))
+                                    timeTask (runVE2 [$here] (shell cmd) "" :: IO (Either IOException (ExitCode, B.ByteString, B.ByteString)))
                            True -> (return (Right mempty, 0)))
 
 prepare :: (MonadIO m, MonadTop r m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m T.SomeDownload
@@ -56,7 +56,7 @@ prepare cache' method' flags' version' =
                                       , tree = tree'' }
     where
       verifySource dir =
-          do result <- try (runV2 $here (shell ("cd " ++ dir ++ " && tla changes")) B.empty)
+          do result <- try (runV2 [$here] (shell ("cd " ++ dir ++ " && tla changes")) B.empty)
              case result of
                Left (e :: SomeException) -> qPutStrLn (show e) >> removeSource dir >> createSource dir -- Failure means there is corruption
                Right _output -> updateSource dir                                                         -- Success means no changes
@@ -64,7 +64,7 @@ prepare cache' method' flags' version' =
       removeSource dir = liftIO $ removeRecursiveSafely dir
 
       updateSource dir =
-          runV2 $here (shell ("cd " ++ dir ++ " && tla update " ++ version')) B.empty >>
+          runV2 [$here] (shell ("cd " ++ dir ++ " && tla update " ++ version')) B.empty >>
              -- At one point we did a tla undo here.  However, we are
              -- going to assume that the "clean" copies in the cache
              -- directory are clean, since some of the other target
@@ -76,5 +76,5 @@ prepare cache' method' flags' version' =
             -- Create parent dir and let tla create dir
             let (parent, _) = splitFileName dir
             liftIO $ createDirectoryIfMissing True parent
-            _output <- runV2 $here (shell ("tla get " ++ version' ++ " " ++ dir)) B.empty
+            _output <- runV2 [$here] (shell ("tla get " ++ version' ++ " " ++ dir)) B.empty
             findSourceTree dir

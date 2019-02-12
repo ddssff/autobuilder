@@ -10,14 +10,14 @@ import qualified Codec.Compression.GZip as Z
 import Control.Exception (SomeException, throw, evaluate)
 import Control.Monad.Catch (MonadCatch, try)
 import Control.Monad.Trans (MonadIO, liftIO)
-import qualified Data.ByteString.Char8 as B
+--import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as L
 import Data.List (isPrefixOf, tails, intercalate)
 import Data.ListLike as LL (drop, length)
 import Data.Maybe (listToMaybe, mapMaybe)
 import Data.Monoid ((<>))
 import Data.Set as Set (fromList, toList)
-import Data.Text as T (breakOn, empty, null, pack, Text, unpack)
+import Data.Text as T (breakOn, empty, null, Text, unpack)
 #if MIN_VERSION_Cabal(2,0,0)
 import Distribution.Version (Version, mkVersion', showVersion)
 import Data.Version (parseVersion)
@@ -31,13 +31,14 @@ import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.AutoBuilder.Types.ParamRec as P
 import Debian.Repo as DP (findSourceTree, MonadRepos, MonadTop, SourceTree, sub, topdir)
 import Debian.Repo.Fingerprint (RetrieveMethod)
+import Distribution.Pretty (prettyShow)
 import GHC.IO.Exception (IOErrorType(OtherError))
 import Prelude hiding (drop, length)
 import System.Exit
 import System.FilePath ((</>), (<.>))
 import System.IO (hPutStrLn, hPutStr, stderr)
 import System.IO.Error (mkIOError)
-import System.Process (CreateProcess, proc, showCommandForUser, cmdspec)
+import System.Process (CreateProcess, proc, {-showCommandForUser,-} cmdspec)
 import System.Process.ListLike (readCreateProcessWithExitCode, readProcessWithExitCode, showCmdSpecForUser)
 import System.Unix.Directory (removeRecursiveSafely)
 import Text.XML.HaXml.Html.Parse (htmlParse')
@@ -69,7 +70,7 @@ instance T.Download HackageDL where
     origTarball = Just . tar
     flushSource _ = error "flushSource HackageDL unimplemented"
 
-prepare :: (MonadIO m, MonadCatch m, MonadRepos s m, MonadTop r m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m T.SomeDownload
+prepare :: (MonadIO m, MonadCatch m, MonadTop r m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m T.SomeDownload
 prepare cache method flags name =
     do let server = P.hackageServer (P.params cache) -- typically "hackage.haskell.org"
        version <- maybe (liftIO $ getVersion' server name) return (maybe Nothing readVersion versionString)
@@ -179,14 +180,14 @@ tryNTimes n failed action =
       nTimes n r = either (\ _ -> hPutStr stderr "." >> action) (return . Right) r >>= nTimes (n - 1)
 #endif
 
-versionURL server name version = "http://" ++ server ++ "/package/" ++ name ++ "-" ++ showVersion version ++ "/" ++ name ++ "-" ++ showVersion version ++ ".tar.gz"
-cabalURL server name version = "http://" ++ server ++ "/package/" ++ name ++ "-" ++ showVersion version ++ "/" ++ name ++ ".cabal"
+versionURL server name version = "http://" ++ server ++ "/package/" ++ name ++ "-" ++ prettyShow version ++ "/" ++ name ++ "-" ++ prettyShow version ++ ".tar.gz"
+cabalURL server name version = "http://" ++ server ++ "/package/" ++ name ++ "-" ++ prettyShow version ++ "/" ++ name ++ ".cabal"
 
 unpacked :: MonadTop r m => String -> Version -> m FilePath
-unpacked name version = tmpDir >>= \ tmp -> return $ tmp </> name ++ "-" ++ showVersion version
+unpacked name version = tmpDir >>= \ tmp -> return $ tmp </> name ++ "-" ++ prettyShow version
 
 tarball :: MonadTop r m => String -> Version -> m FilePath
-tarball name version  = tmpDir >>= \ tmp -> return $ tmp </> name ++ "-" ++ showVersion version ++ ".tar.gz"
+tarball name version  = tmpDir >>= \ tmp -> return $ tmp </> name ++ "-" ++ prettyShow version ++ ".tar.gz"
 
 tmpDir :: MonadTop r m => m FilePath
 tmpDir = sub "hackage"

@@ -81,7 +81,7 @@ makeQuiltTree m base patch =
        let cmd1 = ("set -x && cd '" ++ quiltDir ++ "' && rm -f '" ++ quiltPatchesDir ++
                    "' && ln -s '" ++ patchDir ++ "' '" ++ quiltPatchesDir ++ "'")
        -- runTaskAndTest (linkStyle (commandTask cmd1))
-       _output <- runV2 $here (shell cmd1) L.empty
+       _output <- runV2 [$here] (shell cmd1) L.empty
        -- Now we need to have created a DebianSourceTree so
        -- that there is a changelog for us to reconstruct.
        return (copyTree, quiltDir)
@@ -121,11 +121,11 @@ prepare method flags base patch = do
                 unhide x = liftIO $ doesDirectoryExist pch >>= (flip when) (rmrf pc >> renameDirectory pch pc) >> return x
                 pc = (quiltDir ++ "/.pc")
                 pch = (quiltDir ++ "/.pc.hide")
-                rmrf d = runV2 $here (shell ("rm -rf '"  ++ d ++ "'")) L.empty
+                rmrf d = runV2 [$here] (shell ("rm -rf '"  ++ d ++ "'")) L.empty
       make :: (SourceTree, FilePath) -> m T.SomeDownload
       make (quiltTree, quiltDir) =
           do qPutStrLn "Checking for applied patches"
-             (applied :: Either e (ExitCode, L.ByteString, L.ByteString)) <- runVE2 $here (shell cmd1a) ""
+             (applied :: Either e (ExitCode, L.ByteString, L.ByteString)) <- runVE2 [$here] (shell cmd1a) ""
              -- `catchError` (\(e :: e) -> throwError (fromIOException (userError (target ++ " - Unexpected exception " ++ show e ++ " in " ++ show cmd1a))))
              case applied of
                -- This is the normal result from quilt apply
@@ -134,13 +134,13 @@ prepare method flags base patch = do
                           findUnapplied >>= apply >> buildLog >> cleanSource
                           where
                             findUnapplied :: m [String]
-                            findUnapplied = do unapplied <- runVE2 $here (shell cmd1b) "" >>= qMessage "Checking for unapplied patches"
+                            findUnapplied = do unapplied <- runVE2 [$here] (shell cmd1b) "" >>= qMessage "Checking for unapplied patches"
                                                case (unapplied :: Either e (ExitCode, L.ByteString, L.ByteString)) of
                                                  Right (ExitSuccess, text, _) -> return (lines (decode text))
                                                  _ -> fail $ target ++ " - No patches to apply"
                             apply :: [String] -> m ()
                             apply patches =
-                                do result2 <- runVE2 $here (shell (cmd2 patches)) "" >>= qMessage "Patching Quilt target"
+                                do result2 <- runVE2 [$here] (shell (cmd2 patches)) "" >>= qMessage "Patching Quilt target"
                                    case (result2 :: Either e (ExitCode, L.ByteString, L.ByteString)) of
                                      Right (ExitSuccess, _, _) -> return ()
                                      Right (_, _, err') -> fail $ target ++ " - Failed to apply quilt patches: " ++ decode err'
@@ -153,12 +153,12 @@ prepare method flags base patch = do
                                 do qPutStrLn "Merging changelogs"
                                    exists <- liftIO $ doesFileExist (quiltDir ++ "/" ++ quiltPatchesDir ++ "/changelog")
                                    case exists of
-                                     False -> throwError $ fromIOException $here $ userError $ target ++ "- Missing changelog file: " ++ show (quiltDir ++ "/" ++ quiltPatchesDir ++ "/changelog")
+                                     False -> throwError $ fromIOException [$here] $ userError $ target ++ "- Missing changelog file: " ++ show (quiltDir ++ "/" ++ quiltPatchesDir ++ "/changelog")
                                      True -> mergeChangelogs' (quiltDir ++ "/debian/changelog") (quiltDir ++ "/" ++ quiltPatchesDir ++ "/changelog")
                             cleanSource :: m T.SomeDownload
                             cleanSource =
                                 do qPutStrLn "Cleaning Quilt target"
-                                   result3 <- runVE2 $here (shell cmd3) L.empty
+                                   result3 <- runVE2 [$here] (shell cmd3) L.empty
                                    case (result3 :: Either e (ExitCode, L.ByteString, L.ByteString)) of
                                      Right (ExitSuccess, _, _) ->
                                          do (tree :: SourceTree) <- findSourceTree (topdir quiltTree)
@@ -170,7 +170,7 @@ prepare method flags base patch = do
                                                                               , _tree = tree }
                                      _ -> fail $ target ++ " - Failure removing quilt directory: " ++ cmd3
                Right (ExitFailure _, _, err) -> fail $ target ++ " - Unexpected output from quilt applied: " ++ decode err
-               Right (_, _, err) -> throwError $ fromIOException $here $ userError $ target ++ " - Unexpected result code from quilt applied: " ++ decode err
+               Right (_, _, err) -> throwError $ fromIOException [$here] $ userError $ target ++ " - Unexpected result code from quilt applied: " ++ decode err
                Left e -> throwError e
           where
             cmd1a = ("export QUILT_PATCHES=" ++ quiltPatchesDir ++ " && cd '" ++ quiltDir ++ "' && quilt applied")
@@ -193,7 +193,7 @@ mergeChangelogs' basePath patchPath = do
   baseText <- liftIO (readFile basePath)
   -- vEPutStrBl 1 $ "Merging changelogs: " ++ baseText ++ "\npatch:\n\n" ++ patchText
   case mergeChangelogs baseText patchText of
-    Left e -> throwError $ fromIOException $here $ userError e
+    Left e -> throwError $ fromIOException [$here] $ userError e
     Right newText -> liftIO $ (replaceFile basePath $! newText)
 
 partitionFailing :: [Failing a] -> ([[String]], [a])

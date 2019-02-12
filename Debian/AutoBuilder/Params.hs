@@ -44,11 +44,11 @@ buildCache myUploadURI params' =
                   [".", "darcs", "deb-dir", "dists", "hackage", Local.subDir, "quilt", "tmp"]
        allSlices <- mapM parseNamedSliceList (sources params')
        --let uri = either (\_ -> uploadURI params') Right (buildURI params')
-       build <- repoSources' $here myUploadURI Nothing [SourceOption "trusted" OpSet ["yes"]] (buildReleaseTree params')
+       build <- repoSources' [$here] myUploadURI Nothing [SourceOption "trusted" OpSet ["yes"]] (buildReleaseTree params')
        return $ CacheRec {params = params', allSources = allSlices, buildRepoSources = build}
     where
       parseNamedSliceList (name, lines') =
-          do sources' <- verifySourcesList Nothing lines'
+          do sources' <- verifySourcesList [$here] Nothing lines'
              return $ NamedSliceList { sliceListName = parseCodename name, sliceList = sources' }
 
 -- |An instance of RunClass contains all the information we need to
@@ -72,18 +72,18 @@ computeTopDir params' =
          True -> return top
 
 -- |Find a release by name, among all the "Sources" entries given in the configuration.
-findSlice :: Loc -> CacheRec -> Codename -> Either String NamedSliceList
-findSlice loc cache dist =
+findSlice :: [Loc] -> CacheRec -> Codename -> Either String NamedSliceList
+findSlice locs cache dist =
     case filter ((== dist) . sliceListName) (allSources cache) of
       [x] -> Right x
-      [] -> Left (prettyShow loc <> " -> " <> prettyShow $here <> " - no sources.list found for " ++ codename dist ++ ".  Is it in Debian.Releases.baseReleaseList?  allSources cache = " ++ show (fmap (codename . sliceListName) (allSources cache)))
-      xs -> Left (prettyShow loc <> " -> " <> prettyShow $here <> " - Multiple sources.lists found for " ++ codename dist ++ "\n" ++ show xs)
+      [] -> Left (prettyShow ($here : locs) <> " - no sources.list found for " ++ codename dist ++ ".  Is it in Debian.Releases.baseReleaseList?  allSources cache = " ++ show (fmap (codename . sliceListName) (allSources cache)))
+      xs -> Left (prettyShow ($here : locs) <> " - Multiple sources.lists found for " ++ codename dist ++ "\n" ++ show xs)
 
 -- | Packages uploaded to the build release will be compatible
 -- with packages in this release.
 baseRelease :: ParamRec -> Codename
 baseRelease params' =
-    maybe (error $ "Unknown release suffix: " ++ rel) parseCodename
+    maybe (error $ "Unknown release suffix: " ++ rel ++ " releaseSuffixes=" ++ show (releaseSuffixes params')) parseCodename
               (dropOneSuffix (releaseSuffixes params') rel)
     where rel = codename (buildRelease params')
 

@@ -427,7 +427,7 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
   checkDryRun
   source <- noisier 2 $ prepareBuildTree cache dependOS buildOS newFingerprint target
   logEntry source
-  result <- evalMonadOS (withProcAndSys $here (view (to _root . rootPath) buildOS) $ build source) buildOS
+  result <- evalMonadOS (withProcAndSys [$here] (view (to _root . rootPath) buildOS) $ build source) buildOS
   result' <- find result
   -- Upload to the local repo without a PGP key
   evalInstall (doLocalUpload result') repo Nothing
@@ -455,20 +455,20 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
              dpkgSource <- modifyProcessEnv [("EDITOR", Just "/bin/true")] ((proc "dpkg-source" ["--commit", ".", "autobuilder.diff"]) {cwd = Just path'})
              let doDpkgSource False = do
                    liftIO $ createDirectoryIfMissing True (path' </> "debian/patches")
-                   _ <- runV2 $here dpkgSource L.empty
+                   _ <- runV2 [$here] dpkgSource L.empty
                    exists <- liftIO $ doesFileExist (path' </> "debian/patches/autobuilder.diff")
                    when (not exists) (liftIO $ removeDirectory (path' </> "debian/patches"))
-                 doDpkgSource True = runV2 $here dpkgSource L.empty >> return ()
+                 doDpkgSource True = runV2 [$here] dpkgSource L.empty >> return ()
                  -- doDpkgSource' = setEnv "EDITOR" "/bin/true" >> readCreateProcess ((proc "dpkg-source" ["--commit", ".", "autobuilder.diff"]) {cwd = Just path'}) L.empty
              _ <- useEnv' root (\ _ -> return ())
                              (do -- Get the version number of dpkg-dev in the build environment
                                  let p = shell ("dpkg -s dpkg-dev | sed -n 's/^Version: //p'")
-                                 result <- runVE2 $here p "" :: m' (Either e' (ExitCode, L.ByteString, L.ByteString))
+                                 result <- runVE2 [$here] p "" :: m' (Either e' (ExitCode, L.ByteString, L.ByteString))
                                  installed <- case result of
                                                 Right (ExitSuccess, out, _) -> return . head . words . L.unpack $ out
                                                 _ -> error $ showCreateProcessForUser p ++ " -> " ++ show result
                                  -- If it is >= 1.16.1 we may need to run dpkg-source --commit.
-                                 result <- runVE2 $here (shell ("dpkg --compare-versions '" ++ installed ++ "' ge 1.16.1")) "" :: m' (Either e' (ExitCode, L.ByteString, L.ByteString))
+                                 result <- runVE2 [$here] (shell ("dpkg --compare-versions '" ++ installed ++ "' ge 1.16.1")) "" :: m' (Either e' (ExitCode, L.ByteString, L.ByteString))
                                  newer <- case result of
                                             Right (ExitSuccess, _, _ :: L.ByteString) -> return True
                                             _ -> return False
@@ -665,7 +665,7 @@ data Status = Complete | Missing [BinPkgName]
 -- |Compute a new version number for a package by adding a vendor tag
 -- with a number sufficiently high to trump the newest version in the
 -- dist, and distinct from versions in any other dist.
-computeNewVersion :: (MonadIO m, MonadApt r m, MonadRepos s m, T.Download a) =>
+computeNewVersion :: (MonadIO m, MonadApt r m, MonadRepos s m, T.Download a, HasIOException e, MonadError e m) =>
                      P.CacheRec -> Target a -> ReleaseControlInfo -> m (Failing DebianVersion)
 computeNewVersion cache target info = do
   let current = if buildTrumped then Nothing else releaseSourcePackage info
@@ -788,10 +788,10 @@ updateChangesFile elapsed changes = do
 {-    autobuilderVersion <- processOutput "dpkg -s autobuilder | sed -n 's/^Version: //p'" >>=
                             return . either (const Nothing) Just >>=
                             return . maybe Nothing (listToMaybe . lines) -}
-      hostname <- let p = shell "hostname" in runV2 $here p "" >>= (\ (_, out, _) -> return out) >>= return . listToMaybe . lines . L.unpack
+      hostname <- let p = shell "hostname" in runV2 [$here] p "" >>= (\ (_, out, _) -> return out) >>= return . listToMaybe . lines . L.unpack
       cpuInfo <- parseProcCpuinfo
       memInfo <- parseProcMeminfo
-      machine <- let p = shell "uname -m" in runV2 $here p "" >>= (\ (_, out, _) -> return out) >>= return . listToMaybe . lines . L.unpack
+      machine <- let p = shell "uname -m" in runV2 [$here] p "" >>= (\ (_, out, _) -> return out) >>= return . listToMaybe . lines . L.unpack
       date <- getCurrentLocalRFC822Time
       let buildInfo = ["Autobuilder-Version: " ++ V.autoBuilderVersion] ++
                       ["Time: " ++ show elapsed] ++
@@ -850,14 +850,14 @@ buildDependencies downloadOnly source extra sourceFingerprint =
        command <- liftIO $ modifyProcessEnv [("DEBIAN_FRONTEND", Just "noninteractive")] (if True then aptGetCommand else pbuilderCommand)
        if downloadOnly then (qPutStrLn $ "Dependency packages:\n " ++ intercalate "\n  " (showDependencies' sourceFingerprint)) else return ()
        qPutStrLn $ (if downloadOnly then "Downloading" else "Installing") ++ " build dependencies into " ++ root
-       (result :: Either e' (ExitCode, L.ByteString, L.ByteString)) <- useEnv' root return (noisier 2 $ runVE2 $here command mempty)
+       (result :: Either e' (ExitCode, L.ByteString, L.ByteString)) <- useEnv' root return (noisier 2 $ runVE2 [$here] command mempty)
        case result of
          Right (ExitSuccess, out :: L.ByteString, _) -> return $ decode out
          _ -> error $ "buildDependencies: " ++ showCreateProcessForUser command ++ " -> " ++ show result
 
 -- | This should probably be what the real useEnv does.
 useEnv' :: (HasIOException e, MonadError e m, MonadIO m, MonadMask m) => FilePath -> (a -> m a) -> m a -> m a
-useEnv' rootPath force action = quieter 1 $ withProcAndSys $here rootPath $ useEnv rootPath force $ noisier 1 action
+useEnv' rootPath force action = quieter 1 $ withProcAndSys [$here] rootPath $ useEnv rootPath force $ noisier 1 action
 
 -- |Set a "Revision" line in the .dsc file, and update the .changes
 -- file to reflect the .dsc file's new md5sum.  By using our newdist

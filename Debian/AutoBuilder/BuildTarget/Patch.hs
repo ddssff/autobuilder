@@ -9,7 +9,7 @@ import Control.Monad.Except (liftIO, MonadIO)
 import qualified Data.ByteString.Char8 as B
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
-import Debian.Repo (findSourceTree, copySourceTree, SourceTree(dir'), DebianSourceTree, findDebianSourceTrees, sub, MonadRepos, MonadTop)
+import Debian.Repo (findSourceTree, copySourceTree, SourceTree(dir'), DebianSourceTree, findDebianSourceTrees, sub, MonadTop)
 import Debian.Repo.Fingerprint (RetrieveMethod(Apt, Patch), retrieveMethodMD5)
 import System.Directory (createDirectoryIfMissing)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure))

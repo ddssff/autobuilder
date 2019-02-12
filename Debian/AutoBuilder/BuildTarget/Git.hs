@@ -41,7 +41,7 @@ documentation = [ "darcs:<string> - a target of this form obtains the source cod
 
 darcsRev :: SourceTree -> RetrieveMethod -> IO (Either SomeException String)
 darcsRev tree m =
-    try (runV2 $here (cmd {cwd = Just path}) mempty >>= (\ (_, out, _) -> return out) >>=
+    try (runV2 [$here] (cmd {cwd = Just path}) mempty >>= (\ (_, out, _) -> return out) >>=
          return . matchRegex (mkRegex "hash='([^']*)'") . B.unpack) >>=
     return . either Left (maybe (fail $ "could not find hash field in output of '" ++ showCmdSpecForUser (cmdspec cmd) ++ "'")
                                 (\ rev -> Right (show m ++ "=" ++ head rev)))
@@ -70,7 +70,7 @@ instance T.Download GitDL where
     flushSource x = sub ("git" </> gitSum (_gitFlags x) (_gitUri x) (_gitSpecs x)) >>= liftIO . removeRecursiveSafely
     cleanTarget x =
         (\ top -> case any P.isKeepRCS (_gitFlags x) of
-                    False -> let cmd = "find " ++ top ++ " -name '.git' -maxdepth 1 -prune | xargs rm -rf" in timeTask (runVE2 $here (shell cmd) "")
+                    False -> let cmd = "find " ++ top ++ " -name '.git' -maxdepth 1 -prune | xargs rm -rf" in timeTask (runVE2 [$here] (shell cmd) "")
                     True -> return (Right mempty, 0))
     attrs x = singleton $ GitCommit $ _gitLatestCommit x
 
@@ -138,9 +138,9 @@ prepare method flags theUri gitspecs = do
              liftIO $ createDirectoryIfMissing True parent
              liftIO $ removeRecursiveSafely dir
              let clone = proc "git" (["clone", renderForGit theUri'] ++ concat (map (\ x -> case x of (Branch s) -> ["--branch", s]; _ -> []) gitspecs) ++ [dir])
-             runVE2 $here clone B.empty >>= test1
+             runVE2 [$here] clone B.empty >>= test1
 
-      readProc pr inp = runV2 $here pr inp >>= testCode pr
+      readProc pr inp = runV2 [$here] pr inp >>= testCode pr
       testCode _pr (ExitSuccess, _, _) = return ()
       testCode pr (ExitFailure s, out, err) = error (prettyShow pr ++ " -> " ++ show s ++ "\n  out: " ++ show out ++ "\n  err: " ++ show err)
 
@@ -156,8 +156,8 @@ prepare method flags theUri gitspecs = do
 
       fixLink base =
           let link = base </> name in
-          runV2 $here (proc "rm" ["-rf", link]) B.empty >>
-          runV2 $here (proc "ln" ["-s", gitSum flags theUri gitspecs, link]) B.empty
+          runV2 [$here] (proc "rm" ["-rf", link]) B.empty >>
+          runV2 [$here] (proc "ln" ["-s", gitSum flags theUri gitspecs, link]) B.empty
       name = snd . splitFileName $ (uriPath theUri')
 
       theUri' = mustParseURI theUri

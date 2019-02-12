@@ -203,7 +203,7 @@ releaseSourceLines myVendorURI release debianMirrorHost ubuntuMirrorHost =
       Nothing -> baseReleaseSourceLines release debianMirrorHost ubuntuMirrorHost
       Just suff ->
           releaseSourceLines myVendorURI (dropSuffix suff release) debianMirrorHost ubuntuMirrorHost ++
-          List.map (parseSourceLine $here)
+          List.map (parseSourceLine [$here])
             [ "deb " ++ show (view vendorURI myVendorURI) ++ " " ++ release ++ " main"
             , "deb-src " ++ show (view vendorURI myVendorURI) ++ " " ++ release ++ " main" ]
 
@@ -214,12 +214,12 @@ baseReleaseSourceLines release debianMirrorHost ubuntuMirrorHost =
       x -> error $ "Unknown release repository: " ++ show x
 
 debianSourceLines debianMirrorHost release =
-    List.map (parseSourceLine $here) $
+    List.map (parseSourceLine [$here]) $
     [ "deb http://" ++ debianMirrorHost ++ "/debian " ++ release ++ " main contrib non-free"
     , "deb-src http://" ++ debianMirrorHost ++ "/debian " ++ release ++ " main contrib non-free" ]
 
 ubuntuSourceLines ubuntuMirrorHost release =
-    List.map (parseSourceLine $here) $
+    List.map (parseSourceLine [$here]) $
     [ "deb http://" ++ ubuntuMirrorHost ++ "/ubuntu/ " ++ release ++ " main restricted universe multiverse"
     , "deb-src http://" ++ ubuntuMirrorHost ++ "/ubuntu/ " ++ release ++ " main restricted universe multiverse"
     , "deb http://" ++ ubuntuMirrorHost ++ "/ubuntu/ " ++ release ++ "-updates main restricted universe multiverse"

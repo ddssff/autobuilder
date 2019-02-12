@@ -38,7 +38,7 @@ instance T.Download HgDL where
     cleanTarget x =
         (\ path -> case any P.isKeepRCS (_flags x) of
                      False -> let cmd = "rm -rf " ++ path ++ "/.hg" in
-                              timeTask (runVE2 $here (shell cmd) B.empty)
+                              timeTask (runVE2 [$here] (shell cmd) B.empty)
                      _ -> return (Right mempty, 0))
 
 prepare :: (MonadIO m, MonadTop r m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m T.SomeDownload
@@ -54,18 +54,18 @@ prepare cache method flags archive =
                                      , _tree = tree }
     where
       verifySource dir =
-          try (runV2 $here (shell ("cd " ++ dir ++ " && hg status | grep -q .")) B.empty) >>=
+          try (runV2 [$here] (shell ("cd " ++ dir ++ " && hg status | grep -q .")) B.empty) >>=
           either (\ (_ :: SomeException) -> updateSource dir)   -- failure means there were no changes
                  (\ _ -> removeSource dir >> createSource dir)  -- success means there was a change
 
       removeSource dir = liftIO $ removeRecursiveSafely dir
 
       updateSource dir =
-          runV2 $here (shell ("cd " ++ dir ++ " && hg pull -u")) B.empty >>
+          runV2 [$here] (shell ("cd " ++ dir ++ " && hg pull -u")) B.empty >>
           findSourceTree dir :: IO SourceTree
 
       createSource dir =
           let (parent, _) = splitFileName dir in
           liftIO (createDirectoryIfMissing True parent) >>
-          runV2 $here (shell ("hg clone " ++ archive ++ " " ++ dir)) B.empty >>
+          runV2 [$here] (shell ("hg clone " ++ archive ++ " " ++ dir)) B.empty >>
           findSourceTree dir :: IO SourceTree

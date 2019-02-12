@@ -11,6 +11,7 @@ import qualified Debian.AutoBuilder.Types.Packages as P (PackageFlag, aptPin)
 import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec(ifSourcesChanged))
 import Debian.Changes (logVersion)
 import Debian.Codename (codename, parseCodename)
+import Debian.Except (HasIOException)
 import Debian.Relation (SrcPkgName)
 import Debian.Repo.AptImage (aptDir)
 import Debian.Repo.Fingerprint (RetrieveMethod, RetrieveAttribute(AptVersion))
@@ -19,6 +20,7 @@ import Debian.Repo.SourceTree (topdir, DebianBuildTree, entry, debTree')
 import Debian.Repo.MonadRepos (MonadRepos)
 import Debian.Repo.State.AptImage (withAptImage, prepareSource)
 import Debian.Repo.Top (MonadTop)
+import Debian.TH (here)
 import Debian.Version (parseDebianVersion', prettyDebianVersion)
 import System.Unix.Directory (removeRecursiveSafely)
 
@@ -52,9 +54,11 @@ instance Download AptDL where
     flushSource x = liftIO $ removeRecursiveSafely $ _apt x
     attrs = singleton . AptVersion . show . prettyDebianVersion . logVersion . entry . debTree' . _tree
 
-prepare :: (MonadIO m, MonadCatch m, MonadRepos s m, MonadTop r m, MonadError e m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> SrcPkgName -> m SomeDownload
+prepare ::
+    (MonadIO m, MonadCatch m, MonadRepos s m, MonadTop r m, HasIOException e, MonadError e m)
+    => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> SrcPkgName -> m SomeDownload
 prepare cache method' flags' name package =
-    withAptImage (P.ifSourcesChanged (P.params cache)) distro $ do
+    withAptImage [$here] (P.ifSourcesChanged (P.params cache)) distro $ do
       apt <- aptDir package
       tree <- prepareSource package version'
       return $ SomeDownload $ AptDL { _allSources = P.allSources cache

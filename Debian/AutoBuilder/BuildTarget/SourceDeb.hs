@@ -49,7 +49,7 @@ prepare _cache method flags base =
          [] -> return $  error ("Invalid sourcedeb base: no .dsc file in " ++ show (T.method base))
          (dscName, Right (S.Control (dscInfo' : _))) : _ ->
              let p = unpack top dscName in
-             liftIO (runV2 $here p B.empty >>
+             liftIO (runV2 [$here] p B.empty >>
                      makeTarget dscInfo' dscName)
          (dscName, _) : _ -> error ("Invalid .dsc file: " ++ dscName)
     where

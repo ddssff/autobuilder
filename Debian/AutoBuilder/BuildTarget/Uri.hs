@@ -92,7 +92,7 @@ prepare rmethod pflags u' s' =
              _output <-
                  case exists of
                    True -> return mempty
-                   False -> runV2 $here (shell ("curl -s '" ++ uriToString' (mustParseURI u') ++ "' > '" ++ tar' ++ "'")) B.empty
+                   False -> runV2 [$here] (shell ("curl -s '" ++ uriToString' (mustParseURI u') ++ "' > '" ++ tar' ++ "'")) B.empty
              -- We should do something with the output
              return ()
       -- Make sure what we just downloaded has the correct checksum
@@ -118,15 +118,15 @@ prepare rmethod pflags u' s' =
                    fileInfo <- liftIO $ magicFile magic tar'
                    case () of
                      _ | isPrefixOf "Zip archive data" fileInfo ->
-                           timeTask $ runV2 $here (shell ("unzip " ++ tar' ++ " -d " ++ src)) B.empty
+                           timeTask $ runV2 [$here] (shell ("unzip " ++ tar' ++ " -d " ++ src)) B.empty
                        | isPrefixOf "gzip" fileInfo ->
-                           timeTask $ runV2 $here (shell ("tar xfz " ++ tar' ++ " -C " ++ src)) B.empty
+                           timeTask $ runV2 [$here] (shell ("tar xfz " ++ tar' ++ " -C " ++ src)) B.empty
                        | isPrefixOf "bzip2" fileInfo ->
-                           timeTask $ runV2 $here (shell ("tar xfj " ++ tar' ++ " -C " ++ src)) B.empty
+                           timeTask $ runV2 [$here] (shell ("tar xfj " ++ tar' ++ " -C " ++ src)) B.empty
                        | isPrefixOf "XZ compressed data" fileInfo ->
-                           timeTask $ runV2 $here (shell ("tar xfJ " ++ tar' ++ " -C " ++ src)) B.empty
+                           timeTask $ runV2 [$here] (shell ("tar xfJ " ++ tar' ++ " -C " ++ src)) B.empty
                        | True ->
-                           timeTask $ runV2 $here (shell ("cp " ++ tar' ++ " " ++ src ++ "/")) B.empty
+                           timeTask $ runV2 [$here] (shell ("cp " ++ tar' ++ " " ++ src ++ "/")) B.empty
             read' (_output, _elapsed) = sourceDir s' >>= \ src -> liftIO (getDir src)
             getDir dir = getDirectoryContents dir >>= return . filter (not . flip elem [".", ".."])
             search files = checkContents (filter (not . flip elem [".", ".."]) files)
