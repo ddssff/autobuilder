@@ -6,7 +6,7 @@ module Debian.AutoBuilder.BuildTarget
 
 import Control.Exception (Exception)
 import Control.Monad.Catch (MonadMask)
-import Control.Monad.Except (lift, liftIO, MonadError, MonadIO)
+import Control.Monad.Except (lift, liftIO)
 import Data.List (intersperse)
 import qualified Debian.AutoBuilder.BuildTarget.Apt as Apt
 import qualified Debian.AutoBuilder.BuildTarget.Cd as Cd
@@ -30,13 +30,13 @@ import Debian.AutoBuilder.Types.Download (Download(..), SomeDownload(..))
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Debianize (CabalT, CabalInfo)
-import Debian.Except (HasIOException)
 import Debian.Relation (SrcPkgName(..))
 import qualified Debian.Repo.Fingerprint as P
 import Debian.Repo.MonadOS (MonadOS)
 import Debian.Repo.Rsync (HasRsyncError)
 import Debian.Repo.SourceTree (HasSourceTree, SourceTree(dir'), copySourceTree, findSourceTree, topdir)
 import Debian.Repo.Top (MonadTop)
+import Extra.Except
 import System.FilePath ((</>))
 import System.Unix.Mount (WithProcAndSys)
 
@@ -98,11 +98,11 @@ instance Download ZeroDL where
 -- | Given a RetrieveMethod, perform the retrieval and return the result.
 -- This wrapper ensures that /proc and /sys are mounted, even though the
 -- underlying code in retrieve' hasn't been updated to enforce this.
-retrieve :: forall r s e m. (MonadIO m, MonadMask m, Exception e, HasIOException e, HasRsyncError e, MonadError e m, MonadOS r s m, MonadTop r m, HasSourceTree SourceTree m) =>
+retrieve :: forall r s e m. (MonadIOError e m, HasLoc e, MonadMask m, Exception e, HasRsyncError e, MonadOS r s m, MonadTop r m, HasSourceTree SourceTree m) =>
             CabalT IO () -> C.CacheRec -> P.RetrieveMethod -> [P.PackageFlag] -> [CabalInfo -> CabalInfo] -> WithProcAndSys m SomeDownload
 retrieve defaultAtoms cache method' flags' functions = lift $ retrieve' defaultAtoms cache method' flags' functions
 
-retrieve' :: forall r s e m. (MonadIO m, MonadMask m, Exception e, HasIOException e, HasRsyncError e, MonadError e m, MonadOS r s m, MonadTop r m, HasSourceTree SourceTree m) =>
+retrieve' :: forall r s e m. (MonadIOError e m, HasLoc e, MonadMask m, Exception e, HasRsyncError e, MonadOS r s m, MonadTop r m, HasSourceTree SourceTree m) =>
             CabalT IO () -> C.CacheRec -> P.RetrieveMethod -> [P.PackageFlag] -> [CabalInfo -> CabalInfo] -> m SomeDownload
 retrieve' defaultAtoms cache method flags functions =
     case method of

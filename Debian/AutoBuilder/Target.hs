@@ -57,7 +57,6 @@ import Debian.Control (Control'(Control), ControlFunctions(parseControlFromFile)
 import Debian.Debianize (CabalInfo)
 import qualified Debian.GenBuildDeps as G
 import Debian.Pretty (prettyShow, ppShow, ppPrint)
-import Debian.Except (HasIOException)
 import Debian.Relation (BinPkgName(..), SrcPkgName(..))
 import Debian.Relation.ByteString (Relation(..), Relations)
 import Debian.Repo.AptKey (AptKey, aptKey, MonadApt)
@@ -87,6 +86,7 @@ import Debian.Time (getCurrentLocalRFC822Time)
 import Debian.URI (HasParseError)
 import Debian.Version (DebianVersion, parseDebianVersion', prettyDebianVersion)
 import Debian.VersionPolicy (parseTag, setTag)
+import Extra.Except
 import Extra.Files (replaceFile)
 import Extra.List (dropPrefix)
 import Extra.Misc (columns)
@@ -134,7 +134,7 @@ _formatVersions buildDeps =
     where prefix = "\n    "
 
 prepareTargets ::
-    forall r s e m a. (MonadIO m, MonadMask m, HasIOException e, HasRsyncError e, MonadError e m, MonadOS r s m, T.Download a)
+    forall r s e m a. (MonadIOError e m, HasLoc e, MonadMask m, HasRsyncError e, MonadOS r s m, T.Download a)
     => P.CacheRec -> [Buildable a] -> m [Target a]
 prepareTargets cache targetSpecs =
     do results <- mapM (prepare (length targetSpecs)) (zip [1..] targetSpecs)
@@ -168,9 +168,8 @@ partitionFailing xs =
 -- | Build a set of targets.  When a target build is successful it
 -- is uploaded to the incoming directory of the local repository,
 -- and then the function to process the incoming queue is called.
-buildTargets :: (MonadIO m, MonadMask m,
+buildTargets :: (MonadIOError e m, HasLoc e, Exception e, HasRsyncError e, HasParseError e, MonadMask m,
                  HasReposState s, MonadState s m,
-                 MonadError e m, Exception e, HasIOException e, HasRsyncError e, HasParseError e,
                  MonadTop r m, MonadApt r m, T.Download a) =>
                 P.CacheRec -> OSKey -> OSKey -> LocalRepository -> [Buildable a] -> m (LocalRepository, [Target a])
 buildTargets _ _ _ localRepo [] = return (localRepo, [])
@@ -183,7 +182,7 @@ buildTargets cache dependOS buildOS localRepo !targetSpecs =
 
 -- Execute the target build loop until all the goals (or everything) is built
 -- FIXME: Use sets instead of lists
-buildLoop :: forall r s e m a. (MonadIO m, MonadMask m, Exception e, HasIOException e, HasRsyncError e, HasParseError e, MonadError e m, MonadRepos s m, MonadTop r m, MonadApt r m, T.Download a) =>
+buildLoop :: forall r s e m a. (MonadIOError e m, HasLoc e, MonadMask m, Exception e, HasRsyncError e, HasParseError e, MonadRepos s m, MonadTop r m, MonadApt r m, T.Download a) =>
              P.CacheRec -> LocalRepository -> OSKey -> OSKey -> [Target a] -> m [Target a]
 buildLoop cache localRepo dependOS buildOS !targets =
     Set.toList <$> loop (Set.fromList targets) Set.empty
@@ -355,7 +354,7 @@ qError message = qPutStrLn message >> error message
 
 -- Decide whether a target needs to be built and, if so, build it.
 buildTarget ::
-    forall r s e m a. (MonadIO m, MonadMask m, Exception e, HasIOException e, HasRsyncError e, HasParseError e, MonadError e m, MonadRepos s m, MonadTop r m, MonadApt r m, T.Download a)
+    forall r s e m a. (MonadIOError e m, HasLoc e, MonadMask m, Exception e, HasRsyncError e, HasParseError e, MonadRepos s m, MonadTop r m, MonadApt r m, T.Download a)
  => P.CacheRec                       -- configuration info
  -> OSKey
  -> OSKey
@@ -410,8 +409,7 @@ oldFingerprint = maybe Nothing packageFingerprint . releaseSourcePackage
 
 -- | Build a package and upload it to the local repository.
 buildPackage ::
-    forall e r s m a. (MonadIO m, MonadMask m,
-                       MonadError e m, Exception e, HasIOException e, HasRsyncError e, HasParseError e,
+    forall e r s m a. (MonadIOError e m, HasLoc e, MonadMask m, Exception e, HasRsyncError e, HasParseError e,
                        HasReposState s, MonadState s m, MonadTop r m, T.Download a)
     => P.CacheRec
     -> OSKey
@@ -427,7 +425,7 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
   checkDryRun
   source <- noisier 2 $ prepareBuildTree cache dependOS buildOS newFingerprint target
   logEntry source
-  result <- evalMonadOS (withProcAndSys [$here] (view (to _root . rootPath) buildOS) $ build source) buildOS
+  result <- withError (withLoc $here) $ evalMonadOS (withProcAndSys (view (to _root . rootPath) buildOS) $ build source) buildOS
   result' <- find result
   -- Upload to the local repo without a PGP key
   evalInstall (doLocalUpload result') repo Nothing
@@ -440,9 +438,8 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
           case P.noClean (P.params cache) of
             False -> liftIO (maybeAddLogEntry buildTree newVersion)
             True -> return ()
-      build :: forall r' s' e' m'. (MonadIO m', MonadMask m',
+      build :: forall r' s' e' m'. (MonadIOError e' m', HasLoc e', MonadMask m', Exception e',
                                     MonadReader r' m', HasOSKey r',
-                                    Exception e', HasIOException e', MonadError e' m',
                                     HasReposState s', MonadState s' m') => DebianBuildTree -> {-WithProcAndSys-} m' (DebianBuildTree, NominalDiffTime)
       build buildTree =
           do -- The --commit flag does not appear until dpkg-dev-1.16.1,
@@ -527,7 +524,7 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
 -- these operations take place in a different order from other types
 -- of builds.  For lax: dependencies, then image copy, then source
 -- copy.  For other: image copy, then source copy, then dependencies.
-prepareBuildTree :: (MonadIO m, MonadMask m, Exception e, HasIOException e, HasRsyncError e, MonadError e m, MonadTop r m, MonadRepos s m) =>
+prepareBuildTree :: (MonadIOError e m, HasLoc e, MonadMask m, Exception e, HasRsyncError e, MonadTop r m, MonadRepos s m) =>
                     P.CacheRec -> OSKey -> OSKey -> Fingerprint -> Target a -> m DebianBuildTree
 prepareBuildTree cache dependOS buildOS sourceFingerprint target = do
   let dependRoot = view (to _root . rootPath) dependOS
@@ -562,7 +559,7 @@ prepareBuildTree cache dependOS buildOS sourceFingerprint target = do
 -- | Get the control info for the newest version of a source package
 -- available in a release.  Make sure that the files for this build
 -- architecture are available.
-getReleaseControlInfo :: forall r s e m a. (MonadIO m, HasIOException e, MonadError e m, MonadOS r s m) => Target a -> m ReleaseControlInfo
+getReleaseControlInfo :: forall r s e m a. (MonadIOError e m, HasLoc e, MonadOS r s m) => Target a -> m ReleaseControlInfo
 getReleaseControlInfo target = do
   -- The source packages with the specified name, newest first
   (sourcePackages' :: [SourcePackage]) <- (sortSourcePackages (== packageName)) <$> osSourcePackages
@@ -665,7 +662,7 @@ data Status = Complete | Missing [BinPkgName]
 -- |Compute a new version number for a package by adding a vendor tag
 -- with a number sufficiently high to trump the newest version in the
 -- dist, and distinct from versions in any other dist.
-computeNewVersion :: (MonadIO m, MonadApt r m, MonadRepos s m, T.Download a, HasIOException e, MonadError e m) =>
+computeNewVersion :: (MonadIOError e m, HasLoc e, MonadApt r m, MonadRepos s m, T.Download a) =>
                      P.CacheRec -> Target a -> ReleaseControlInfo -> m (Failing DebianVersion)
 computeNewVersion cache target info = do
   let current = if buildTrumped then Nothing else releaseSourcePackage info
@@ -721,7 +718,7 @@ computeNewVersion cache target info = do
 -- | Return the first build dependency solution if it can be computed.
 -- The actual list could be arbitrarily long, this prevents the caller
 -- from trying to look at it.
-buildDepSolution :: (MonadIO m, MonadOS r s m, HasDebianControl control, HasIOException e, MonadError e m) => Arch -> [BinPkgName] -> control -> m (Failing [BinaryPackage])
+buildDepSolution :: (MonadIOError e m, HasLoc e, MonadOS r s m, HasDebianControl control) => Arch -> [BinPkgName] -> control -> m (Failing [BinaryPackage])
 buildDepSolution arch preferred target = do
   solns <- buildDepSolutions arch preferred target
   return $ case solns of
@@ -730,7 +727,7 @@ buildDepSolution arch preferred target = do
              _ -> Failure [$(symbol 'buildDepSolution) ++ ": Internal error 4"]
 
 -- FIXME: Most of this code should move into Debian.Repo.Dependencies
-buildDepSolutions :: (MonadIO m, MonadOS r s m, HasDebianControl control, HasIOException e, MonadError e m) => Arch -> [BinPkgName] -> control -> m (Failing [(Int, [BinaryPackage])])
+buildDepSolutions :: (MonadIOError e m, HasLoc e, MonadOS r s m, HasDebianControl control) => Arch -> [BinPkgName] -> control -> m (Failing [(Int, [BinaryPackage])])
 buildDepSolutions arch preferred target =
     do globalBuildDeps <- buildEssential
        packages <- osBinaryPackages
@@ -819,7 +816,7 @@ sinkFields f (Paragraph fields) =
           f' (Comment _) = False
 
 -- |Download the package's build dependencies into /var/cache
-downloadDependencies :: (MonadIO m, MonadMask m, MonadOS r s m, Exception e, HasIOException e, MonadError e m) => DebianBuildTree -> [String] -> Fingerprint -> m String
+downloadDependencies :: (MonadIOError e m, HasLoc e, MonadMask m, MonadOS r s m, Exception e) => DebianBuildTree -> [String] -> Fingerprint -> m String
 downloadDependencies = buildDependencies True
 
 pathBelow :: FilePath -> FilePath -> FilePath
@@ -828,12 +825,11 @@ pathBelow root path =
     where message = "Expected a path below " ++ root ++ ", saw " ++ path
 
 -- |Install the package's build dependencies.
-installDependencies :: (MonadIO m, MonadMask m, MonadOS r s m, Exception e, HasIOException e, MonadError e m) => DebianBuildTree -> [String] -> Fingerprint -> m String
+installDependencies :: (MonadIOError e m, HasLoc e, MonadMask m, MonadOS r s m, Exception e) => DebianBuildTree -> [String] -> Fingerprint -> m String
 installDependencies = buildDependencies False
 
 buildDependencies ::
-    forall e' r' s' m'. (MonadIO m', MonadMask m',
-                         Exception e', HasIOException e', MonadError e' m',
+    forall e' r' s' m'. (MonadIOError e' m', HasLoc e', MonadMask m', Exception e',
                          HasOSKey r', MonadReader r' m',
                          HasReposState s', MonadState s' m')
     => Bool -> DebianBuildTree -> [String] -> Fingerprint -> m' String
@@ -856,8 +852,8 @@ buildDependencies downloadOnly source extra sourceFingerprint =
          _ -> error $ "buildDependencies: " ++ showCreateProcessForUser command ++ " -> " ++ show result
 
 -- | This should probably be what the real useEnv does.
-useEnv' :: (HasIOException e, MonadError e m, MonadIO m, MonadMask m) => FilePath -> (a -> m a) -> m a -> m a
-useEnv' rootPath force action = quieter 1 $ withProcAndSys [$here] rootPath $ useEnv rootPath force $ noisier 1 action
+useEnv' :: (MonadIOError e m, HasLoc e, MonadMask m) => FilePath -> (a -> m a) -> m a -> m a
+useEnv' rootPath force action = quieter 1 $ withError (withLoc $here) $ withProcAndSys rootPath $ useEnv rootPath force $ noisier 1 action
 
 -- |Set a "Revision" line in the .dsc file, and update the .changes
 -- file to reflect the .dsc file's new md5sum.  By using our newdist

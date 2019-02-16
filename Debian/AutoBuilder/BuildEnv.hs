@@ -15,7 +15,6 @@ import qualified Debian.AutoBuilder.LocalRepo as Local (prepare)
 import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec(archSet, buildRelease, cleanUp, components, excludePackages, flushDepends, flushPool, flushRoot, ifSourcesChanged, includePackages, optionalIncludePackages))
 import Debian.Debianize (EnvSet(..))
 import Debian.Codename (Codename, codename)
-import Debian.Except (HasIOException)
 import Debian.Repo.EnvPath (EnvRoot(EnvRoot))
 import Debian.Repo.MonadRepos (MonadRepos, putOSImage)
 import Debian.Repo.OSImage (OSImage, osRoot)
@@ -29,6 +28,7 @@ import Debian.Repo.Top (MonadTop, sub)
 import Debian.TH (here)
 import Debian.URI (HasParseError)
 import Distribution.Pretty (prettyShow)
+import Extra.Except
 import Prelude hiding (null)
 import System.FilePath ((</>))
 
@@ -51,7 +51,8 @@ cleanEnvOfRelease distro =
     sub ("dists" </> releaseName' distro </> "clean") >>= return . EnvRoot
 -}
 
-prepareDependOS :: (MonadIO m, MonadMask m, MonadRepos s m, MonadTop r m, Show e, HasIOException e, HasRsyncError e, HasParseError e, MonadError e m) => P.ParamRec -> NamedSliceList -> [Slice] -> m OSKey
+prepareDependOS :: (MonadIOError e m, HasLoc e, Show e, HasRsyncError e, HasParseError e, MonadMask m,
+                    MonadRepos s m, MonadTop r m) => P.ParamRec -> NamedSliceList -> [Slice] -> m OSKey
 prepareDependOS params rel extra =
     do localRepo <- Local.prepare (P.flushPool params) (P.buildRelease params) (P.archSet params)
        -- release <- prepareRelease repo (P.buildRelease params) [] [parseSection' "main"] (P.archSet params)

@@ -10,12 +10,12 @@ import Data.Set (union)
 import Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Changes (logVersion)
-import Debian.Except (HasIOException)
 import Debian.Repo
 import Debian.Repo.Fingerprint (RetrieveMethod, retrieveMethodMD5)
 import Debian.Repo.Rsync (HasRsyncError, rsyncOld')
 import Debian.Version (version)
 import Distribution.Pretty (prettyShow)
+import Extra.Except
 import System.Directory
 import System.FilePath ((</>), takeBaseName)
 

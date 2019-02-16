@@ -2,7 +2,7 @@
 module Debian.AutoBuilder.BuildTarget.Apt where
 
 import Control.Monad.Catch (MonadCatch)
-import Control.Monad.Except (MonadIO(liftIO), MonadError)
+import Control.Monad.Except (MonadIO(liftIO))
 import Data.Maybe (mapMaybe)
 import Data.Set (singleton)
 import qualified Debian.AutoBuilder.Types.CacheRec as P (CacheRec(allSources, params))
@@ -11,7 +11,6 @@ import qualified Debian.AutoBuilder.Types.Packages as P (PackageFlag, aptPin)
 import qualified Debian.AutoBuilder.Types.ParamRec as P (ParamRec(ifSourcesChanged))
 import Debian.Changes (logVersion)
 import Debian.Codename (codename, parseCodename)
-import Debian.Except (HasIOException)
 import Debian.Relation (SrcPkgName)
 import Debian.Repo.AptImage (aptDir)
 import Debian.Repo.Fingerprint (RetrieveMethod, RetrieveAttribute(AptVersion))
@@ -22,6 +21,7 @@ import Debian.Repo.State.AptImage (withAptImage, prepareSource)
 import Debian.Repo.Top (MonadTop)
 import Debian.TH (here)
 import Debian.Version (parseDebianVersion', prettyDebianVersion)
+import Extra.Except
 import System.Unix.Directory (removeRecursiveSafely)
 
 documentation = [ "apt:<distribution>:<packagename> - a target of this form looks up"
@@ -55,7 +55,7 @@ instance Download AptDL where
     attrs = singleton . AptVersion . show . prettyDebianVersion . logVersion . entry . debTree' . _tree
 
 prepare ::
-    (MonadIO m, MonadCatch m, MonadRepos s m, MonadTop r m, HasIOException e, MonadError e m)
+    (MonadIOError e m, HasLoc e, MonadCatch m, MonadRepos s m, MonadTop r m)
     => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> SrcPkgName -> m SomeDownload
 prepare cache method' flags' name package =
     withAptImage [$here] (P.ifSourcesChanged (P.params cache)) distro $ do

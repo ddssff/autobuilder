@@ -16,11 +16,11 @@ import Data.Monoid ((<>))
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
-import Debian.Except (HasIOException(fromIOException), liftEIO)
 import Debian.Repo
 import Debian.Repo.Fingerprint (RetrieveMethod)
 import Debian.Repo.Prelude.Process (runVE2, timeTask)
 import Debian.TH (here)
+import Extra.Except -- (HasIOException(fromIOException), liftEIO)
 import Network.URI (URI(..), URIAuth(..), parseURI, unEscapeString)
 import System.Directory
 import System.Exit
@@ -68,10 +68,10 @@ instance T.Download SvnDL where
                                     timeTask (runVE2 [$here] (shell cmd) "")
                            True -> return (Right mempty, 0))
 
-prepare :: forall r e m. (MonadIO m, MonadCatch m, MonadTop r m, Exception e, HasIOException e, MonadError e m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m T.SomeDownload
+prepare :: forall r e m. (MonadIOError e m, HasLoc e, Exception e, MonadCatch m, MonadTop r m) => P.CacheRec -> RetrieveMethod -> [P.PackageFlag] -> String -> m T.SomeDownload
 prepare cache method flags uri =
     do dir <- sub ("svn" </> show (md5 (L.pack (maybe "" uriRegName (uriAuthority uri') ++ (uriPath uri')))))
-       exists <- liftEIO [$here] $ doesDirectoryExist dir
+       exists <- withError (withLoc $here) $ liftIOError $ doesDirectoryExist dir
        tree <- if exists then verifySource dir else createSource dir
        return $ T.SomeDownload $ SvnDL { _cache = cache
                                        , _method = method
@@ -80,7 +80,7 @@ prepare cache method flags uri =
                                        , _tree = tree }
     where
       uri' = mustParseURI uri
-      verifySource :: forall m'. (MonadIO m', MonadCatch m', MonadError e m') => FilePath -> m' SourceTree
+      verifySource :: forall m'. (MonadIOError e m', MonadCatch m') => FilePath -> m' SourceTree
       verifySource dir = do
         (result :: Either e (ExitCode, L.ByteString, L.ByteString)) <- svn (["status","--no-auth-cache","--non-interactive"] ++ (username userInfo) ++ (password userInfo))
         case result of
@@ -89,24 +89,24 @@ prepare cache method flags uri =
           -- Failure - error code or output from status means changes have occured
           _ -> removeSource dir >> createSource dir
 
-      removeSource dir = liftEIO [$here] $ removeRecursiveSafely dir
+      removeSource dir = withError (withLoc $here) $ liftIOError $ removeRecursiveSafely dir
 
-      updateSource :: forall m'. (MonadIO m', MonadCatch m', MonadError e m') => FilePath -> m' SourceTree
+      updateSource :: forall m'. (MonadIOError e m', MonadCatch m') => FilePath -> m' SourceTree
       updateSource dir =
           do
             -- if the original url contained a specific revision, this will do the wrong thing
             result <- svn (["update","--no-auth-cache","--non-interactive"] ++ (username userInfo) ++ (password userInfo))
             case (result :: Either e (ExitCode, L.ByteString, L.ByteString)) of
-              Right (ExitSuccess, _, _) -> liftEIO [$here] $ findSourceTree dir
+              Right (ExitSuccess, _, _) -> withError (withLoc $here) $ liftIOError $ findSourceTree dir
               _ -> error $ "svn -> " ++ show result
 
-      createSource :: forall m'. (MonadIO m', MonadError e m') => FilePath -> m' SourceTree
-      createSource dir = liftEIO [$here] $
+      createSource :: forall m'. (MonadIOError e m', MonadCatch m') => FilePath -> m' SourceTree
+      createSource dir = withError (withLoc $here) $
           let (parent, _) = splitFileName dir in
-          liftIO (createDirectoryIfMissing True parent) >>
+          liftIOError (createDirectoryIfMissing True parent) >>
           checkout dir >>
-          liftIO (findSourceTree dir)
-      checkout :: forall e' m'. (MonadIO m', MonadCatch m', Exception e', HasIOException e', MonadError e' m') => FilePath -> m' (Either e' (ExitCode, L.ByteString, L.ByteString))
+          liftIOError (findSourceTree dir)
+      checkout :: forall e' m'. (MonadIOError e' m', HasLoc e', MonadCatch m', Exception e') => FilePath -> m' (Either e' (ExitCode, L.ByteString, L.ByteString))
       --checkout = svn createStyle args
       checkout dir = runVE2 [$here] (proc "svn" args) "" >>= return . finish
           where
@@ -117,7 +117,7 @@ prepare cache method flags uri =
             finish output =
                 case output of
                   Right result@(ExitSuccess, _, _) -> Right result
-                  _ -> throwError $ fromIOException [$here] $ userError $ "*** FAILURE: svn " ++ concat (intersperse " " args)
+                  _ -> withError (withLoc $here) $ throwError $ fromIOException $ userError $ "*** FAILURE: svn " ++ concat (intersperse " " args)
       userInfo = maybe "" uriUserInfo (uriAuthority uri')
 
 mustParseURI :: String -> URI

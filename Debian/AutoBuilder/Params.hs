@@ -17,23 +17,23 @@ import qualified Debian.AutoBuilder.LocalRepo as Local (subDir)
 import Debian.AutoBuilder.Types.CacheRec (CacheRec(..))
 import Debian.AutoBuilder.Types.ParamRec (ParamRec(..))
 import Debian.Codename (Codename, codename, parseCodename)
-import Debian.Except (HasIOException)
 import Debian.Releases (ReleaseTree, ReleaseURI)
 -- import Debian.Repo.MonadOS (MonadOS, buildEssential)
 import Debian.Repo.MonadRepos (MonadRepos)
 import Debian.Repo.Slice (NamedSliceList(..){-, SliceList(..)-})
 import Debian.Repo.State.Slice ({-repoSources,-} repoSources', verifySourcesList)
 import Debian.Repo.Top (MonadTop, sub, TopDir(TopDir), toTop)
-import System.Directory (createDirectoryIfMissing, getPermissions, writable)
-import System.Environment (getEnv)
 import Debian.Repo.Prelude.Verbosity (qPutStrLn)
 import Debian.Sources (SourceOption(..), SourceOp(..))
 import Debian.TH (here, Loc)
 import Distribution.Pretty (prettyShow)
+import Extra.Except
+import System.Directory (createDirectoryIfMissing, getPermissions, writable)
+import System.Environment (getEnv)
 
 -- |Create a Cache object from a parameter set.
 buildCache ::
-    forall s r e m. (MonadIO m, MonadRepos s m, MonadTop r m, Show e, HasIOException e, MonadError e m)
+    forall s r e m. (MonadIOError e m, HasLoc e, MonadRepos s m, MonadTop r m, Show e)
     => (ReleaseTree -> Either e ReleaseURI)
     -> ParamRec
     -> m CacheRec

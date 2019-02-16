@@ -11,9 +11,8 @@ import Control.Applicative.Error (Failing(..))
 import Control.Exception (AsyncException(UserInterrupt), Exception, fromException, SomeException, toException)
 import Control.Lens (to, view)
 import Control.Monad(when)
-import Control.Monad.Catch (catch, MonadMask, MonadThrow, throwM)
-import Control.Monad.Except (ExceptT, lift, MonadError, runExceptT)
---import Control.Monad.Reader (ReaderT)
+import Control.Monad.Catch (catch, MonadCatch, MonadMask, MonadThrow, throwM)
+import Control.Monad.Reader (runReaderT)
 import Control.Monad.State (MonadIO(liftIO), MonadState)
 import qualified Data.ByteString.Lazy as L
 import Data.Either (partitionEithers)
@@ -35,17 +34,15 @@ import qualified Debian.AutoBuilder.Version as V
 import Debian.Codename (codename, parseCodename)
 import Debian.Control.Policy (debianPackageNames, debianSourcePackageName)
 import Debian.Debianize (CabalT, CabalInfo)
-import Debian.Except (HasIOException)
 import Debian.GHC (hvrCompilerPATH, withModifiedPATH)
 import Debian.Pretty (prettyShow, ppShow)
-import Debian.Except (fromIOException)
 import Debian.Relation (BinPkgName(unBinPkgName), SrcPkgName(unSrcPkgName))
 import Debian.Releases (ReleaseTree, ReleaseURI{-, releaseURI-})
 import Debian.Repo.EnvPath (rootPath)
 import qualified Debian.Repo.Fingerprint as P (RetrieveMethod(Patch, Cd, DebDir, DataFiles, Debianize'', Proc, Quilt, SourceDeb, Twice{-, Zero-}))
 import Debian.Repo.LocalRepository(uploadRemote, verifyReleaseURI)
 import Debian.Repo.MonadOS (MonadOS, getOS, evalMonadOS)
-import Debian.Repo.MonadRepos (HasReposState, MonadRepos, runReposCachedT, MonadReposCached)
+import Debian.Repo.MonadRepos (HasReposState, MonadRepos, runReposT, {-runReposCachedT,-} MonadReposCached)
 import Debian.Repo.OSImage (osLocalMaster, osLocalCopy, osBaseDistro)
 import Debian.Repo.OSKey (OSKey(_root))
 import Debian.Repo.Prelude.Process (runV2)
@@ -67,6 +64,7 @@ import Debian.URI(HasParseError, URI(uriPath, uriAuthority), URIAuth(uriUserInfo
 import Debian.VendorURI (vendorURI)
 import Debian.Version(DebianVersion, parseDebianVersion', prettyDebianVersion)
 import Distribution.Pretty (Pretty)
+import Extra.Except
 import Extra.Lock(withLock)
 import Extra.Misc(checkSuperUser)
 import Prelude hiding (null)
@@ -83,7 +81,7 @@ import System.Unix.Mount (withProcAndSys)
 import Text.Printf ( printf )
 
 main ::
-    forall e. (Exception e, Pretty e, HasIOException e, HasParseError e, HasRsyncError e)
+    forall e. (Exception e, Pretty e, HasLoc e, HasIOException e, HasParseError e, HasRsyncError e)
     => CabalT IO ()
     -> (ReleaseTree -> Either e ReleaseURI)
     -> (FilePath -> String -> R.ParamRec)
@@ -103,33 +101,22 @@ main ini myBuildURI myParams =
          -- All the work for a given run must occur in the same top
          -- directory - ~/.autobuilder for example.
          [top] -> do
-           (results :: [Either e (Either e (Maybe (ExitCode, L.ByteString, L.ByteString)))])
-               <- runReposCachedT (TopDir top) (mapM (runExceptT . doParameterSet myBuildURI ini) recs)
+           (results :: [Either e (Maybe (ExitCode, L.ByteString, L.ByteString))])
+               <- runReaderT (runReposT (mapM (runExceptT . doParameterSet myBuildURI ini) recs)) (TopDir top)
            testResults results
          -- [top] -> (undefined :: IO [Either e (ExitCode, L.ByteString, L.ByteString)]) >>= testResults
          [] -> ePutStrLn "No parameter sets" >> return []
          tops' -> ePutStrLn ("Parameter sets have different top directories: " ++ show tops') >> return []
     where -- foo :: FilePath -> [R.ParamRec] -> IO [Either e (ExitCode, L.ByteString, L.ByteString)]
           -- foo top recs = runReposCachedT (TopDir top) (mapM (runExceptT . doParameterSet myBuildURI ini) recs)
-          testResults :: [Either e (Either e (Maybe (ExitCode, L.ByteString, L.ByteString)))] -> IO [e]
+          testResults :: [Either e (Maybe (ExitCode, L.ByteString, L.ByteString))] -> IO [e]
           testResults results =
-              let (es1, results') = partitionEithers results
-                  (es2, _) = partitionEithers results' in
-              case (es1 <> es2) of
-                [] -> ePutStrLn (intercalate "\n  " ("Results:" : map (uncurry showResult) (zip [(1 :: Int)..] results))) >> return []
+              let (es, results') = partitionEithers results in
+              case es of
+                [] -> ePutStrLn (intercalate "\n  " ("Results:" : map (uncurry showResult) (zip [(1 :: Int)..] results'))) >> return []
                 es -> ePutStrLn (intercalate "\n  " ("Errors:" : map prettyShow es)) >> return es
-{-                
-              case (any isLeft results || any isLeft (rights results)) of
-                True -> ePutStrLn (intercalate "\n  " (map (uncurry showResult) (zip [(1 :: Int)..] results))) >>
-                        exitWith (ExitFailure 1)
-                False -> return ()
--}
-          showResult :: Int -> (Either e (Either e (Maybe (ExitCode, L.ByteString, L.ByteString)))) -> String
-          showResult num result =
-              "Parameter set " ++ show num ++ ": " ++  case result of
-                                                         Left e -> "Failure: " <> show e
-                                                         Right (Left e) -> "Failure: " <> show e
-                                                         _ -> "Ok"
+          showResult :: Int -> Maybe (ExitCode, L.ByteString, L.ByteString) -> String
+          showResult num result = "Parameter set " ++ show num ++ " Ok"
           -- showAndThrow (e :: SomeException) = ePutStrLn ("Exception: " ++ show e) >> throwM e
 
 #if 0
@@ -147,11 +134,13 @@ isFailure _ = False
 -- |Process one set of parameters.  Usually there is only one, but there
 -- can be several which are run sequentially.  Stop on first failure.
 doParameterSet ::
-    forall r s e m. (Exception e, HasIOException e, HasParseError e, HasRsyncError e, HasReposState s, MonadMask m, MonadState s m, MonadTop r m, MonadIO m, HasSourceTree SourceTree (ExceptT e m))
+    forall r s e m. (MonadIOError e m, HasLoc e, Exception e, HasParseError e, HasRsyncError e,
+                     HasReposState s, MonadMask m, MonadState s m, MonadTop r m,
+                     HasSourceTree SourceTree m)
     => (ReleaseTree -> Either e ReleaseURI)
     -> CabalT IO ()
     -> R.ParamRec
-    -> ExceptT e m (Either e (Maybe (ExitCode, L.ByteString, L.ByteString)))
+    -> m (Maybe (ExitCode, L.ByteString, L.ByteString))
 -- If one parameter set fails, don't try the rest.  Not sure if
 -- this is the right thing, but it is safe.
 doParameterSet myBuildURI ini params = do
@@ -168,7 +157,7 @@ doParameterSet myBuildURI ini params = do
 -- | Get the sources.list for the local upload repository associated
 -- with the OSImage.  The resulting paths are for running inside the
 -- build environment.
-getLocalSources :: (MonadIO m, MonadOS r s m, HasIOException e, MonadError e m) => [Loc] -> m SliceList
+getLocalSources :: (MonadIOError e m, HasLoc e, MonadOS r s m) => [Loc] -> m SliceList
 getLocalSources locs = do
   root <- view (osLocalCopy . repoRoot) <$> getOS
   ePutStrLn ("getLocalSources root=" <> show root <> " at " <> prettyShow ($here : locs))
@@ -179,8 +168,8 @@ getLocalSources locs = do
   repoSources ($here : locs) [SourceOption "trusted" OpSet ["yes"]] root {-(Just (view envRoot root)) (review vendorURI uri)-}
 
 runParameterSet ::
-    forall r s e m. (MonadIO m, MonadMask m, Exception e, HasIOException e, HasRsyncError e, HasParseError e, MonadError e m, MonadReposCached r s m, HasSourceTree SourceTree m)
-    => CabalT IO () -> C.CacheRec -> m (Either e (Maybe (ExitCode, L.ByteString, L.ByteString)))
+    forall r s e m. (MonadIOError e m, HasLoc e, MonadMask m, Exception e, HasRsyncError e, HasParseError e, MonadReposCached r s m, HasSourceTree SourceTree m)
+    => CabalT IO () -> C.CacheRec -> m (Maybe (ExitCode, L.ByteString, L.ByteString))
 runParameterSet ini cache =
     do
       (TopDir top) <- view toTop
@@ -222,7 +211,7 @@ runParameterSet ini cache =
       withAptImage [$here] (R.ifSourcesChanged params) poolSources $ do
         buildResult <- buildTargets cache dependOS buildOS local targets
         (uploadResult :: [(Either e (ExitCode, L.ByteString, L.ByteString))]) <- lift $ noisier 1 $ upload buildResult
-        liftIO $ newDist (partitionEithers uploadResult)
+        newDist (partitionEithers uploadResult)
     where
 {-
       partitionFailing :: [Either e a] -> ([e], [a])
@@ -290,7 +279,7 @@ runParameterSet ini cache =
                 Left e -> error "Cannot upload, no 'Upload-URI' parameter given"
                 Right uri -> do
                   qPutStrLn "Uploading from local repository to remote"
-                  fmap fooFailing <$> liftIO (uploadRemote repo uri)
+                  fmap fooFailing <$> uploadRemote repo uri
           | True = return []
       upload (_, failed) =
           do let msg = ("Some targets failed to build:\n  " ++ intercalate "\n  " (map (ppShow . debianSourcePackageName) failed))
@@ -300,9 +289,9 @@ runParameterSet ini cache =
                False -> return ()
              error msg
       newDist ::
-          forall e'. (HasIOException e', Show e')
+          forall e' m'. (MonadIOError e' m', Show e', MonadCatch m')
           => ([e'], [(ExitCode, L.ByteString, L.ByteString)])
-          -> IO (Either e' (Maybe (ExitCode, L.ByteString, L.ByteString)))
+          -> m' (Maybe (ExitCode, L.ByteString, L.ByteString))
       newDist ([], _)
           | R.doNewDist params =
               case R.theVendorURI params of
@@ -319,7 +308,7 @@ runParameterSet ini cache =
                                          args = ["--sign", "--root", view (vendorURI . uriPathLens) uri] in
                                      (proc cmd args)
                        qPutStrLn (" -> " ++ showCmdSpecForUser (cmdspec p))
-                       testOutput <$> runV2 [$here] p L.empty
+                       testOutput =<< runV2 [$here] p L.empty
 {-
                        -- result <- (undefined :: (Either IOException (ExitCode, L.ByteString, L.ByteString)) -> (Either e' (Maybe (ExitCode, L.ByteString, L.ByteString)))) <$> liftEIO $here (runVE2 $here p L.empty)
                        case result of
@@ -327,26 +316,26 @@ runParameterSet ini cache =
                          (Left e) -> ePutStrLn ("newdist failed:" <> show e) >> return result
 -}
                        -- return result
-                Left e -> error "Missing Upload-URI parameter"
-          | True = return (Right Nothing)
-      newDist (es, _) = return $ Left $ fromIOException [$here] $ userError (unlines (fmap show es))
+                Left e -> throwError $ fromIOException $ userError "Missing Upload-URI parameter"
+          | True = return Nothing
+      newDist (es, _) = throwError $ fromIOException $ userError (unlines (fmap show es))
 
-      testOutput :: forall e'. HasIOException e' => (ExitCode, L.ByteString, L.ByteString) -> Either e' (Maybe (ExitCode, L.ByteString, L.ByteString))
-      testOutput result@(ExitSuccess, _, _) = Right (Just result)
+      testOutput :: forall e' m'. MonadIOError e' m' => (ExitCode, L.ByteString, L.ByteString) -> m' (Maybe (ExitCode, L.ByteString, L.ByteString))
+      testOutput result@(ExitSuccess, _, _) = return (Just result)
       testOutput (code, out, err) =
-          Left (fromIOException [$here] (userError (show code <> "\n" <> ({-LT.unpack $ decodeUtf8 $ mconcat $ L.toChunks $ snd $ indentChunks " 1> " " 2> "-} show (out, err)))))
+          throwError $ fromIOException (userError (show code <> "\n" <> ({-LT.unpack $ decodeUtf8 $ mconcat $ L.toChunks $ snd $ indentChunks " 1> " " 2> "-} show (out, err))))
 
       setOptions :: [SourceOption] -> SliceList -> SliceList
       setOptions opts l = l {slices = fmap (\s -> s {sliceSource = (sliceSource s) {_sourceOptions = opts}}) (slices l)}
 
 fooFailing :: HasIOException e => Failing a -> Either e a
-fooFailing (Failure msgs) = Left (fromIOException [$here] (userError (unlines msgs)))
+fooFailing (Failure msgs) = Left (fromIOException (userError (unlines msgs)))
 fooFailing (Success r) = Right r
 
 -- | Make sure the build release ("P.buildRelease params") - the
 -- release and repository to which we intend to upload the packages
 -- that we build - exists on the upload server ("P.uploadURI params").
-doVerifyBuildRepo :: (MonadIO m, MonadRepos s m, HasIOException e, MonadError e m) => C.CacheRec -> m ()
+doVerifyBuildRepo :: (MonadIOError e m, HasLoc e, MonadRepos s m) => C.CacheRec -> m ()
 doVerifyBuildRepo cache =
     do repoNames <- (nub . map releaseName . concat) <$> mapM (foldRepository [$here] (return . repoReleaseInfo) (return . repoReleaseInfo)) keys
        when (not (any (== (R.buildRelease params)) repoNames))

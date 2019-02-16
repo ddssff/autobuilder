@@ -22,7 +22,6 @@ import Debian.AutoBuilder.Target (decode)
 import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Changes (ChangeLogEntry(..), parseEntries, parseEntry)
-import Debian.Except (HasIOException(fromIOException))
 import Debian.Pretty (ppShow)
 import Debian.Repo (HasDebDir(debdir), HasSourceTree, HasTopDir(topdir), SourceTree, DebianBuildTree, findSourceTree, findOneDebianBuildTree, copySourceTree, sub, HasTop)
 import Debian.Repo.Fingerprint (RetrieveMethod, retrieveMethodMD5)
@@ -30,6 +29,7 @@ import Debian.Repo.Prelude.Process (runV2, runVE2)
 import Debian.Repo.Prelude.Verbosity (qPutStrLn)
 import Debian.TH (here)
 import Debian.Version
+import Extra.Except
 import Extra.Files (replaceFile)
 import Extra.List ()
 import System.Directory (doesFileExist, createDirectoryIfMissing, doesDirectoryExist, renameDirectory)
@@ -108,7 +108,7 @@ instance (T.Download a, T.Download b) => T.Download (QuiltDL a b) where
     attrs x = union (T.attrs (_base x)) (T.attrs (_patch x))
 
 prepare ::
-    forall r e m a b. (MonadIO m, MonadMask m, Exception e, HasIOException e, MonadError e m, MonadReader r m, HasTop r, T.Download a, T.Download b, HasSourceTree SourceTree m)
+    forall r e m a b. (MonadIOError e m, HasLoc e, MonadMask m, Exception e, MonadReader r m, HasTop r, T.Download a, T.Download b, HasSourceTree SourceTree m)
     => RetrieveMethod -> [P.PackageFlag] -> a -> b -> m T.SomeDownload
 prepare method flags base patch = do
     qPutStrLn "Preparing quilt target"
@@ -153,7 +153,7 @@ prepare method flags base patch = do
                                 do qPutStrLn "Merging changelogs"
                                    exists <- liftIO $ doesFileExist (quiltDir ++ "/" ++ quiltPatchesDir ++ "/changelog")
                                    case exists of
-                                     False -> throwError $ fromIOException [$here] $ userError $ target ++ "- Missing changelog file: " ++ show (quiltDir ++ "/" ++ quiltPatchesDir ++ "/changelog")
+                                     False -> withError (withLoc $here) $ throwError $ fromIOException $ userError $ target ++ "- Missing changelog file: " ++ show (quiltDir ++ "/" ++ quiltPatchesDir ++ "/changelog")
                                      True -> mergeChangelogs' (quiltDir ++ "/debian/changelog") (quiltDir ++ "/" ++ quiltPatchesDir ++ "/changelog")
                             cleanSource :: m T.SomeDownload
                             cleanSource =
@@ -170,7 +170,7 @@ prepare method flags base patch = do
                                                                               , _tree = tree }
                                      _ -> fail $ target ++ " - Failure removing quilt directory: " ++ cmd3
                Right (ExitFailure _, _, err) -> fail $ target ++ " - Unexpected output from quilt applied: " ++ decode err
-               Right (_, _, err) -> throwError $ fromIOException [$here] $ userError $ target ++ " - Unexpected result code from quilt applied: " ++ decode err
+               Right (_, _, err) -> withError (withLoc $here) $ throwError $ fromIOException $ userError $ target ++ " - Unexpected result code from quilt applied: " ++ decode err
                Left e -> throwError e
           where
             cmd1a = ("export QUILT_PATCHES=" ++ quiltPatchesDir ++ " && cd '" ++ quiltDir ++ "' && quilt applied")
@@ -187,13 +187,13 @@ prepare method flags base patch = do
                     "rm -rf '" ++ quiltDir ++ "/.pc' '" ++ quiltDir ++ "/" ++ quiltPatchesDir ++ "'")
             target = "quilt:(" ++ show (T.method base) ++ "):(" ++ show (T.method patch) ++ ")"
 
-mergeChangelogs' :: (MonadIO m, HasIOException e, MonadError e m) => FilePath -> FilePath -> m ()
+mergeChangelogs' :: (MonadIOError e m, HasLoc e) => FilePath -> FilePath -> m ()
 mergeChangelogs' basePath patchPath = do
   patchText <- liftIO (readFile patchPath)
   baseText <- liftIO (readFile basePath)
   -- vEPutStrBl 1 $ "Merging changelogs: " ++ baseText ++ "\npatch:\n\n" ++ patchText
   case mergeChangelogs baseText patchText of
-    Left e -> throwError $ fromIOException [$here] $ userError e
+    Left e -> withError (withLoc $here) $ throwError $ fromIOException $ userError e
     Right newText -> liftIO $ (replaceFile basePath $! newText)
 
 partitionFailing :: [Failing a] -> ([[String]], [a])
