@@ -57,22 +57,22 @@ instance Download a => Download (CdDL a) where
     attrs = attrs . _parent
 
 data ProcDL a
-    = ProcDL { procMethod :: P.RetrieveMethod
-             , procFlags :: [P.PackageFlag]
-             , base :: a
+    = ProcDL { _procMethod :: P.RetrieveMethod
+             , _procFlags :: [P.PackageFlag]
+             , _base :: a
              } deriving Show
 
 instance Download a => Download (ProcDL a) where
-    method = procMethod
-    flags = procFlags
-    getTop = getTop . base
-    logText x = logText (base x) ++ " (with /proc mounted)"
-    flushSource x = flushSource (base x)
-    cleanTarget = cleanTarget . base
+    method = _procMethod
+    flags = _procFlags
+    getTop = getTop . _base
+    logText x = logText (_base x) ++ " (with /proc mounted)"
+    flushSource x = flushSource (_base x)
+    cleanTarget = cleanTarget . _base
     -- A no op - as of now we always mount /proc and /sys
     buildWrapper _ = id -- getOS >>= \ os -> withProcAndSys (rootPath . osRoot $ os) go
-    attrs = attrs . base
-    origTarball x = origTarball (base x)
+    attrs = attrs . _base
+    origTarball x = origTarball (_base x)
 
 data DirDL
     = DirDL { dirMethod :: P.RetrieveMethod
@@ -152,9 +152,9 @@ retrieve' defaultAtoms cache method flags functions =
 
       P.Proc spec' ->
           retrieve' defaultAtoms cache spec' flags functions >>= \ base ->
-          return $ SomeDownload $ ProcDL { procMethod = method
-                                         , procFlags = flags
-                                         , base = base }
+          return $ SomeDownload $ ProcDL { _procMethod = method
+                                         , _procFlags = flags
+                                         , _base = base }
       P.Quilt base patches ->
           do base' <- retrieve' defaultAtoms cache base flags functions
              patches' <- retrieve' defaultAtoms cache patches flags functions

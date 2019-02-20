@@ -25,7 +25,7 @@ import Control.Applicative.Error (Failing(..))
 import Control.Arrow (second)
 import Control.Exception (AsyncException(UserInterrupt), Exception, fromException, SomeException, throw, toException)
 import Control.Lens (to, view)
-import Control.Monad.Catch (catch, MonadMask, try)
+import Control.Monad.Catch (bracket, catch, MonadMask, try)
 import Control.Monad.Except (MonadError)
 import Control.Monad.Reader (MonadReader, ReaderT, runReaderT)
 import Control.Monad.RWS (liftIO, MonadIO, when)
@@ -90,17 +90,17 @@ import Extra.Except
 import Extra.Files (replaceFile)
 import Extra.List (dropPrefix)
 import Extra.Misc (columns)
-import System.Directory (createDirectoryIfMissing, doesDirectoryExist, doesFileExist, removeDirectory)
+import System.Directory (createDirectoryIfMissing, doesDirectoryExist, doesFileExist, getCurrentDirectory, removeDirectory, setCurrentDirectory)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure), exitWith)
 import System.FilePath ((</>))
 import System.IO (hPutStrLn, stderr)
 import System.Posix.Files (fileSize, getFileStatus)
-import System.Process (CreateProcess(cwd), proc, readProcessWithExitCode, shell, showCommandForUser)
+import System.Process (CreateProcess(cwd), proc, readProcessWithExitCode, shell, showCommandForUser, readProcess)
 import System.Process.ListLike (showCreateProcessForUser)
 import System.Unix.Chroot (useEnv)
 import Debian.Repo.Mount (withProcAndSys, withTmp)
 import Text.Printf (printf)
-import Text.Regex (matchRegex, mkRegex)
+import "regex-compat-tdfa" Text.Regex (matchRegex, mkRegex)
 
 instance T.Download a => Ord (Target a) where
     compare = compare `on` debianSourcePackageName
@@ -425,7 +425,7 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
   checkDryRun
   source <- noisier 2 $ prepareBuildTree cache dependOS buildOS newFingerprint target
   logEntry source
-  result <- withError (withLoc $here) $ evalMonadOS (withProcAndSys (view (to _root . rootPath) buildOS) $ build source) buildOS
+  result <- withError (withLoc $here) $ evalMonadOS (withProcAndSys [$here] (view (to _root . rootPath) buildOS) $ build source) buildOS
   result' <- find result
   -- Upload to the local repo without a PGP key
   evalInstall (doLocalUpload result') repo Nothing
@@ -438,9 +438,9 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
           case P.noClean (P.params cache) of
             False -> liftIO (maybeAddLogEntry buildTree newVersion)
             True -> return ()
-      build :: forall r' s' e' m'. (MonadIOError e' m', HasLoc e', MonadMask m', Exception e',
-                                    MonadReader r' m', HasOSKey r',
-                                    HasReposState s', MonadState s' m') => DebianBuildTree -> {-WithProcAndSys-} m' (DebianBuildTree, NominalDiffTime)
+      build :: forall r' s' m'. (MonadIOError e m', MonadMask m',
+                                 MonadReader r' m', HasOSKey r',
+                                 HasReposState s', MonadState s' m') => DebianBuildTree -> {-WithProcAndSys-} m' (DebianBuildTree, NominalDiffTime)
       build buildTree =
           do -- The --commit flag does not appear until dpkg-dev-1.16.1,
              -- so we need to check this version number.  We also
@@ -449,7 +449,7 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
              root <- view (osRoot . to _root . rootPath) <$> getOS
              let path = debdir buildTree
                  path' = fromJust (dropPrefix root path)
-             dpkgSource <- modifyProcessEnv [("EDITOR", Just "/bin/true")] ((proc "dpkg-source" ["--commit", ".", "autobuilder.diff"]) {cwd = Just path'})
+             dpkgSource <- modifyProcessEnv [("EDITOR", Just "/bin/true")] (proc "dpkg-source" ["--commit", ".", "autobuilder.diff"])
              let doDpkgSource False = do
                    liftIO $ createDirectoryIfMissing True (path' </> "debian/patches")
                    _ <- runV2 [$here] dpkgSource L.empty
@@ -457,15 +457,15 @@ buildPackage cache dependOS buildOS newVersion oldFingerprint newFingerprint !ta
                    when (not exists) (liftIO $ removeDirectory (path' </> "debian/patches"))
                  doDpkgSource True = runV2 [$here] dpkgSource L.empty >> return ()
                  -- doDpkgSource' = setEnv "EDITOR" "/bin/true" >> readCreateProcess ((proc "dpkg-source" ["--commit", ".", "autobuilder.diff"]) {cwd = Just path'}) L.empty
-             _ <- useEnv' root (\ _ -> return ())
+             _ <- useEnv' root path' (\ _ -> return ())
                              (do -- Get the version number of dpkg-dev in the build environment
                                  let p = shell ("dpkg -s dpkg-dev | sed -n 's/^Version: //p'")
-                                 result <- runVE2 [$here] p "" :: m' (Either e' (ExitCode, L.ByteString, L.ByteString))
+                                 result <- runVE2 [$here] p "" :: m' (Either e (ExitCode, L.ByteString, L.ByteString))
                                  installed <- case result of
                                                 Right (ExitSuccess, out, _) -> return . head . words . L.unpack $ out
                                                 _ -> error $ showCreateProcessForUser p ++ " -> " ++ show result
                                  -- If it is >= 1.16.1 we may need to run dpkg-source --commit.
-                                 result <- runVE2 [$here] (shell ("dpkg --compare-versions '" ++ installed ++ "' ge 1.16.1")) "" :: m' (Either e' (ExitCode, L.ByteString, L.ByteString))
+                                 result <- runVE2 [$here] (shell ("dpkg --compare-versions '" ++ installed ++ "' ge 1.16.1")) "" :: m' (Either e (ExitCode, L.ByteString, L.ByteString))
                                  newer <- case result of
                                             Right (ExitSuccess, _, _ :: L.ByteString) -> return True
                                             _ -> return False
@@ -546,7 +546,7 @@ prepareBuildTree cache dependOS buildOS sourceFingerprint target = do
   when (P.strictness (P.params cache) /= P.Lax)
        (do -- Strict mode - download dependencies to depend environment,
            -- sync downloads to build environment and install dependencies there.
-           _ <- evalMonadOS (withTmp dependRoot (downloadDependencies buildTree buildDepends sourceFingerprint)) dependOS
+           _ <- evalMonadOS (withTmp [$here] dependRoot (downloadDependencies buildTree buildDepends sourceFingerprint)) dependOS
            when (not noClean) (evalMonadOS (syncOS buildOS) dependOS >> return ())
            _ <- evalMonadOS (installDependencies buildTree buildDepends sourceFingerprint) buildOS
            return ())
@@ -836,6 +836,7 @@ buildDependencies ::
 buildDependencies downloadOnly source extra sourceFingerprint =
     do root <- view (osRoot . to _root . rootPath) <$> getOS
        let path = pathBelow root (topdir source)
+           path' = fromJust (dropPrefix root (topdir source </> debdir source))
            -- pbuilderCommand = "cd '" ++  path ++ "' && /usr/lib/pbuilder/pbuilder-satisfydepends"
            pbuilderCommand = (proc "/usr/lib/pbuilder/pbuilder-satisfydepends" []) {cwd = Just path}
            -- aptGetCommand = "apt-get --yes --force-yes install -o APT::Install-Recommends=True --download-only " ++ intercalate " " (showDependencies' sourceFingerprint ++ extra)
@@ -846,14 +847,33 @@ buildDependencies downloadOnly source extra sourceFingerprint =
        command <- liftIO $ modifyProcessEnv [("DEBIAN_FRONTEND", Just "noninteractive")] (if True then aptGetCommand else pbuilderCommand)
        if downloadOnly then (qPutStrLn $ "Dependency packages:\n " ++ intercalate "\n  " (showDependencies' sourceFingerprint)) else return ()
        qPutStrLn $ (if downloadOnly then "Downloading" else "Installing") ++ " build dependencies into " ++ root
-       (result :: Either e' (ExitCode, L.ByteString, L.ByteString)) <- useEnv' root return (noisier 2 $ runVE2 [$here] command mempty)
+       (result :: Either e' (ExitCode, L.ByteString, L.ByteString)) <- useEnv' root path' return (noisier 2 $ runVE2 [$here] command mempty)
        case result of
          Right (ExitSuccess, out :: L.ByteString, _) -> return $ decode out
          _ -> error $ "buildDependencies: " ++ showCreateProcessForUser command ++ " -> " ++ show result
 
--- | This should probably be what the real useEnv does.
-useEnv' :: (MonadIOError e m, HasLoc e, MonadMask m) => FilePath -> (a -> m a) -> m a -> m a
-useEnv' rootPath force action = quieter 1 $ withError (withLoc $here) $ withProcAndSys rootPath $ useEnv rootPath force $ noisier 1 action
+withCurrentDirectory ::
+    (MonadIO m, MonadMask m)
+    => FilePath  -- ^ Directory to execute in
+    -> m a      -- ^ Action to be executed
+    -> m a
+withCurrentDirectory dir action =
+  bracket (liftIO getCurrentDirectory) (liftIO . setCurrentDirectory) $ \ _ -> do
+    liftIO (setCurrentDirectory dir)
+    action
+
+useEnv' :: (MonadIOError e m, HasLoc e, MonadMask m) => FilePath -> FilePath -> (a -> m a) -> m a -> m a
+useEnv' rootPath cwdPath force action =
+    quieter 1 $
+      withError (withLoc $here) $
+        {-withProcAndSys [$here] rootPath $-}
+        useEnv rootPath force $
+          noisier 1 $
+            withCurrentDirectory cwdPath $ do
+              liftIOError $ readProcess "pwd" [] ""  >>= \out -> putStrLn ("pwd -> " ++ out)
+              liftIOError $ readProcess "ls" ["/proc"] "" >>= \out -> putStrLn ("ls /proc -> " ++ out)
+              liftIOError $ readProcess "ls" ["/sys"] "" >>= \out -> putStrLn ("ls /sys -> " ++ out)
+              action
 
 -- |Set a "Revision" line in the .dsc file, and update the .changes
 -- file to reflect the .dsc file's new md5sum.  By using our newdist

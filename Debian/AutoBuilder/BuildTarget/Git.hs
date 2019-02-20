@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, FlexibleContexts, GADTs, OverloadedStrings, Rank2Types, ScopedTypeVariables, TemplateHaskell #-}
+{-# LANGUAGE CPP, FlexibleContexts, GADTs, OverloadedStrings, PackageImports, Rank2Types, ScopedTypeVariables, TemplateHaskell #-}
 module Debian.AutoBuilder.BuildTarget.Git where
 
 import Control.Exception (Exception, SomeException, try)
@@ -28,7 +28,7 @@ import System.Process (proc, shell, CreateProcess(cwd, cmdspec))
 import System.Process.ListLike (CmdSpec, readCreateProcessWithExitCode, showCmdSpecForUser, showCreateProcessForUser)
 import System.Unix.Directory
 import Text.PrettyPrint.HughesPJClass (Pretty(pPrint), prettyShow, text)
-import Text.Regex
+import "regex-compat-tdfa" Text.Regex
 
 instance Pretty CreateProcess where
     pPrint = text . showCreateProcessForUser
