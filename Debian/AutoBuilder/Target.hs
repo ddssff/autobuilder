@@ -869,11 +869,7 @@ useEnv' rootPath cwdPath force action =
         {-withProcAndSys [$here] rootPath $-}
         useEnv rootPath force $
           noisier 1 $
-            withCurrentDirectory cwdPath $ do
-              liftIOError $ readProcess "pwd" [] ""  >>= \out -> putStrLn ("pwd -> " ++ out)
-              liftIOError $ readProcess "ls" ["/proc"] "" >>= \out -> putStrLn ("ls /proc -> " ++ out)
-              liftIOError $ readProcess "ls" ["/sys"] "" >>= \out -> putStrLn ("ls /sys -> " ++ out)
-              action
+            withCurrentDirectory cwdPath action
 
 -- |Set a "Revision" line in the .dsc file, and update the .changes
 -- file to reflect the .dsc file's new md5sum.  By using our newdist
