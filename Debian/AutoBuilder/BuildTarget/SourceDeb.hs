@@ -14,9 +14,9 @@ import qualified Debian.AutoBuilder.Types.CacheRec as P
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.Control.String as S
 import Debian.Repo.Fingerprint (RetrieveMethod)
-import Debian.Repo.Prelude.Process (runV2)
 import Debian.TH (here)
 import qualified Debian.Version as V
+import Extra.Process (runV2)
 import System.Directory
 import System.Process (CreateProcess(cwd), proc)
 

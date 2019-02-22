@@ -18,8 +18,8 @@ import Debian.URI
 import System.FilePath (splitFileName, (</>))
 import System.Unix.Directory
 import System.Process (shell)
-import Debian.Repo.Prelude.Process (runVE2, runV2, timeTask)
-import Debian.Repo.Prelude.Verbosity (qPutStrLn)
+import Extra.Process (runVE2, runV2, timeTask)
+import Extra.Verbosity (qPutStrLn)
 import System.Directory
 
 documentation :: [String]

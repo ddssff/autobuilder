@@ -62,7 +62,6 @@ import Debian.Relation.ByteString (Relation(..), Relations)
 import Debian.Repo.AptKey (AptKey, aptKey, MonadApt)
 import Debian.Repo.Changes (saveChangesFile)
 import Debian.Repo.Dependencies (prettySimpleRelation, simplifyRelations, solutions)
-import Debian.Repo.EnvPath (rootPath)
 import Debian.Repo.Fingerprint (RetrieveMethod, dependencyChanges, DownstreamFingerprint, Fingerprint, packageFingerprint, showDependencies', showFingerprint)
 import Debian.Repo.LocalRepository (LocalRepository, uploadLocal)
 import Debian.Repo.MonadOS (MonadOS, getOS, evalMonadOS, buildEssential, syncOS)
@@ -73,8 +72,6 @@ import Debian.Repo.Package (binaryPackageSourceVersion, sourcePackageBinaryNames
 import Debian.Repo.PackageID (PackageID(packageVersion))
 import Debian.Repo.PackageIndex (BinaryPackage(packageInfo), SourcePackage(sourceParagraph, sourcePackageID), sortBinaryPackages, sortSourcePackages{-, prettyBinaryPackage-})
 import Debian.Repo.Prelude (symbol)
-import Debian.Repo.Prelude.Process (modifyProcessEnv, runV2, runVE2)
-import Debian.Repo.Prelude.Verbosity (ePutStrLn, noisier, qPutStrLn, quieter, ePutStr)
 import Debian.Repo.Rsync (HasRsyncError)
 import Debian.Repo.SourceTree (addLogEntry, buildDebs, copySourceTree, DebianBuildTree, findChanges, findOneDebianBuildTree, SourcePackageStatus(..), BuildDecision(..), HasChangeLog(entry), HasDebDir(debdir), HasTopDir(topdir))
 import Debian.Repo.State.AptImage (aptSourcePackages)
@@ -86,10 +83,13 @@ import Debian.Time (getCurrentLocalRFC822Time)
 import Debian.URI (HasParseError)
 import Debian.Version (DebianVersion, parseDebianVersion', prettyDebianVersion)
 import Debian.VersionPolicy (parseTag, setTag)
+import Extra.EnvPath (rootPath)
 import Extra.Except
 import Extra.Files (replaceFile)
 import Extra.List (dropPrefix)
 import Extra.Misc (columns)
+import Extra.Process (modifyProcessEnv, runV2, runVE2)
+import Extra.Verbosity (ePutStrLn, noisier, qPutStrLn, quieter, ePutStr)
 import System.Directory (createDirectoryIfMissing, doesDirectoryExist, doesFileExist, getCurrentDirectory, removeDirectory, setCurrentDirectory)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure), exitWith)
 import System.FilePath ((</>))
@@ -534,7 +534,7 @@ prepareBuildTree cache dependOS buildOS sourceFingerprint target = do
   when (P.strictness (P.params cache) == P.Lax)
        (do -- Lax mode - dependencies accumulate in the dependency
            -- environment, sync that to build environment.
-           _ <- evalMonadOS (installDependencies (cleanSource target) buildDepends sourceFingerprint) dependOS
+           _ <- evalMonadOS (withProcAndSys [$here] (view (to _root . rootPath) dependOS) (installDependencies (cleanSource target) buildDepends sourceFingerprint)) dependOS
            when (not noClean) (evalMonadOS (syncOS buildOS) dependOS)
            return ())
   buildTree <- case noClean of

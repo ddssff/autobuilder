@@ -23,11 +23,11 @@ import Debian.Repo.MonadRepos (MonadRepos)
 import Debian.Repo.Slice (NamedSliceList(..){-, SliceList(..)-})
 import Debian.Repo.State.Slice ({-repoSources,-} repoSources', verifySourcesList)
 import Debian.Repo.Top (MonadTop, sub, TopDir(TopDir), toTop)
-import Debian.Repo.Prelude.Verbosity (qPutStrLn)
 import Debian.Sources (SourceOption(..), SourceOp(..))
 import Debian.TH (here, Loc)
 import Distribution.Pretty (prettyShow)
 import Extra.Except
+import Extra.Verbosity (qPutStrLn)
 import System.Directory (createDirectoryIfMissing, getPermissions, writable)
 import System.Environment (getEnv)
 

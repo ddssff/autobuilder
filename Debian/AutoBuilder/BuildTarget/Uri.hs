@@ -18,10 +18,10 @@ import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import qualified Debian.Repo as R (topdir, SourceTree, findSourceTree)
 import Debian.Repo.Fingerprint (RetrieveMethod)
-import Debian.Repo.Prelude.Process (runV2, timeTask)
 import Debian.Repo.Top (MonadTop, sub)
 import Debian.TH (here)
 import Debian.URI (parseURI, URI, uriPath, uriToString')
+import Extra.Process (runV2, timeTask)
 import Magic
 import System.FilePath (splitFileName, (</>))
 import System.Directory

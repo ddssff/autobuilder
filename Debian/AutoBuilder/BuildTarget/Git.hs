@@ -16,10 +16,10 @@ import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Repo (SourceTree, topdir, sub, findSourceTree)
 import Debian.Repo.Fingerprint (RetrieveMethod, RetrieveAttribute(GitCommit), GitSpec(Branch, Commit))
-import Debian.Repo.Prelude.Process (runVE2, runV2, timeTask)
 import Debian.Repo.SourceTree (HasSourceTree)
 import Debian.Repo.Top (HasTop)
 import Debian.TH (here)
+import Extra.Process (runVE2, runV2, timeTask)
 import Network.URI (URI(..), URIAuth(..), uriToString, parseURI)
 import System.Directory
 import System.Exit (ExitCode(..))

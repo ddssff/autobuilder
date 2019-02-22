@@ -37,14 +37,14 @@ import Debian.Repo.OSKey (OSKey(_root))
 import Debian.Repo.Rsync (HasRsyncError)
 import Debian.Repo.SourceTree (DebianBuildTree(..), entry, subdir, debdir, findDebianBuildTrees, findBuildTree, copySourceTree,
                                DebianSourceTree(..), findSourceTree)
-import Debian.Repo.EnvPath (rootPath)
 import qualified Debian.Version
+import Extra.EnvPath (rootPath)
 import Extra.Except
+import Extra.Verbosity (quieter, qPutStrLn)
 import System.Directory(renameDirectory)
 import System.FilePath (takeExtension, (</>))
 import System.IO.Error (isAlreadyExistsError)
 import System.Posix.Files (createLink, removeLink)
-import Debian.Repo.Prelude.Verbosity (quieter, qPutStrLn)
 
 -- | Case analysis for the 'Failing' type.
 -- If the value is @'Failure'@, apply the first function to @[ErrorMsg]@;

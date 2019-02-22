@@ -17,14 +17,13 @@ import qualified Debian.AutoBuilder.Types.Download as T
 import qualified Debian.AutoBuilder.Types.Packages as P
 import Debian.Repo
 import Debian.Repo.Fingerprint (RetrieveMethod, RetrieveAttribute(DarcsChangesId))
-import Debian.Repo.Prelude.Process (runQE2, runVE2, runV2)
 import Debian.TH (here)
+import Extra.Process (runQE2, runVE2, runV2, timeTask)
 import Network.URI (URI(..), URIAuth(..), uriToString, parseURI)
 import System.Directory
 import System.Exit (ExitCode(..))
 import System.FilePath
 import System.Process (shell, proc, CreateProcess(cwd))
-import Debian.Repo.Prelude.Process (timeTask)
 import System.Unix.Directory
 
 documentation :: [String]
