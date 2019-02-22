@@ -56,8 +56,7 @@ Library
       , process
       , process-extras >= 0.2.0
       , pureMD5
-      , regex-compat
-      , regex-posix
+      , regex-compat-tdfa
       , regex-tdfa
       , sr-extra
       , syb
@@ -108,7 +107,7 @@ Library
 
   if flag(local-libs)
     Hs-Source-Dirs: ../debian-repo
-    Build-Depends: lens, transformers, transformers-compat, deepseq, bytestring, transformers, process-extras, Unixutils, filepath, lens, mtl, template-haskell, filemanip-extra, directory, pureMD5, unix, process, ListLike, old-locale, exceptions, text, regex-compat, network-uri, HUnit
+    Build-Depends: lens, transformers, transformers-compat, deepseq, bytestring, transformers, process-extras, Unixutils, filepath, lens, mtl, template-haskell, filemanip-extra, directory, pureMD5, unix, process, ListLike, old-locale, exceptions, text, regex-compat-tdfa, network-uri, HUnit
     Exposed-modules:
         Debian.Releases,
         Debian.Repo,
